@@ -191,6 +191,88 @@ dd a{color:var(--accInk);font-weight:600}
 </div>
 <div class="toast" id="toast" role="status"></div>
 
+<!-- ===== Supabase ayarları: kendi projenizin bilgilerini yazın ===== -->
+<script>
+window.CRM_CONFIG={
+  SUPABASE_URL:'sb_publishable_UF_j3gaW_eLQKRQLacSLzQ_xmGT8XNS',   // Supabase > Project Settings > API > Project URL
+  SUPABASE_ANON_KEY:'sb_secret_U7H5HpKFVnc9PO65a6rHlg_rzyDFpDH'      // Supabase > Project Settings > API > anon public
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+/* Supabase bağlantısı: CRM kodunun kullandığı veritabanı arayüzünü Supabase'in "docs" tablosuna bağlar */
+(function(){
+  if(window.claude)return; // Claude içinde açılırsa kendi veritabanını kullanır
+  const cfg=window.CRM_CONFIG||{};
+  if(!window.supabase||!cfg.SUPABASE_URL||cfg.SUPABASE_URL.includes('PROJE-ID'))return;
+  const sb=window.supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
+  const T='docs';
+  const rid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/-/g,'').slice(0,20);
+  const fail=e=>{throw Object.assign(new Error(e.message||'db'),{code:e.code})};
+  const listeners=new Set();let chan=null;
+  function ensureChannel(){
+    if(chan)return;
+    chan=sb.channel('docs-changes').on('postgres_changes',{event:'*',schema:'public',table:T},p=>{
+      const r=p.new&&p.new.collection?p.new:p.old||{};for(const l of listeners)l(r)}).subscribe();
+  }
+  function onChange(fn){ensureChannel();listeners.add(fn);return()=>listeners.delete(fn)}
+  function debounce(fn,ms){let t;return()=>{clearTimeout(t);t=setTimeout(fn,ms)}}
+  function docRef(col,id){
+    return {id,
+      async get(){const {data,error}=await sb.from(T).select('data').eq('collection',col).eq('id',id).maybeSingle();if(error)fail(error);return {id,exists:!!data,data:()=>data?data.data:undefined}},
+      async set(d){const {error}=await sb.from(T).upsert({collection:col,id,data:d,updated_at:new Date().toISOString()});if(error)fail(error)},
+      async update(p){const cur=await this.get();if(!cur.exists)fail({message:'not found'});const {error}=await sb.from(T).update({data:{...cur.data(),...p},updated_at:new Date().toISOString()}).eq('collection',col).eq('id',id);if(error)fail(error)},
+      async delete(){const {error}=await sb.from(T).delete().eq('collection',col).eq('id',id);if(error)fail(error)}
+    };
+  }
+  // doc onSnapshot: sadece ilgili dokümanda yeniden yükle
+  function docSnap(col,id,cb,err){const ref=docRef(col,id);const load=async()=>{try{cb(await ref.get())}catch(e){err&&err(e)}};load();const d=debounce(load,300);return onChange(r=>{if(r.collection===col&&r.id===id)d()})}
+  function collection(col){
+    let ord=null,lim=null;
+    const q={
+      orderBy(f,dir){ord=[f,dir];return q},limit(n){lim=n;return q},
+      doc(id){const r=docRef(col,id||rid());r.onSnapshot=(cb,err)=>docSnap(col,r.id,cb,err);return r},
+      onSnapshot(cb,err){
+        const load=async()=>{try{
+          const rows=[];for(let from=0;;from+=1000){const {data,error}=await sb.from(T).select('id,data').eq('collection',col).range(from,from+999);if(error)fail(error);rows.push(...data);if(data.length<1000)break}
+          if(ord){const [f,dir]=ord;rows.sort((a,b)=>{const x=a.data[f]??'',y=b.data[f]??'';return (x<y?-1:x>y?1:0)*(dir==='desc'?-1:1)})}
+          const out=lim?rows.slice(0,lim):rows;
+          cb({docs:out.map(r=>({id:r.id,exists:true,data:()=>r.data})),metadata:{fromCache:false}})
+        }catch(e){err&&err(e)}};
+        load();const d=debounce(load,400);return onChange(r=>{if(r.collection===col)d()})
+      }};
+    return q;
+  }
+  const db={collection,doc(path){const [c,i]=path.split('/');const r=docRef(c,i);r.onSnapshot=(cb,err)=>docSnap(c,i,cb,err);return r}};
+  window.CRM_DB=db; // zamanlanmış görevler için
+
+  /* --- giriş ekranı --- */
+  function loginUI(){
+    return new Promise(res=>{
+      const w=document.createElement('div');w.id='login';
+      w.innerHTML=`<style>#login{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:var(--bg,#fff);font-family:system-ui,sans-serif}#login form{width:min(380px,90vw);display:grid;gap:12px;padding:28px;border:1px solid #ddd;border-radius:14px}#login h2{margin:0;font-size:24px}#login input,#login button{min-height:46px;border-radius:10px;font-size:16px;padding:0 14px;border:1px solid #ccc}#login button{background:#ff4a1c;color:#fff;border-color:#ff4a1c;font-weight:600;cursor:pointer}#login p{margin:0;color:#666;font-size:14px}</style>
+      <form><h2>Müşteri Takibi</h2><p>Giriş için e-posta adresinizi yazın. Size bir giriş bağlantısı göndereceğiz.</p>
+      <input type="email" name="e" required placeholder="ad@firma.com" autocomplete="email"><button>Giriş bağlantısı gönder</button><p id="lmsg"></p></form>`;
+      document.body.appendChild(w);
+      w.querySelector('form').onsubmit=async e=>{e.preventDefault();const email=e.target.elements.e.value.trim();const m=w.querySelector('#lmsg');m.textContent='Gönderiliyor…';
+        const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:location.origin+location.pathname}});
+        m.textContent=error?'Bağlantı gönderilemedi. Biraz sonra tekrar deneyin.':'E-postanıza giriş bağlantısı gönderildi. Bağlantıya tıklayın.'};
+      sb.auth.onAuthStateChange((ev,s)=>{if(s){w.remove();res(s)}});
+    });
+  }
+  async function session(){
+    const {data}=await sb.auth.getSession();const s=data.session||await loginUI();
+    const {data:ok}=await sb.from('allowed_users').select('email').maybeSingle();
+    if(!ok){document.body.innerHTML=`<div style="font-family:system-ui;padding:40px;max-width:520px;margin:auto"><h2>Erişim yetkiniz yok</h2><p>${s.user.email} adresi CRM kullanıcı listesinde değil. Yöneticinizden eklenmesini isteyin.</p><button id="lo">Farklı e-posta ile giriş</button></div>`;document.getElementById('lo').onclick=async()=>{await sb.auth.signOut();location.reload()};await new Promise(()=>{})}
+    return s}
+  function logoutBtn(s){const b=document.createElement('button');b.textContent='Çıkış ('+s.user.email+')';b.style.cssText='position:fixed;right:10px;bottom:10px;z-index:50;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#333;opacity:.8;cursor:pointer';b.onclick=async()=>{await sb.auth.signOut();location.reload()};document.body.appendChild(b)}
+  window.claude={async use(k){
+    if(k==='db'){const s=await session();logoutBtn(s);return db}
+    if(k==='user')return {can:async()=>true};
+    if(k==='downloads')return {async save({filename,data}){const u=URL.createObjectURL(new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}};
+    return null}};
+})();
+</script>
 <script>
 {
 const $=s=>document.querySelector(s);
@@ -260,7 +342,7 @@ function renderTop(){
   $('#ximpBtn').style.display=canWrite?'inline-flex':'none';
   $('#sub').textContent=INVTO?`Fatura verisi ${fmt(INVTO)} tarihine kadar (Power BI) · son temas faturaları da kapsar`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde';
   let b='';
-  if(st.nodb)b='<span>Kayıtlara ulaşılamıyor. Bu sayfayı claude.ai üzerinde oturum açmış olarak açın.</span>';
+  if(st.nodb)b='<span>Kayıtlara ulaşılamıyor. Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.</span>';
   else if(st.err)b='<span>Kayıtlar okunamadı. Sayfayı daha sonra tekrar açın.</span>';
   else if(st.slow&&!loaded)b='<span>Veriye henüz ulaşılamıyor; bağlantınızı kontrol edin. Gösterilenler güncel olmayabilir.</span>';
   else if(!canWrite)b='<span>Salt okunur görünüm: kayıt eklemek için sayfa sahibinden “Contributor” yetkisi isteyin.</span>';
