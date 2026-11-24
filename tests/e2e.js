@@ -141,12 +141,21 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   step('7. Hedef takibi');
   await page.click('#tabB');
-  await page.fill('#tform [name="Lütfi Kaplan"]','abc');await page.click('#tform button[type=submit]');
-  ok(/sayı olmalı/.test(await txt(page,'#toast')),'geçersiz hedef reddedildi');
-  await page.fill('#tform [name="Lütfi Kaplan"]','4.000');await page.fill('#tform [name="Mehmet Halici"]','10000');
+  const heads7=await page.$$eval('#tform thead th',t=>t.map(x=>x.textContent));
+  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Toplam"]','hedef tablosu: Temsilci, A–E, Toplam');
+  ok((await page.$$('#tform .eurin i')).length===25&&await txt(page,'#tform .eurin i')==='€','her hücrede € simgesi (5 temsilci × 5 kategori)');
+  await page.fill('#tform [name="Lütfi Kaplan|A"]','abc');await page.click('#tform button[type=submit]');
+  ok(/€ tutarı olmalı/.test(await txt(page,'#toast')),'geçersiz hedef reddedildi');
+  await page.fill('#tform [name="Lütfi Kaplan|A"]','1500');await page.press('#tform [name="Lütfi Kaplan|A"]','Tab');
+  ok(await page.inputValue('#tform [name="Lütfi Kaplan|A"]')==='1.500','1500 yazınca alan "1.500" biçimine geçiyor');
+  await page.fill('#tform [name="Lütfi Kaplan|B"]','2.500');await page.fill('#tform [name="Mehmet Halici|A"]','10.000');
+  ok(await txt(page,'#tform [data-tt="Lütfi Kaplan"]')==='€ 4.000','satır toplamı canlı: € 4.000');
+  ok(await txt(page,'#tform [data-ct="A"]')==='€ 11.500'&&await txt(page,'#tform [data-ct="_all"]')==='€ 14.000','sütun ve genel toplam canlı: A € 11.500, toplam € 14.000');
+  await page.screenshot({path:path.join(SHOTS,'7-hedef-tablo.png'),fullPage:true});
   await page.click('#tform button[type=submit]');await page.waitForTimeout(100);
   const tg=await doc(page,'targets/'+F.TODAY.slice(0,7));
-  ok(tg&&tg.reps['Lütfi Kaplan']===4000&&tg.reps['Mehmet Halici']===10000,'hedefler kaydedildi (4.000 → 4000)');
+  ok(tg&&tg.grid['Lütfi Kaplan'].A===1500&&tg.grid['Lütfi Kaplan'].B===2500&&tg.reps['Lütfi Kaplan']===4000&&tg.reps['Mehmet Halici']===10000,'kategori hedefleri ve temsilci toplamları kaydedildi');
+  ok(JSON.stringify(tg.cats)==='["A","B","C","D","E"]','kategori adları kayıtta');
   {const v=await page.$$eval('#boardT tbody tr',rs=>rs.find(r=>r.cells[0].textContent.includes('Lütfi')).cells[5].textContent.replace(/\u00a0/g,' '));ok(/€ 1\.200\s*\/ € 4\.000 · %30/.test(v),'karnede Lütfi: € 1.200 / € 4.000 · %30 → '+JSON.stringify(v))}
   await page.click('[data-view=list]');
   await page.click('.chip[data-rep="Lütfi Kaplan"]');
@@ -176,6 +185,8 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
   await sel(page,'Sessiz Market');
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
+  await page.evaluate(()=>{window.CRM_IS_ADMIN=undefined;document.querySelector('#tabB').hidden=false;document.querySelector('#tabB').click()});
+  ok(!(await page.$('#tform')),'yönetici olarak doğrulanmamış kullanıcı hedef formunu görmüyor');
   await ctx.close();
 
   step('8. Telefon ekranı (390 px) ve koyu tema');

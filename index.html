@@ -144,7 +144,10 @@ dd a{color:var(--accInk);font-weight:600}
 .aform [hidden]{display:none!important}
 .oc{font-weight:600}
 .board h3{font-size:24px;margin:22px 0 8px}.board h3:first-child{margin-top:0}.board .ordp{margin:0 0 8px;overflow-x:auto}.board td,.board th{white-space:nowrap}.board .sm{color:var(--mut);font-size:13px}
-.tform{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;align-items:end}.tform label{display:grid;gap:4px;font-size:14px;color:var(--mut)}.tform input{color:var(--ink)}
+.tgrid td,.tgrid th{text-align:right}.tgrid td:first-child,.tgrid th:first-child{text-align:left}.tgrid .tt{font-weight:600}
+.eurin{display:inline-flex;align-items:center;gap:4px;justify-content:flex-end}.eurin i{font-style:normal;color:var(--mut)}
+.eurin input{width:108px;min-height:38px;padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums}.eurin input[aria-invalid=true]{border-color:var(--bad);color:var(--bad)}
+#tform .mb{margin-top:10px}
 @media(max-width:600px){.ctf{grid-template-columns:minmax(0,1fr)}}
 .ordp{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px 16px;margin:-8px 0 18px}.ordp .oh{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-bottom:8px}.ordp small{color:var(--mut)}.ordp table{width:100%;border-collapse:collapse;font-size:15px}.ordp th,.ordp td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}.ordp th:first-child,.ordp td:first-child{text-align:left}.ordp tfoot td{font-weight:700;border-bottom:0}.ordp tr.on td{background:var(--soft)}.lnk{background:none;border:0;padding:0;color:var(--accInk);font:inherit;cursor:pointer;text-decoration:underline}
 </style>
@@ -569,7 +572,32 @@ function renderBoard(){
   <h3>En yüksek iade oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}'i ve üzeri</small></h3>
   ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
   <h3>Aylık hedefler <small class="sm">${mname}</small></h3>
-  ${isAdm&&canWrite?`<form class="tform" id="tform">${allReps().map(r=>`<label>${esc(r)}<input name="${esc(r)}" inputmode="decimal" placeholder="€" value="${TG[r]?esc(TG[r]):''}"></label>`).join('')}<button class="primary" type="submit">Hedefleri kaydet</button></form>`:`<p>${Object.keys(TG).length?Object.entries(TG).map(([r,v])=>`${esc(r)}: ${eur(v)}`).join(' · '):'Bu ay için hedef girilmemiş.'}</p>`}`;
+  ${targetsHtml(mk)}`;
+}
+/* Aylık hedefler: temsilci × kategori tablosu. Yalnızca yönetici girer. */
+const CATS=['A','B','C','D','E']; // kategori adları buradan değiştirilir
+const eurIn=n=>n?Math.round(n).toLocaleString('nl-NL'):'';
+function targetsHtml(mk){
+  const T=TGS[mk]||{},G=T.grid||{},L=T.reps||{};
+  const reps=allReps(),adm=window.CRM_IS_ADMIN===true&&canWrite;
+  const legacy=r=>!G[r]&&+L[r]?+L[r]:0; // kategorisiz girilmiş eski toplam
+  const rowSum=r=>legacy(r)||CATS.reduce((a,c)=>a+(+((G[r]||{})[c])||0),0);
+  const catSum=c=>reps.reduce((a,r)=>a+(+((G[r]||{})[c])||0),0);
+  const cell=(r,c)=>{const v=+((G[r]||{})[c])||0;return adm?`<td><span class="eurin"><i aria-hidden="true">€</i><input name="${esc(r)}|${esc(c)}" inputmode="decimal" autocomplete="off" aria-label="${esc(r)} – ${esc(c)} hedefi" placeholder="0" value="${eurIn(v)}"></span></td>`:`<td>${v?eur(v):'–'}</td>`};
+  const tot=r=>`<td class="tt" data-tt="${esc(r)}">${rowSum(r)?eur(rowSum(r)):'–'}${legacy(r)?' <span class="sm">kategorisiz</span>':''}</td>`;
+  const all=reps.reduce((a,r)=>a+rowSum(r),0);
+  const table=`<div class="ordp tgrid"><table><thead><tr><th>Temsilci</th>${CATS.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Toplam</th></tr></thead>
+    <tbody>${reps.map(r=>`<tr><td>${esc(r)}</td>${CATS.map(c=>cell(r,c)).join('')}${tot(r)}</tr>`).join('')}</tbody>
+    <tfoot><tr><td>Toplam</td>${CATS.map(c=>`<td data-ct="${esc(c)}">${catSum(c)?eur(catSum(c)):'–'}</td>`).join('')}<td data-ct="_all">${all?eur(all):'–'}</td></tr></tfoot></table></div>`;
+  if(!adm)return Object.keys(G).length||Object.keys(L).length?table:'<p>Bu ay için hedef girilmemiş.</p>';
+  return `<form id="tform" autocomplete="off">${table}<div class="mb"><span>Tutarları € olarak girin (örn. 25.000). Satırın toplamı temsilcinin aylık hedefidir.</span><button class="primary" type="submit">Hedefleri kaydet</button></div></form>`;
+}
+function tformTotals(f){
+  const val=e=>{const n=num(e.value);return n>0?n:0};const rs={},cs={};
+  for(const e of f.querySelectorAll('input[name*="|"]')){const [r,c]=e.name.split('|');rs[r]=(rs[r]||0)+val(e);cs[c]=(cs[c]||0)+val(e)}
+  const L=(TGS[monthKey()]||{}).reps||{},G=(TGS[monthKey()]||{}).grid||{};let all=0;
+  for(const td of f.querySelectorAll('[data-tt]')){const r=td.dataset.tt;const leg=!rs[r]&&!G[r]&&+L[r]?+L[r]:0;const v=rs[r]||leg;all+=v;td.innerHTML=(v?eur(v):'–')+(leg?' <span class="sm">kategorisiz</span>':'')}
+  for(const td of f.querySelectorAll('[data-ct]')){const c=td.dataset.ct;const v=c==='_all'?all:(cs[c]||0);td.textContent=v?eur(v):'–'}
 }
 function renderTasks(){
   const cm=Object.fromEntries(C.map(c=>[c.id,c]));
@@ -599,7 +627,7 @@ function render(){
   for(const [id,vals] of Object.entries(keep)){const g=$('#'+id);if(!g)continue;
     for(const e of g.elements){if(!e.name)continue;const k=(e.type==='radio'||e.type==='checkbox')?vals.find(x=>x.n===e.name&&x.v===e.value):vals.find(x=>x.n===e.name);if(!k)continue;
       if(e.type==='radio'||e.type==='checkbox')e.checked=k.c;else e.value=k.v;if(k.touched)e.dataset.touched=k.touched}
-    if(id==='aform')syncOutcome(g,false)}
+    if(id==='aform')syncOutcome(g,false);if(id==='tform')tformTotals(g)}
   if(foc){const g=$('#'+foc[0]);if(g&&g.elements[foc[1]])g.elements[foc[1]].focus()}
   st.formFor=st.sel;
 }
@@ -846,6 +874,7 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('change',async e=>{
   const t=e.target;
+  if(t.closest('#tform')&&t.name&&t.name.includes('|')){const n=num(t.value);if(n!=null&&n>=0){t.value=eurIn(n);t.removeAttribute('aria-invalid')}else if(String(t.value).trim())t.setAttribute('aria-invalid','true');tformTotals(t.closest('form'));return}
   if(t.dataset.done){const ok=await w(()=>db.collection('activities').doc(t.dataset.done).update({done:t.checked,doneAt:t.checked?TODAY:''}));if(ok&&t.checked)toast('Takip tamamlandı');if(!ok)t.checked=!t.checked;return}
   if(t.name==='ch'&&t.closest('#aform')){st.type=t.value;return}
   if(t.name==='out'&&t.closest('#aform')){syncOutcome(t.closest('form'),true);return}
@@ -855,7 +884,7 @@ document.addEventListener('change',async e=>{
   if(t.id==='ximp'&&t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readImport(f);return}
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
-document.addEventListener('input',e=>{const t=e.target;if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
+document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#tform'))tformTotals(t.closest('#tform'));if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
   e.preventDefault();const f=e.target;
@@ -889,11 +918,15 @@ document.addEventListener('submit',async e=>{
     if(await w(()=>db.collection('contacts').doc(c.id).set({phone,contact,updatedAt:Date.now(),by:window.CRM_USER||''}))){st.ctEdit=null;st.formFor=null;toast('İletişim bilgisi kaydedildi');render()}
     return}
   if(f.id==='tform'){
-    if(window.CRM_IS_ADMIN===false)return;const reps={};let bad=0;
-    for(const e of f.elements){if(!e.name)continue;const v=String(e.value||'').trim();if(!v)continue;const n=num(v);if(n==null||n<0){bad++;continue}if(n>0)reps[e.name]=Math.round(n)}
-    if(bad){toast('Hedefler sayı olmalı (örn. 25000).',1);return}
-    const mk=monthKey();
-    if(await w(()=>db.doc('targets/'+mk).set({month:mk,reps,updatedAt:Date.now(),by:window.CRM_USER||''}))){toast('Hedefler kaydedildi');render()}
+    if(window.CRM_IS_ADMIN!==true){toast('Hedefleri yalnızca yönetici girebilir.',1);return}
+    const mk=monthKey(),old=TGS[mk]||{},grid={},reps={};let bad=0;
+    for(const e of f.querySelectorAll('input[name*="|"]')){const v=String(e.value||'').trim();if(!v)continue;const n=num(v);if(n==null||n<0){bad++;e.setAttribute('aria-invalid','true');continue}e.removeAttribute('aria-invalid');
+      const [r,c]=e.name.split('|');if(n>0)(grid[r]=grid[r]||{})[c]=Math.round(n)}
+    if(bad){toast('Hedefler € tutarı olmalı (örn. 25.000).',1);return}
+    for(const [r,g] of Object.entries(grid))reps[r]=Object.values(g).reduce((a,v)=>a+v,0);
+    // kategori girilmemiş temsilcinin eski (kategorisiz) toplamı korunur
+    for(const [r,v] of Object.entries(old.reps||{}))if(!grid[r]&&!(old.grid||{})[r]&&+v)reps[r]=+v;
+    if(await w(()=>db.doc('targets/'+mk).set({month:mk,cats:CATS,grid,reps,updatedAt:Date.now(),by:window.CRM_USER||''}))){toast('Hedefler kaydedildi');render()}
     return}
 });
 
