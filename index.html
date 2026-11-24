@@ -12,7 +12,7 @@
    PICTURE: the working list + customer card themselves, under a modest title
    COLOUR and TYPE: white / near-black / vermilion accent; Sofia Sans Condensed 800 + Instrument Sans
    LAYOUT: header, rep chips, four count tiles, list | detail (stacks under 900px, detail becomes a sheet) */
-:root{color-scheme:light dark;--bg:light-dark(#fff,#120d0b);--ink:light-dark(#15110f,#f4eeea);--mut:light-dark(#6d635e,#a99f99);--line:light-dark(#e8e2de,#2e2622);--card:light-dark(#f8f6f5,#1b1512);--acc:#ff4a1c;--accInk:light-dark(#c2300c,#ff7a57);--soft:light-dark(#fff0ea,#2b1610);--ok:light-dark(#1f7a4d,#5fd39a)}
+:root{color-scheme:light dark;--bg:light-dark(#fff,#120d0b);--ink:light-dark(#15110f,#f4eeea);--mut:light-dark(#6d635e,#a99f99);--line:light-dark(#e8e2de,#2e2622);--card:light-dark(#f8f6f5,#1b1512);--acc:#ff4a1c;--accInk:light-dark(#c2300c,#ff7a57);--soft:light-dark(#fff0ea,#2b1610);--ok:light-dark(#1f7a4d,#5fd39a);--bad:light-dark(#c62828,#ff6b6b);--badSoft:light-dark(#fdecec,#2a1414)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
 [hidden]{display:none!important}
@@ -122,6 +122,7 @@ dd a{color:var(--accInk);font-weight:600}
 .sample{font-size:13px;color:var(--mut);margin:-4px 0 12px}
 @media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}.detail{display:none;position:fixed;inset:0;z-index:40;border-radius:0;border:0;overflow:auto;padding-bottom:40px}.detail.open{display:block}.back{display:inline-flex;align-items:center;min-height:44px;margin:-6px 0 8px;padding:0 4px;border:0;background:none;font-weight:600;color:var(--accInk)}}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters input{grid-column:1/-1}.g3,.g2,.info{grid-template-columns:minmax(0,1fr)}.tl>li{grid-template-columns:minmax(0,1fr);gap:4px}.tm{grid-auto-flow:column;justify-content:start;align-items:center;gap:8px}.tk li{grid-template-columns:28px minmax(0,1fr) auto;row-gap:2px}.tk .ta{grid-column:2/-1}.tk small{grid-column:2}.sheet{padding:18px}}
+@media(max-width:600px){body{font-size:14px}header.top{padding-top:18px;padding-bottom:10px}header h1{font-size:26px}header p{font-size:12.5px}.primary,.ghost{min-height:40px;padding:0 12px;font-size:14px}.chip{min-height:34px;padding:0 11px;font-size:13px}.stats{gap:8px}.stat{padding:10px 12px}.stat b{font-size:24px}.stat span{font-size:12.5px;line-height:1.35}.tab{min-height:40px;font-size:14px;padding:0 10px}.meta{font-size:12.5px;flex-wrap:wrap;gap:2px 10px}.meta>span:first-child{white-space:nowrap}.row{padding:10px 6px;gap:10px;--segw:92px}.rm b{font-size:15px}.rm small{font-size:12px}.seg{font-size:12.5px;height:26px;line-height:24px}.lc{font-size:12px}.dh h2{font-size:24px}.ph h2{font-size:24px}.tag{font-size:12px}.alert{font-size:13px;padding:7px 10px}.cta a,.cta button{min-height:40px;padding:0 12px;font-size:14px}dt{font-size:12px}dd{font-size:14px}.info{gap:8px 16px;margin:14px 0}.ordp{padding:10px 12px}.ordp table{font-size:13px}.ordp th,.ordp td{padding:5px 6px}.board h3{font-size:20px}.sheet h2{font-size:24px}.toast{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.toast{transition:none}}
 .pas{color:light-dark(#c62828,#ff6b6b)!important}
 .row>.seg{width:100%;max-width:none;text-align:left}
@@ -129,7 +130,7 @@ dd a{color:var(--accInk);font-weight:600}
 .bar{display:block;width:100%;height:6px;border-radius:3px;background:var(--line);margin-top:8px;overflow:hidden}.bar i{display:block;height:100%;background:var(--ok)}.bar i.behind{background:var(--acc)}.stat.on .bar{background:rgb(255 255 255/.35)}.stat.on .bar i{background:#fff}
 .alert{margin:10px 0 0;padding:8px 12px;border-radius:10px;background:var(--soft);color:var(--accInk);font-size:14px;font-weight:600}
 .rk{color:var(--accInk)!important;font-weight:600}
-.rtag{font-style:normal;font-size:11px;font-weight:700;padding:0 5px;border-radius:5px;border:1px solid currentColor;color:var(--accInk)}
+.rtag{font-style:normal;font-size:11px;font-weight:700;padding:0 5px;border-radius:5px;border:1px solid currentColor;color:var(--accInk)}.rtag.rt{color:var(--bad);background:var(--badSoft);border-color:transparent}#retAlert{background:var(--badSoft);color:var(--bad)}.rl.bad span,.rl.bad b,.rl.bad .rp{color:var(--bad)}
 .cta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 0}.cta a,.cta button{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-weight:600;text-decoration:none;font-size:15px}.cta a:hover,.cta button:hover{background:var(--card)}.cta a.call{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .ctf{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto;gap:8px;margin-top:10px;align-items:end;background:var(--card);padding:12px;border-radius:12px}.ctf label{display:grid;gap:4px;font-size:14px;color:var(--mut)}.ctf input{color:var(--ink)}
 .typ{display:flex;flex-wrap:wrap;gap:6px;border:0;margin:0;padding:0}.typ legend{width:100%;padding:0;margin-bottom:4px;font-size:14px;color:var(--mut)}
@@ -329,7 +330,7 @@ const low=s=>String(s||'').toLocaleLowerCase('tr');
 
 /* Kayıp riski ve iade kuralları */
 const RISK={dropPace:0.7,dropMin:3000,silentDays:45,silentMax:365,silentMin:1000};
-const RET_WARN=0.08,RET_MIN=1000;
+const RET_WARN=0.025,RET_MIN=1000;
 // yılın geçen kısmı: 2026 satışını 2025 cirosunun aynı dönemine göre kıyaslamak için
 const YF=(()=>{const y=+TODAY.slice(0,4);if(y>2026)return 1;const s=Date.UTC(y,0,1),n=Date.UTC(y,+TODAY.slice(5,7)-1,+TODAY.slice(8,10));const len=(Date.UTC(y+1,0,1)-s)/864e5;return ((n-s)/864e5+1)/len})();
 const OUTCOMES=[['Sipariş alındı',0,''],['Tekrar gel',7,'Tekrar ziyaret et'],['Fiyat itirazı',14,'Fiyat itirazını yeniden görüş'],['Rakip var',30,'Rakip durumunu kontrol et'],['Kapalıydı / yetkili yok',3,'Tekrar uğra'],['Bilgi notu',0,'']];
@@ -464,7 +465,7 @@ function renderList(){
   if(!r.length){$('#list').innerHTML='<li class="empty">Bu filtrelere uyan müşteri yok.</li>';return}
   $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]),rk=RK[c.id],rt=retOf(c);
     const sub=st.quick==='risk'&&rk?`<small class="rk">${esc(riskText(rk))}</small>`:`<small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small>`;
-    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${rt&&rt.warn?`<em class="rtag" title="İade oranı yüksek">iade %${Math.round(rt.p*100)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
+    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
 }
 function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
@@ -543,7 +544,7 @@ function renderBoard(){
   <div class="ordp"><div class="oh"><b>Tempo: 2026 bugüne kadar satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}'i)</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
   <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 bugüne</th><th>Tempo</th><th>Bu ay sipariş / hedef</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Gecikmiş takip</th><th>Kayıp riski</th><th>Telefonsuz aktif</th></tr></thead>
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
-  <h3>En yüksek iade oranı <small class="sm">ilk 10 · satışın %${Math.round(RET_WARN*100)}'i ve üzeri</small></h3>
+  <h3>En yüksek iade oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}'i ve üzeri</small></h3>
   ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
   <h3>Aylık hedefler <small class="sm">${mname}</small></h3>
   ${isAdm&&canWrite?`<form class="tform" id="tform">${allReps().map(r=>`<label>${esc(r)}<input name="${esc(r)}" inputmode="decimal" placeholder="€" value="${TG[r]?esc(TG[r]):''}"></label>`).join('')}<button class="primary" type="submit">Hedefleri kaydet</button></form>`:`<p>${Object.keys(TG).length?Object.entries(TG).map(([r,v])=>`${esc(r)}: ${eur(v)}`).join(' · '):'Bu ay için hedef girilmemiş.'}</p>`}`;
@@ -599,7 +600,8 @@ function retRows(c){
   const [sales,iade,iadeN,ff,ffN]=r;
   const base=typeof c.ciro2026==='number'?c.ciro2026:null;
   const pct=v=>base>0&&v?`<span class="rp">%${(Math.abs(v)/base*100).toFixed(1).replace('.',',')}</span>`:'';
-  const line=(l,v,n,p)=>`<div class="rl"><span>${l}</span><b>${v?eur(v):'€ 0'}</b><small>${n||0} fatura</small>${p?pct(v):'<span></span>'}</div>`;
+  const bad=!!(retOf(c)||{}).warn;
+  const line=(l,v,n,p)=>`<div class="rl${bad&&l==='İade'?' bad':''}"><span>${l}</span><b>${v?eur(v):'€ 0'}</b><small>${n||0} fatura</small>${p?pct(v):'<span></span>'}</div>`;
   return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar Excel'deki Ciro 2026 YTD'ye (${eur(base)}) göre.`:'Ciro 2026 YTD boş olduğu için oran gösterilemiyor.'}</p></dd></div>`;
 }
 

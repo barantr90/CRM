@@ -95,12 +95,17 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   step('5. İade uyarısı');
   const tags=await page.$$eval('#list .row',rs=>rs.map(r=>[r.querySelector('b').textContent,(r.querySelector('.rtag[title^="İade"]')||{}).textContent||'']));
-  ok(tags.find(t=>t[0]==='İadeci Market')[1]==='iade %12','İadeci Market listede "iade %12" etiketi taşıyor');
-  ok(tags.filter(t=>t[1]).length===1,'düşük iadeli müşterilerde etiket yok');
+  ok(tags.find(t=>t[0]==='İadeci Market')[1]==='iade %12,0','İadeci Market listede "iade %12,0" etiketi taşıyor');
+  ok(tags.find(t=>t[0]==='Düşüş Market')[1]==='',"Düşüş Market (%2,0) etiketsiz: eşik %2,5");
+  ok(tags.find(t=>t[0]==='Yeni Market')[1]==='iade %3,0','Yeni Market (%3,0) etiketli');
+  ok(tags.filter(t=>t[1]).length===2,'%2,5 altındaki müşterilerde etiket yok');
+  ok(await page.$eval('#list .rtag.rt',e=>getComputedStyle(e).color)==='rgb(198, 40, 40)','iade etiketi kırmızı');
   await sel(page,'İadeci Market');
   ok(/satışın %12,0'i iade/.test(await txt(page,'#retAlert')),'kartta iade uyarısı: '+await txt(page,'#retAlert'));
   await sel(page,'Sağlıklı Market');
   ok(!(await page.$('#retAlert')),'%1 iadede uyarı yok');
+  await sel(page,'İadeci Market');
+  ok(await page.$eval('#detail .rl.bad b',e=>getComputedStyle(e).color)==='rgb(198, 40, 40)','kartta İade satırı kırmızı');
 
   step('6. Temsilci karnesi');
   ok(await page.isVisible('#tabB'),'yönetici Karne sekmesini görüyor');
@@ -114,7 +119,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(br['Mehmet Halici'][2]==='€ 50.500','Mehmet ciro 2025 toplamı € 50.500 → '+JSON.stringify(br['Mehmet Halici'][2]));
   ok(br['Özgür Firat'][8]==='0'&&br['Lütfi Kaplan'][8]==='1','telefonsuz aktif müşteri sayıları doğru');
   const rt=await page.$$eval('#retT tbody tr',rs=>rs.map(r=>r.cells[0].textContent));
-  ok(JSON.stringify(rt)==='["İadeci Market"]','iade tablosunda yalnızca İadeci Market');
+  ok(JSON.stringify(rt)==='["İadeci Market","Yeni Market"]','iade tablosu orana göre: İadeci, Yeni');
   await page.screenshot({path:path.join(SHOTS,'6-karne.png'),fullPage:true});
   await page.click('[data-brisk="Lütfi Kaplan"]');
   ok(await page.isVisible('#listView')&&JSON.stringify(await rows(page))==='["Düşüş Market","Sessiz Market"]','risk sayısına tıklayınca o temsilcinin risk listesi açılıyor');
