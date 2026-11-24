@@ -1,0 +1,198 @@
+// Uçtan uca testler: node tests/e2e.js
+// index.html, Supabase yerine bellek içi bir veritabanıyla (tests/mockdb.js) açılır; gerçek veriye dokunulmaz.
+const {chromium}=require('playwright');
+const path=require('path'),fs=require('fs');
+const ROOT=path.resolve(__dirname,'..');
+const SHOTS=process.env.SHOTS||path.join(__dirname,'screens');
+const FIX=fs.readFileSync(path.join(__dirname,'fixture.js'),'utf8');
+const MOCK=fs.readFileSync(path.join(__dirname,'mockdb.js'),'utf8');
+let pass=0,fail=0;const errors=[];
+const ok=(cond,msg)=>{if(cond){pass++;console.log('  ✓',msg)}else{fail++;console.log('  ✗',msg)}};
+const step=t=>console.log('\n'+t);
+
+async function open(browser,{admin=true,user='baran.sengul@akar-group.com',viewport={width:1400,height:1000},scheme='light'}={}){
+  const ctx=await browser.newContext({viewport,colorScheme:scheme});
+  const page=await ctx.newPage();
+  page.on('pageerror',e=>errors.push(e.message));
+  page.on('console',m=>{if(m.type()==='error'&&!/Failed to load resource/.test(m.text()))errors.push(m.text())});
+  // dış kaynakları (font, CDN) kapat: test tamamen çevrimdışı
+  await page.route(/^https?:/,r=>r.abort());
+  await page.addInitScript(`try{localStorage.clear()}catch(e){};${FIX};window.CRM_IS_ADMIN=${admin};window.CRM_USER=${JSON.stringify(user)};${MOCK}`);
+  await page.goto('file://'+path.join(ROOT,'index.html'));
+  await page.waitForSelector('#list .row');
+  return {ctx,page};
+}
+const txt=(p,s)=>p.$eval(s,e=>e.textContent.replace(/\u00a0/g,' ').trim()).catch(()=>null);
+const rows=p=>p.$$eval('#list .row b',bs=>bs.map(b=>b.textContent));
+const writes=p=>p.evaluate(()=>window.__writes);
+const doc=(p,k)=>p.evaluate(k=>{const d=window.__store.get(k);return d===undefined?null:d},k);
+const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await p.waitForSelector('#detail h2')};
+
+(async()=>{
+  fs.mkdirSync(SHOTS,{recursive:true});
+  const browser=await chromium.launch();
+  let {ctx,page}=await open(browser);
+  const F=await page.evaluate(()=>({...window.__FIX,days:Object.fromEntries([-3,7,14].map(n=>[n,window.__FIX.day(n)]))}));
+  F.day=n=>F.days[n];
+
+  step('0. Sayfa açılıyor');
+  ok((await page.$$('#stats .stat')).length===5,'5 özet kutusu var');
+  ok((await rows(page)).length===8,'8 müşteri listelendi');
+
+  step('1. Kayıp riski listesi');
+  const tile=await txt(page,'[data-quick=risk]');
+  ok(tile.startsWith('3'),`risk kutusu 3 müşteri gösteriyor ("${tile}")`);
+  await page.click('[data-quick=risk]');
+  const r1=await rows(page);
+  ok(JSON.stringify(r1)===JSON.stringify(['Düşüş Market','Kayıp Market','Sessiz Market']),'en büyük kayıp üstte sıralı: '+r1.join(', '));
+  ok(!r1.includes('Kapanan Market'),'elle "Pasif" yapılan (kapanan) müşteri listede yok');
+  ok(!r1.includes('Küçük Kiosk'),'küçük ciro eşiğin altında, listede yok');
+  ok(!r1.includes('Sağlıklı Market'),'temposu normal müşteri listede yok');
+  const why=await page.$$eval('#list .rk',e=>e.map(x=>x.textContent));
+  ok(why[0].includes('Ciro temposu %'+Math.round(20000/(60000*F.YF)*100)),'Düşüş Market nedeni: '+why[0]);
+  ok(/70 gündür fatura yok/.test(why[2]),'Sessiz Market nedeni: '+why[2]);
+  await page.click('.chip[data-rep="Lütfi Kaplan"]');
+  ok(JSON.stringify(await rows(page))===JSON.stringify(['Düşüş Market','Sessiz Market']),'temsilci seçilince yalnızca onun riskli müşterileri');
+  await sel(page,'Düşüş Market');
+  ok(/Kayıp riski: Ciro temposu/.test(await txt(page,'#riskAlert')),'müşteri kartında risk uyarısı');
+  await page.screenshot({path:path.join(SHOTS,'1-risk.png')});
+  await page.click('[data-quick=risk]');await page.click('.chip[data-rep=""]');
+
+  step('2. Hızlı ziyaret kaydı');
+  await sel(page,'Sessiz Market');
+  ok(await page.isHidden('.amtf'),'sipariş tutarı alanı başta gizli');
+  ok(/Zamanı gelen 1 takibi/.test(await txt(page,'#aform .nx')),'zamanı gelen takip için kapatma kutusu işaretli geliyor');
+  await page.click('#aform button[type=submit]');
+  ok(/Bir sonuç seçin/.test(await txt(page,'#toast')),'boş kayıt engellendi');
+  await page.check('input[name=out][value="Tekrar gel"]',{force:true});
+  ok(await page.inputValue('[name=nextDate]')===F.day(7),'"Tekrar gel" → takip 1 hafta sonraya ayarlandı');
+  ok(await page.inputValue('[name=nextAction]')==='Tekrar ziyaret et','"Tekrar gel" → sıradaki adım otomatik doldu');
+  await page.check('input[name=out][value="Sipariş alındı"]',{force:true});
+  ok(await page.isVisible('.amtf'),'"Sipariş alındı" → tutar alanı göründü');
+  ok(await page.inputValue('[name=nextDate]')==='','"Sipariş alındı" → takip tarihi boşaldı');
+  await page.fill('[name=amount]','850,50');
+  await page.fill('[name=note]','Bayram siparişi');
+  // yazarken başka birinin kaydı gelirse form silinmemeli
+  await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('activities').doc('ext').set({customerId:'c3',type:'Not',date:'2020-01-01',note:'dış',createdAt:3})));
+  await page.waitForTimeout(100);
+  ok(await page.inputValue('[name=note]')==='Bayram siparişi'&&await page.isChecked('input[name=out][value="Sipariş alındı"]'),'canlı güncelleme sırasında yazılanlar korundu');
+  await page.click('#aform [data-nd="14"]');
+  ok(await page.inputValue('[name=nextDate]')===F.day(14),'"2 hafta" butonu tarihi ayarladı');
+  await page.click('#aform button[type=submit]');
+  await page.waitForTimeout(100);
+  const acts=(await writes(page)).filter(w=>w[0]==='set'&&w[1].startsWith('activities/')&&w[1]!=='activities/ext');
+  const a=acts[0]&&acts[0][2];
+  ok(a&&a.outcome==='Sipariş alındı'&&a.amount===850.5&&a.type==='Ziyaret'&&a.nextDate===F.day(14)&&a.note==='Bayram siparişi'&&a.by==='baran.sengul@akar-group.com','kayıt doğru yazıldı (sonuç, tutar 850,50, kanal, tarih, yazan)');
+  ok((await doc(page,'activities/a1')).done===true,'zamanı gelen eski takip tamamlandı olarak işaretlendi');
+  ok(/1 takip tamamlandı/.test(await txt(page,'#toast')),'bildirim: '+await txt(page,'#toast'));
+  ok(/Sipariş alındı/.test(await txt(page,'#detail .tl li:first-child')),'geçmişte sonuç görünüyor');
+  ok(await page.inputValue('[name=note]')==='','kayıttan sonra form temizlendi');
+  await page.check('input[name=ch][value="Telefon"]',{force:true});
+  const nw=(await writes(page)).length;
+  await page.fill('[name=note]','x');await page.fill('[name=nextDate]',F.day(-3));
+  await page.click('#aform button[type=submit]');await page.waitForTimeout(100);
+  ok((await writes(page)).length===nw,'geçmiş takip tarihiyle kayıt yazılmadı');
+  await page.fill('[name=nextDate]','');await page.fill('[name=note]','');
+  await page.screenshot({path:path.join(SHOTS,'2-ziyaret.png')});
+
+  step('3. Telefon, WhatsApp ve yol tarifi');
+  await sel(page,'Sağlıklı Market');
+  ok(await page.getAttribute('#ctCall','href')==='tel:0612345678','Ara → tel:0612345678');
+  ok(await page.getAttribute('#ctWa','href')==='https://wa.me/31612345678','WhatsApp → 31612345678 (06 → 316)');
+  const maps=decodeURIComponent(await page.getAttribute('#ctMap','href'));
+  ok(maps.includes('destination=Kerkstraat 1, 1017 GA, Amsterdam, Nederland'),'yol tarifi adresi doğru');
+  await sel(page,'İadeci Market');
+  ok(await page.getAttribute('#ctWa','href')==='https://wa.me/31698765432','+31 6… numarası doğru çevrildi');
+  await sel(page,'Sessiz Market');
+  ok(!(await page.$('#ctCall'))&&!!(await page.$('#ctMap')),'telefonu yoksa yalnız yol tarifi; adres yoksa ada göre arar');
+  ok(decodeURIComponent(await page.getAttribute('#ctMap','href')).includes('Sessiz Market'),'adres yoksa market adı kullanılıyor');
+  await page.click('#ctEdit');
+  await page.fill('#ctform [name=phone]','123');await page.click('#ctform button[type=submit]');
+  ok(/çok kısa/.test(await txt(page,'#toast')),'kısa numara reddedildi');
+  await page.fill('#ctform [name=phone]','06 11122233');await page.fill('#ctform [name=contact]','Mehmet Usta');
+  await page.click('#ctform button[type=submit]');await page.waitForTimeout(100);
+  const k=await doc(page,'contacts/c2');
+  ok(k&&k.phone==='06 11122233'&&k.contact==='Mehmet Usta','iletişim bilgisi "contacts" koleksiyonuna kaydedildi');
+  ok(await page.getAttribute('#ctCall','href')==='tel:0611122233','kaydedince Ara butonu çıktı');
+  await page.fill('#q','mehmet usta');
+  ok(JSON.stringify(await rows(page))==='["Sessiz Market"]','yetkili adıyla arama çalışıyor');
+  await page.fill('#q','');await page.dispatchEvent('#q','input');
+  await page.screenshot({path:path.join(SHOTS,'3-iletisim.png')});
+
+  step('5. İade uyarısı');
+  const tags=await page.$$eval('#list .row',rs=>rs.map(r=>[r.querySelector('b').textContent,(r.querySelector('.rtag[title^="İade"]')||{}).textContent||'']));
+  ok(tags.find(t=>t[0]==='İadeci Market')[1]==='iade %12','İadeci Market listede "iade %12" etiketi taşıyor');
+  ok(tags.filter(t=>t[1]).length===1,'düşük iadeli müşterilerde etiket yok');
+  await sel(page,'İadeci Market');
+  ok(/satışın %12,0'i iade/.test(await txt(page,'#retAlert')),'kartta iade uyarısı: '+await txt(page,'#retAlert'));
+  await sel(page,'Sağlıklı Market');
+  ok(!(await page.$('#retAlert')),'%1 iadede uyarı yok');
+
+  step('6. Temsilci karnesi');
+  ok(await page.isVisible('#tabB'),'yönetici Karne sekmesini görüyor');
+  await page.click('#tabB');
+  ok(await page.isHidden('#listView')&&await page.isVisible('#boardView'),'Karne açıkken müşteri listesi gizli');
+  await page.click('#tabT');ok(await page.isHidden('#listView')&&await page.isVisible('#tasksView'),'Takipler açıkken müşteri listesi gizli');
+  await page.click('#tabB');
+  const br=await page.$$eval('#boardT tbody tr',rs=>Object.fromEntries(rs.map(r=>{const t=[...r.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim());return [t[0],t]})));
+  ok(br['Lütfi Kaplan'][8].startsWith('2 ·'),'Lütfi: 2 riskli müşteri');
+  ok(br['Gökhan Genç'][8].startsWith('1 ·'),'Gökhan: 1 riskli (kapanan hariç)');
+  ok(br['Lütfi Kaplan'][6]==='1 / 2','Lütfi: 7 günde 1, 30 günde 2 kayıt → '+br['Lütfi Kaplan'][6]);
+  ok(br['Mehmet Halici'][6]==='1 / 1','Mehmet: 1 / 1 kayıt');
+  ok(br['Mehmet Halici'][2]==='€ 50.500','Mehmet ciro 2025 toplamı € 50.500 → '+JSON.stringify(br['Mehmet Halici'][2]));
+  ok(br['Özgür Firat'][9]==='0'&&br['Lütfi Kaplan'][9]==='1','telefonsuz aktif müşteri sayıları doğru');
+  const rt=await page.$$eval('#retT tbody tr',rs=>rs.map(r=>r.cells[0].textContent));
+  ok(JSON.stringify(rt)==='["İadeci Market"]','iade tablosunda yalnızca İadeci Market');
+  await page.screenshot({path:path.join(SHOTS,'6-karne.png'),fullPage:true});
+  await page.click('[data-brisk="Lütfi Kaplan"]');
+  ok(await page.isVisible('#listView')&&JSON.stringify(await rows(page))==='["Düşüş Market","Sessiz Market"]','risk sayısına tıklayınca o temsilcinin risk listesi açılıyor');
+  await page.click('.chip[data-rep=""]');await page.click('[data-quick=risk]');
+
+  step('7. Hedef takibi');
+  await page.click('#tabB');
+  await page.fill('#tform [name="Lütfi Kaplan"]','abc');await page.click('#tform button[type=submit]');
+  ok(/sayı olmalı/.test(await txt(page,'#toast')),'geçersiz hedef reddedildi');
+  await page.fill('#tform [name="Lütfi Kaplan"]','4.000');await page.fill('#tform [name="Mehmet Halici"]','10000');
+  await page.click('#tform button[type=submit]');await page.waitForTimeout(100);
+  const tg=await doc(page,'targets/'+F.TODAY.slice(0,7));
+  ok(tg&&tg.reps['Lütfi Kaplan']===4000&&tg.reps['Mehmet Halici']===10000,'hedefler kaydedildi (4.000 → 4000)');
+  {const v=await page.$$eval('#boardT tbody tr',rs=>rs.find(r=>r.cells[0].textContent.includes('Lütfi')).cells[5].textContent.replace(/\u00a0/g,' '));ok(/€ 1\.200\s*\/ € 4\.000 · %30/.test(v),'karnede Lütfi: € 1.200 / € 4.000 · %30 → '+JSON.stringify(v))}
+  await page.click('[data-view=list]');
+  await page.click('.chip[data-rep="Lütfi Kaplan"]');
+  {const v=await txt(page,'#ordBtn');ok(/hedef € 4\.000 \(%30\)/.test(v),'Lütfi seçiliyken sipariş kutusunda hedef ve yüzde → '+JSON.stringify(v))}
+  ok(!!(await page.$('#ordBtn .bar i')),'ilerleme çubuğu var');
+  await page.click('.chip[data-rep=""]');
+  ok(/hedef € 14\.000/.test(await txt(page,'#ordBtn')),'tüm temsilcilerde toplam hedef € 14.000');
+  await page.click('#ordBtn');
+  const heads=await page.$$eval('#ordp th',t=>t.map(x=>x.textContent));
+  ok(heads.includes('Hedef')&&heads.includes('Gerçekleşme'),'sipariş tablosunda Hedef ve Gerçekleşme sütunları');
+  await page.screenshot({path:path.join(SHOTS,'7-hedef.png')});
+  await ctx.close();
+
+  step('6/7. Temsilci (yönetici olmayan) görünümü');
+  ({ctx,page}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'}));
+  ok(await page.isHidden('#tabB'),'temsilci Karne sekmesini görmüyor');
+  ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
+  await sel(page,'Sessiz Market');
+  ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
+  await ctx.close();
+
+  step('8. Telefon ekranı (390 px) ve koyu tema');
+  ({ctx,page}=await open(browser,{viewport:{width:390,height:844},scheme:'dark'}));
+  await page.click('[data-quick=risk]');
+  const sw=await page.evaluate(()=>document.documentElement.scrollWidth);
+  ok(sw<=390,'yatay kaydırma yok (genişlik '+sw+')');
+  await page.screenshot({path:path.join(SHOTS,'8-mobil-liste.png')});
+  await page.click('[data-quick=risk]');
+  await page.click('#list .row:has-text("Sağlıklı Market")');
+  const ctaOk=await page.$eval('.cta',e=>e.getBoundingClientRect().right<=390);
+  ok(ctaOk,'butonlar ekrana sığıyor');
+  await page.screenshot({path:path.join(SHOTS,'8-mobil-kart.png'),fullPage:true});
+  await ctx.close();
+
+  step('Konsol hataları');
+  ok(errors.length===0,errors.length?'hatalar: '+errors.join(' | '):'hiç JavaScript hatası yok');
+  await browser.close();
+  console.log(`\nSonuç: ${pass} geçti, ${fail} kaldı`);
+  process.exit(fail?1:0);
+})().catch(e=>{console.error(e);process.exit(1)});
