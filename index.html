@@ -210,7 +210,7 @@ window.CRM_CONFIG={
   if(!url||url.includes('PROJE-ID')||!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)){diag('CRM_CONFIG içindeki SUPABASE_URL hatalı: "'+url+'". Şu biçimde olmalı: https://xxxxxxxx.supabase.co (sonunda /rest/v1 vb. olmadan).');return}
   if(!key||key.includes('BURAYA')||key.length<30){diag('CRM_CONFIG içindeki SUPABASE_ANON_KEY boş ya da hatalı. Supabase > Project Settings > API > "anon public" (veya "Publishable key") değerini yapıştırın.');return}
   let sb;try{sb=window.supabase.createClient(url,key)}catch(e){diag('Supabase bağlantısı kurulamadı: '+e.message);return}
-  const T='docs';
+  const T='docs';const ADMIN_EMAIL='baran.sengul@akar-group.com';
   const rid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/-/g,'').slice(0,20);
   const fail=e=>{throw Object.assign(new Error(e.message||'db'),{code:e.code})};
   const listeners=new Set();let chan=null;
@@ -286,7 +286,7 @@ window.CRM_CONFIG={
     mk('Şifre belirle',async()=>{const p=prompt('Yeni şifre (en az 8 karakter):');if(!p)return;if(p.length<8){alert('Şifre en az 8 karakter olmalı.');return}const {error}=await sb.auth.updateUser({password:p});alert(error?'Şifre kaydedilemedi: '+error.message:'Şifreniz kaydedildi. Bundan sonra e-posta ve şifreyle giriş yapabilirsiniz.')});
     mk('Çıkış ('+s.user.email+')',async()=>{await sb.auth.signOut();location.reload()});document.body.appendChild(box)}
   window.claude={async use(k){
-    if(k==='db'){try{const s=await session();logoutBtn(s);
+    if(k==='db'){try{const s=await session();window.CRM_IS_ADMIN=String(s.user.email||'').toLowerCase()===ADMIN_EMAIL;logoutBtn(s);
       const {error:te}=await sb.from(T).select('id').limit(1);if(te)throw new Error(te.message);
       return db}catch(e){diag('Supabase hatası: '+(e.message||e));return null}}
     if(k==='user')return {can:async()=>true};
@@ -360,7 +360,8 @@ function visible(){
 
 function renderTop(){
   $('#reps').innerHTML=['',...allReps()].map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}">${r?esc(r):'Tüm temsilciler'}</button>`).join('');
-  $('#ximpBtn').style.display=canWrite?'inline-flex':'none';
+  const isAdm=window.CRM_IS_ADMIN!==false;
+  $('#ximpBtn').style.display=canWrite&&isAdm?'inline-flex':'none';$('#xexp').style.display=isAdm?'':'none';
   $('#sub').textContent=INVTO?`Fatura verisi ${fmt(INVTO)} tarihine kadar (Power BI) · son temas faturaları da kapsar`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde';
   let b='';
   if(st.nodb)b=`<span>Kayıtlara ulaşılamıyor. ${esc(window.CRM_DIAG||'Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.')}</span>`;
@@ -679,7 +680,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.open){st.view='list';st.sel=t.dataset.open;saveUi();render();return}
   if(t.id==='back'){st.sel=null;render();return}
   if(t.id==='irun'){applyImport();return}
-  if(t.id==='xexp'){exportXLSX();return}
+  if(t.id==='xexp'){if(window.CRM_IS_ADMIN===false)return;exportXLSX();return}
   if(t.id==='clearSample'){if(st.arm!=='samples'){st.arm='samples';render();return}
     st.arm=null;for(const a of A.filter(x=>x.sample))await w(()=>db.collection('activities').doc(a.id).delete());
     for(const c of C.filter(x=>x.sample))await w(()=>db.collection('customers').doc(c.id).delete());
@@ -692,7 +693,7 @@ document.addEventListener('change',async e=>{
   if(t.id==='fseg'){st.seg=t.value;render()}
   if(t.id==='fstat'){st.status=t.value;render()}
   if(t.id==='fsort'){st.sort=t.value;saveUi();render()}
-  if(t.id==='ximp'&&t.files[0]){const f=t.files[0];t.value='';readImport(f);return}
+  if(t.id==='ximp'&&t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readImport(f);return}
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
