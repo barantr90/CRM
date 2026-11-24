@@ -17,7 +17,7 @@ async function open(browser,{admin=true,user='baran.sengul@akar-group.com',viewp
   page.on('console',m=>{if(m.type()==='error'&&!/Failed to load resource/.test(m.text()))errors.push(m.text())});
   // dış kaynakları (font, CDN) kapat: test tamamen çevrimdışı
   await page.route(/^https?:/,r=>r.abort());
-  await page.addInitScript(`try{localStorage.clear()}catch(e){};${FIX};window.CRM_IS_ADMIN=${admin};window.CRM_USER=${JSON.stringify(user)};${MOCK}`);
+  await page.addInitScript(`try{localStorage.clear()}catch(e){};${FIX};window.CRM_IS_ADMIN=${admin};window.CRM_USER=${JSON.stringify(user)};window.CRM_AUTH={email:${JSON.stringify(user)},async setPassword(){window.__pw=(window.__pw||0)+1},async signOut(){window.__out=(window.__out||0)+1}};${MOCK}`);
   await page.goto('file://'+path.join(ROOT,'index.html'));
   await page.waitForSelector('#list .row');
   return {ctx,page};
@@ -42,6 +42,20 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isHidden('#dueLeg'),'listedeki "takip" açıklaması gizli');
   ok(!(await page.$('#list .tk-tag')),'satırlarda "takip" etiketi yok');
   ok((await rows(page)).length===8,'8 müşteri listelendi');
+  ok(await page.title()==='Akar Benelux NL CRM'&&await txt(page,'header h1')==='Akar Benelux NL CRM','başlık: Akar Benelux NL CRM');
+
+  step('0b. Kullanıcı menüsü');
+  ok(await txt(page,'#avBtn')==='BS','sağ üstte baş harfler: BS');
+  ok(await page.isHidden('#umDrop'),'menü başta kapalı');
+  await page.click('#avBtn');
+  ok(await page.isVisible('#umDrop')&&await txt(page,'#umName')==='Baran Sengül'&&await txt(page,'#umMail')==='baran.sengul@akar-group.com','tıklayınca menü açılıyor: ad soyad ve e-posta');
+  await page.screenshot({path:path.join(SHOTS,'0-menu.png'),clip:{x:700,y:0,width:700,height:260}});
+  await page.click('h1');ok(await page.isHidden('#umDrop'),'dışarı tıklayınca kapanıyor');
+  await page.click('#avBtn');await page.keyboard.press('Escape');ok(await page.isHidden('#umDrop'),'Esc ile kapanıyor');
+  await page.click('#avBtn');await page.click('[data-um=pw]');
+  ok(await page.evaluate(()=>window.__pw)===1&&await page.isHidden('#umDrop'),'"Şifre belirle" çalışıyor ve menüyü kapatıyor');
+  await page.click('#avBtn');await page.click('[data-um=out]');ok(await page.evaluate(()=>window.__out)===1,'"Çıkış" çalışıyor');
+  ok(!(await page.$('body > div[style*="position:fixed"]')),'sol alttaki eski butonlar yok');
 
   step('1. Kayıp riski listesi');
   const tile=await txt(page,'[data-quick=risk]');
@@ -149,6 +163,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   step('6/7. Temsilci (yönetici olmayan) görünümü');
   ({ctx,page}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'}));
   ok(await page.isHidden('#tabB'),'temsilci Karne sekmesini görmüyor');
+  ok(await txt(page,'#avBtn')==='LK','temsilcide baş harfler: LK');
+  await page.click('#avBtn');ok(await txt(page,'#umName')==='Lütfi Kaplan','e-postadan Türkçe ad: Lütfi Kaplan');
+  await page.keyboard.press('Escape');
   ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
   await sel(page,'Sessiz Market');
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
@@ -156,6 +173,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   step('8. Telefon ekranı (390 px) ve koyu tema');
   ({ctx,page}=await open(browser,{viewport:{width:390,height:844},scheme:'dark'}));
+  ok(await page.$eval('#avBtn',e=>{const r=e.getBoundingClientRect();return r.right<=390&&r.top<70}),'telefonda baş harf butonu sağ üstte');
+  await page.click('#avBtn');ok(await page.$eval('#umDrop',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=390}),'telefonda menü ekrana sığıyor');
+  await page.screenshot({path:path.join(SHOTS,'8-mobil-menu.png')});await page.keyboard.press('Escape');
   await page.click('[data-quick=risk]');
   const sw=await page.evaluate(()=>document.documentElement.scrollWidth);
   ok(sw<=390,'yatay kaydırma yok (genişlik '+sw+')');
