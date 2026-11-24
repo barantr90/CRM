@@ -36,7 +36,11 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   F.day=n=>F.days[n];
 
   step('0. Sayfa açılıyor');
-  ok((await page.$$('#stats .stat')).length===5,'5 özet kutusu var');
+  ok((await page.$$('#stats .stat')).length===4,'4 özet kutusu var');
+  ok(!(await page.$('[data-quick=due]')),'"Takip zamanı gelmiş" kutusu yok');
+  ok(await page.isHidden('#tabT'),'Takipler sekmesi gizli');
+  ok(await page.isHidden('#dueLeg'),'listedeki "takip" açıklaması gizli');
+  ok(!(await page.$('#list .tk-tag')),'satırlarda "takip" etiketi yok');
   ok((await rows(page)).length===8,'8 müşteri listelendi');
 
   step('1. Kayıp riski listesi');
@@ -102,8 +106,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isVisible('#tabB'),'yönetici Karne sekmesini görüyor');
   await page.click('#tabB');
   ok(await page.isHidden('#listView')&&await page.isVisible('#boardView'),'Karne açıkken müşteri listesi gizli');
-  await page.click('#tabT');ok(await page.isHidden('#listView')&&await page.isVisible('#tasksView'),'Takipler açıkken müşteri listesi gizli');
-  await page.click('#tabB');
+
   const br=await page.$$eval('#boardT tbody tr',rs=>Object.fromEntries(rs.map(r=>{const t=[...r.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim());return [t[0],t]})));
   ok(br['Lütfi Kaplan'][7].startsWith('2 ·'),'Lütfi: 2 riskli müşteri');
   ok(br['Gökhan Genç'][7].startsWith('1 ·'),'Gökhan: 1 riskli (kapanan hariç)');
