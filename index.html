@@ -194,8 +194,8 @@ dd a{color:var(--accInk);font-weight:600}
 <!-- ===== Supabase ayarları: kendi projenizin bilgilerini yazın ===== -->
 <script>
 window.CRM_CONFIG={
-  SUPABASE_URL:'https://kbryjqxqtjekooiwtpou.supabase.co',,   // Supabase > Project Settings > API > Project URL
-  SUPABASE_ANON_KEY:'sb_publishable_9RZGPHG7aoQmpS9dvavGQw_ToQvG1RJ'      // Supabase > Project Settings > API > anon public
+  SUPABASE_URL:'https://kbryjqxqtjekooiwtpou.supabase.co',   // Supabase > Project Settings > API > Project URL
+  SUPABASE_ANON_KEY:'sb_publishable_UF_j3gaW_eLQKRQLacSLzQ_xmGT8XNS'      // Supabase > Project Settings > API > anon public
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -204,8 +204,12 @@ window.CRM_CONFIG={
 (function(){
   if(window.claude)return; // Claude içinde açılırsa kendi veritabanını kullanır
   const cfg=window.CRM_CONFIG||{};
-  if(!window.supabase||!cfg.SUPABASE_URL||cfg.SUPABASE_URL.includes('PROJE-ID'))return;
-  const sb=window.supabase.createClient(cfg.SUPABASE_URL,cfg.SUPABASE_ANON_KEY);
+  const diag=m=>{window.CRM_DIAG=m;console.error('[CRM]',m)};
+  const url=String(cfg.SUPABASE_URL||'').trim().replace(/\/+$/,''),key=String(cfg.SUPABASE_ANON_KEY||'').trim();
+  if(!window.supabase){diag('Supabase kütüphanesi yüklenemedi (cdn.jsdelivr.net). İnternet/şirket ağı bu adresi engelliyor olabilir; sayfayı yenileyin ya da başka bir ağda deneyin.');return}
+  if(!url||url.includes('PROJE-ID')||!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)){diag('CRM_CONFIG içindeki SUPABASE_URL hatalı: "'+url+'". Şu biçimde olmalı: https://xxxxxxxx.supabase.co (sonunda /rest/v1 vb. olmadan).');return}
+  if(!key||key.includes('BURAYA')||key.length<30){diag('CRM_CONFIG içindeki SUPABASE_ANON_KEY boş ya da hatalı. Supabase > Project Settings > API > "anon public" (veya "Publishable key") değerini yapıştırın.');return}
+  let sb;try{sb=window.supabase.createClient(url,key)}catch(e){diag('Supabase bağlantısı kurulamadı: '+e.message);return}
   const T='docs';
   const rid=()=>(crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2)).replace(/-/g,'').slice(0,20);
   const fail=e=>{throw Object.assign(new Error(e.message||'db'),{code:e.code})};
@@ -262,12 +266,15 @@ window.CRM_CONFIG={
   }
   async function session(){
     const {data}=await sb.auth.getSession();const s=data.session||await loginUI();
-    const {data:ok}=await sb.from('allowed_users').select('email').maybeSingle();
+    const {data:ok,error:ae}=await sb.from('allowed_users').select('email').maybeSingle();
+    if(ae)throw new Error(/relation|does not exist|schema cache/i.test(ae.message)?'Veritabanı tabloları bulunamadı. 1-supabase-kurulum.sql dosyasını SQL Editor\'de çalıştırdınız mı? ('+ae.message+')':ae.message);
     if(!ok){document.body.innerHTML=`<div style="font-family:system-ui;padding:40px;max-width:520px;margin:auto"><h2>Erişim yetkiniz yok</h2><p>${s.user.email} adresi CRM kullanıcı listesinde değil. Yöneticinizden eklenmesini isteyin.</p><button id="lo">Farklı e-posta ile giriş</button></div>`;document.getElementById('lo').onclick=async()=>{await sb.auth.signOut();location.reload()};await new Promise(()=>{})}
     return s}
   function logoutBtn(s){const b=document.createElement('button');b.textContent='Çıkış ('+s.user.email+')';b.style.cssText='position:fixed;right:10px;bottom:10px;z-index:50;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#333;opacity:.8;cursor:pointer';b.onclick=async()=>{await sb.auth.signOut();location.reload()};document.body.appendChild(b)}
   window.claude={async use(k){
-    if(k==='db'){const s=await session();logoutBtn(s);return db}
+    if(k==='db'){try{const s=await session();logoutBtn(s);
+      const {error:te}=await sb.from(T).select('id').limit(1);if(te)throw new Error(te.message);
+      return db}catch(e){diag('Supabase hatası: '+(e.message||e));return null}}
     if(k==='user')return {can:async()=>true};
     if(k==='downloads')return {async save({filename,data}){const u=URL.createObjectURL(new Blob([data],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)}};
     return null}};
@@ -342,7 +349,7 @@ function renderTop(){
   $('#ximpBtn').style.display=canWrite?'inline-flex':'none';
   $('#sub').textContent=INVTO?`Fatura verisi ${fmt(INVTO)} tarihine kadar (Power BI) · son temas faturaları da kapsar`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde';
   let b='';
-  if(st.nodb)b='<span>Kayıtlara ulaşılamıyor. Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.</span>';
+  if(st.nodb)b=`<span>Kayıtlara ulaşılamıyor. ${esc(window.CRM_DIAG||'Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.')}</span>`;
   else if(st.err)b='<span>Kayıtlar okunamadı. Sayfayı daha sonra tekrar açın.</span>';
   else if(st.slow&&!loaded)b='<span>Veriye henüz ulaşılamıyor; bağlantınızı kontrol edin. Gösterilenler güncel olmayabilir.</span>';
   else if(!canWrite)b='<span>Salt okunur görünüm: kayıt eklemek için sayfa sahibinden “Contributor” yetkisi isteyin.</span>';
