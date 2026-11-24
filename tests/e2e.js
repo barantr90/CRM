@@ -139,10 +139,13 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isVisible('#listView')&&JSON.stringify(await rows(page))==='["Düşüş Market","Sessiz Market"]','risk sayısına tıklayınca o temsilcinin risk listesi açılıyor');
   await page.click('.chip[data-rep=""]');await page.click('[data-quick=risk]');
 
-  step('7. Hedef takibi');
+  step('7. Hedef takibi (ayrı sekme)');
   await page.click('#tabB');
+  ok(!(await page.$('#board #tform'))&&!(await page.$$eval('#board h3',h=>h.map(x=>x.textContent))).some(t=>t.startsWith('Aylık')),'hedefler artık Karne sekmesinde değil');
+  await page.click('#tabH');
+  ok(await page.isVisible('#targetsView')&&await page.isHidden('#boardView')&&await page.isHidden('#listView'),'Hedefler sekmesi ayrı açılıyor');
   const heads7=await page.$$eval('#tform thead th',t=>t.map(x=>x.textContent));
-  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Toplam"]','hedef tablosu: Temsilci, A–E, Toplam');
+  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Hedef","Bu ay sipariş","Gerçekleşme"]','hedef tablosu: Temsilci, A–E, Hedef, Bu ay sipariş, Gerçekleşme');
   ok((await page.$$('#tform .eurin i')).length===25&&await txt(page,'#tform .eurin i')==='€','her hücrede € simgesi (5 temsilci × 5 kategori)');
   await page.fill('#tform [name="Lütfi Kaplan|A"]','abc');await page.click('#tform button[type=submit]');
   ok(/€ tutarı olmalı/.test(await txt(page,'#toast')),'geçersiz hedef reddedildi');
@@ -156,6 +159,10 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   const tg=await doc(page,'targets/'+F.TODAY.slice(0,7));
   ok(tg&&tg.grid['Lütfi Kaplan'].A===1500&&tg.grid['Lütfi Kaplan'].B===2500&&tg.reps['Lütfi Kaplan']===4000&&tg.reps['Mehmet Halici']===10000,'kategori hedefleri ve temsilci toplamları kaydedildi');
   ok(JSON.stringify(tg.cats)==='["A","B","C","D","E"]','kategori adları kayıtta');
+  ok(/^%30/.test(await txt(page,'#tform [data-tp="Lütfi Kaplan"]'))&&!!(await page.$('#tform [data-tp="Lütfi Kaplan"] .bar')),'Lütfi gerçekleşme %30 ve çubuk');
+  ok(/^%66/.test(await txt(page,'#tform [data-tp="_all"]')),'toplam gerçekleşme %66 (9.200 / 14.000)');
+  await page.screenshot({path:path.join(SHOTS,'7-hedefler-sekme.png'),fullPage:true});
+  await page.click('#tabB');
   {const v=await page.$$eval('#boardT tbody tr',rs=>rs.find(r=>r.cells[0].textContent.includes('Lütfi')).cells[5].textContent.replace(/\u00a0/g,' '));ok(/€ 1\.200\s*\/ € 4\.000 · %30/.test(v),'karnede Lütfi: € 1.200 / € 4.000 · %30 → '+JSON.stringify(v))}
   await page.click('[data-view=list]');
   await page.click('.chip[data-rep="Lütfi Kaplan"]');
@@ -185,7 +192,17 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
   await sel(page,'Sessiz Market');
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
-  await page.evaluate(()=>{window.CRM_IS_ADMIN=undefined;document.querySelector('#tabB').hidden=false;document.querySelector('#tabB').click()});
+  ok(await page.isVisible('#tabH'),'temsilci Hedefler sekmesini görüyor');
+  await page.click('#tabH');
+  ok(/hedef girilmemiş/.test(await txt(page,'#targets')),'hedef yoksa bilgi mesajı');
+  await page.evaluate(m=>window.claude.use('db').then(db=>db.doc('targets/'+m).set({month:m,cats:['A','B','C','D','E'],grid:{'Lütfi Kaplan':{A:3000,B:1000}},reps:{'Lütfi Kaplan':4000,'Özgür Firat':5000}})),F.TODAY.slice(0,7));
+  await page.waitForTimeout(100);
+  ok(!(await page.$('#tform'))&&!(await page.$('#targets input')),'temsilci hedefleri yalnızca görüntülüyor: giriş alanı ve kaydet yok');
+  ok(/yalnızca görüntüleme/.test(await txt(page,'#targets h3')),'başlıkta "yalnızca görüntüleme" yazıyor');
+  ok(await txt(page,'#tgT [data-tt="Lütfi Kaplan"]')==='€ 4.000'&&/^%30/.test(await txt(page,'#tgT [data-tp="Lütfi Kaplan"]')),'temsilci hedefi ve gerçekleşmeyi görüyor: € 4.000 · %30');
+  ok(await txt(page,'#tgT [data-tt="Özgür Firat"]')==='€ 5.000 kategorisiz','kategorisiz eski hedef de görünüyor');
+  await page.screenshot({path:path.join(SHOTS,'7-temsilci-hedefler.png'),fullPage:true});
+  await page.evaluate(()=>{window.CRM_IS_ADMIN=undefined});await page.click('#tabH');
   ok(!(await page.$('#tform')),'yönetici olarak doğrulanmamış kullanıcı hedef formunu görmüyor');
   await ctx.close();
 

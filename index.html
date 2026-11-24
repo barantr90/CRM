@@ -144,7 +144,7 @@ dd a{color:var(--accInk);font-weight:600}
 .aform [hidden]{display:none!important}
 .oc{font-weight:600}
 .board h3{font-size:24px;margin:22px 0 8px}.board h3:first-child{margin-top:0}.board .ordp{margin:0 0 8px;overflow-x:auto}.board td,.board th{white-space:nowrap}.board .sm{color:var(--mut);font-size:13px}
-.tgrid td,.tgrid th{text-align:right}.tgrid td:first-child,.tgrid th:first-child{text-align:left}.tgrid .tt{font-weight:600}
+.tgrid td,.tgrid th{text-align:right}.tgrid .tp{min-width:110px}.tgrid thead th:not(:first-child){min-width:92px}.tgrid .tp .bar{margin-top:4px}.tgrid td:first-child,.tgrid th:first-child{text-align:left}.tgrid .tt{font-weight:600}
 .eurin{display:inline-flex;align-items:center;gap:4px;justify-content:flex-end}.eurin i{font-style:normal;color:var(--mut)}
 .eurin input{width:108px;min-height:38px;padding:6px 8px;text-align:right;font-variant-numeric:tabular-nums}.eurin input[aria-invalid=true]{border-color:var(--bad);color:var(--bad)}
 #tform .mb{margin-top:10px}
@@ -170,6 +170,7 @@ dd a{color:var(--accInk);font-weight:600}
   <nav class="tabs" role="tablist">
     <button class="tab" data-view="list" role="tab">Müşteriler</button>
     <button class="tab" data-view="tasks" role="tab" id="tabT">Takipler</button>
+    <button class="tab" data-view="targets" role="tab" id="tabH">Hedefler</button>
     <button class="tab" data-view="board" role="tab" id="tabB" hidden>Karne</button>
   </nav>
   <main class="grid" id="listView">
@@ -186,6 +187,7 @@ dd a{color:var(--accInk);font-weight:600}
     <section class="detail" id="detail" aria-live="polite"></section>
   </main>
   <section class="tasks" id="tasksView" hidden><div id="tasks"></div></section>
+  <section class="board" id="targetsView" hidden><div id="targets"></div></section>
   <section class="board" id="boardView" hidden><div id="board"></div></section>
 </div>
 
@@ -571,33 +573,42 @@ function renderBoard(){
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
   <h3>En yüksek iade oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}'i ve üzeri</small></h3>
   ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
-  <h3>Aylık hedefler <small class="sm">${mname}</small></h3>
-  ${targetsHtml(mk)}`;
+`;
 }
 /* Aylık hedefler: temsilci × kategori tablosu. Yalnızca yönetici girer. */
 const CATS=['A','B','C','D','E']; // kategori adları buradan değiştirilir
 const eurIn=n=>n?Math.round(n).toLocaleString('nl-NL'):'';
 function targetsHtml(mk){
-  const T=TGS[mk]||{},G=T.grid||{},L=T.reps||{};
+  const T=TGS[mk]||{},G=T.grid||{},L=T.reps||{},mon=monRows()||{};
   const reps=allReps(),adm=window.CRM_IS_ADMIN===true&&canWrite;
   const legacy=r=>!G[r]&&+L[r]?+L[r]:0; // kategorisiz girilmiş eski toplam
   const rowSum=r=>legacy(r)||CATS.reduce((a,c)=>a+(+((G[r]||{})[c])||0),0);
   const catSum=c=>reps.reduce((a,r)=>a+(+((G[r]||{})[c])||0),0);
+  const ord=r=>(mon[r]||{}).amt||0;
   const cell=(r,c)=>{const v=+((G[r]||{})[c])||0;return adm?`<td><span class="eurin"><i aria-hidden="true">€</i><input name="${esc(r)}|${esc(c)}" inputmode="decimal" autocomplete="off" aria-label="${esc(r)} – ${esc(c)} hedefi" placeholder="0" value="${eurIn(v)}"></span></td>`:`<td>${v?eur(v):'–'}</td>`};
   const tot=r=>`<td class="tt" data-tt="${esc(r)}">${rowSum(r)?eur(rowSum(r)):'–'}${legacy(r)?' <span class="sm">kategorisiz</span>':''}</td>`;
-  const all=reps.reduce((a,r)=>a+rowSum(r),0);
-  const table=`<div class="ordp tgrid"><table><thead><tr><th>Temsilci</th>${CATS.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Toplam</th></tr></thead>
-    <tbody>${reps.map(r=>`<tr><td>${esc(r)}</td>${CATS.map(c=>cell(r,c)).join('')}${tot(r)}</tr>`).join('')}</tbody>
-    <tfoot><tr><td>Toplam</td>${CATS.map(c=>`<td data-ct="${esc(c)}">${catSum(c)?eur(catSum(c)):'–'}</td>`).join('')}<td data-ct="_all">${all?eur(all):'–'}</td></tr></tfoot></table></div>`;
-  if(!adm)return Object.keys(G).length||Object.keys(L).length?table:'<p>Bu ay için hedef girilmemiş.</p>';
-  return `<form id="tform" autocomplete="off">${table}<div class="mb"><span>Tutarları € olarak girin (örn. 25.000). Satırın toplamı temsilcinin aylık hedefidir.</span><button class="primary" type="submit">Hedefleri kaydet</button></div></form>`;
+  const all=reps.reduce((a,r)=>a+rowSum(r),0),allOrd=reps.reduce((a,r)=>a+ord(r),0);
+  const tableHtml=`<div class="ordp tgrid"><table id="tgT"><thead><tr><th>Temsilci</th>${CATS.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Hedef</th><th>Bu ay sipariş</th><th>Gerçekleşme</th></tr></thead>
+    <tbody>${reps.map(r=>`<tr><td>${esc(r)}</td>${CATS.map(c=>cell(r,c)).join('')}${tot(r)}<td>${eur(ord(r))}</td><td class="tp" data-tp="${esc(r)}" data-ord="${ord(r)}">${tpHtml(ord(r),rowSum(r))}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>Toplam</td>${CATS.map(c=>`<td data-ct="${esc(c)}">${catSum(c)?eur(catSum(c)):'–'}</td>`).join('')}<td data-ct="_all">${all?eur(all):'–'}</td><td>${eur(allOrd)}</td><td class="tp" data-tp="_all" data-ord="${allOrd}">${tpHtml(allOrd,all)}</td></tr></tfoot></table></div>`;
+  if(!adm)return Object.keys(G).length||Object.keys(L).length?tableHtml:'<p class="empty">Bu ay için hedef girilmemiş.</p>';
+  return `<form id="tform" autocomplete="off">${tableHtml}<div class="mb"><span>Tutarları € olarak girin (örn. 25.000). Satırın toplamı temsilcinin aylık hedefidir.</span><button class="primary" type="submit">Hedefleri kaydet</button></div></form>`;
+}
+const tpHtml=(v,t)=>t?`%${Math.round(v/t*100)}${barHtml(v,t)}`:'–';
+function renderTargets(){
+  if(st.view!=='targets')return;
+  const mk=monthKey(),mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`;
+  const adm=window.CRM_IS_ADMIN===true&&canWrite;
+  $('#targets').innerHTML=`<h3>Aylık hedef takibi <small class="sm">${mname} · ayın %${Math.round(monthFrac()*100)}'i geçti${adm?'':' · yalnızca görüntüleme'}</small></h3>${targetsHtml(mk)}
+  <p class="sm">Sipariş: Power BI satış faturaları${MON&&MON.updatedAt?` (güncelleme ${fmt(MON.updatedAt)})`:''}. Çubuk turuncuysa temsilci ayın geçen kısmına göre hedefin gerisinde.</p>`;
 }
 function tformTotals(f){
   const val=e=>{const n=num(e.value);return n>0?n:0};const rs={},cs={};
   for(const e of f.querySelectorAll('input[name*="|"]')){const [r,c]=e.name.split('|');rs[r]=(rs[r]||0)+val(e);cs[c]=(cs[c]||0)+val(e)}
-  const L=(TGS[monthKey()]||{}).reps||{},G=(TGS[monthKey()]||{}).grid||{};let all=0;
-  for(const td of f.querySelectorAll('[data-tt]')){const r=td.dataset.tt;const leg=!rs[r]&&!G[r]&&+L[r]?+L[r]:0;const v=rs[r]||leg;all+=v;td.innerHTML=(v?eur(v):'–')+(leg?' <span class="sm">kategorisiz</span>':'')}
+  const L=(TGS[monthKey()]||{}).reps||{},G=(TGS[monthKey()]||{}).grid||{};let all=0;const tv={};
+  for(const td of f.querySelectorAll('[data-tt]')){const r=td.dataset.tt;const leg=!rs[r]&&!G[r]&&+L[r]?+L[r]:0;const v=rs[r]||leg;tv[r]=v;all+=v;td.innerHTML=(v?eur(v):'–')+(leg?' <span class="sm">kategorisiz</span>':'')}
   for(const td of f.querySelectorAll('[data-ct]')){const c=td.dataset.ct;const v=c==='_all'?all:(cs[c]||0);td.textContent=v?eur(v):'–'}
+  for(const td of f.querySelectorAll('[data-tp]')){const r=td.dataset.tp;td.innerHTML=tpHtml(+td.dataset.ord||0,r==='_all'?all:(tv[r]||0))}
 }
 function renderTasks(){
   const cm=Object.fromEntries(C.map(c=>[c.id,c]));
@@ -616,13 +627,13 @@ function render(){
   if(st.view==='tasks'&&!VISIT_LOG)st.view='list';
   $('#tabT').hidden=!VISIT_LOG;$('#dueLeg').hidden=!VISIT_LOG;
   document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
-  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';
+  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';
   // açık formlardaki yazılanları yeniden çizimde koru
   const keep={};let foc=null;
   for(const id of ['aform','ctform','tform']){const f=$('#'+id);if(!f||(id!=='tform'&&st.formFor!==st.sel))continue;
     keep[id]=[...f.elements].filter(e=>e.name).map(e=>({n:e.name,t:e.type,v:e.value,c:e.checked,touched:e.dataset.touched}));
     const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.name&&ae.type!=='radio'&&ae.type!=='checkbox')foc=[id,ae.name]}
-  renderTop();renderStats();renderList();renderTasks();renderBoard();
+  renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();
   renderDetail();
   for(const [id,vals] of Object.entries(keep)){const g=$('#'+id);if(!g)continue;
     for(const e of g.elements){if(!e.name)continue;const k=(e.type==='radio'||e.type==='checkbox')?vals.find(x=>x.n===e.name&&x.v===e.value):vals.find(x=>x.n===e.name);if(!k)continue;
