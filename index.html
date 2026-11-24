@@ -195,7 +195,7 @@ dd a{color:var(--accInk);font-weight:600}
 <script>
 window.CRM_CONFIG={
   SUPABASE_URL:'https://kbryjqxqtjekooiwtpou.supabase.co',   // Supabase > Project Settings > API > Project URL
-  SUPABASE_ANON_KEY:'sb_publishable_UF_j3gaW_eLQKRQLacSLzQ_xmGT8XNS'      // Supabase > Project Settings > API > anon public
+  SUPABASE_ANON_KEY:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImticnlqcXhxdGpla29vaXd0cG91Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU1MjExNjEsImV4cCI6MjExMTA5NzE2MX0.uyKFvWKuOzz69xjaOs0QVA3_lyTU1zingGBhikdpTnc'      // Supabase > Project Settings > API > anon public
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -255,12 +255,23 @@ window.CRM_CONFIG={
     return new Promise(res=>{
       const w=document.createElement('div');w.id='login';
       w.innerHTML=`<style>#login{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:var(--bg,#fff);font-family:system-ui,sans-serif}#login form{width:min(380px,90vw);display:grid;gap:12px;padding:28px;border:1px solid #ddd;border-radius:14px}#login h2{margin:0;font-size:24px}#login input,#login button{min-height:46px;border-radius:10px;font-size:16px;padding:0 14px;border:1px solid #ccc}#login button{background:#ff4a1c;color:#fff;border-color:#ff4a1c;font-weight:600;cursor:pointer}#login p{margin:0;color:#666;font-size:14px}</style>
-      <form><h2>Müşteri Takibi</h2><p>Giriş için e-posta adresinizi yazın. Size bir giriş bağlantısı göndereceğiz.</p>
-      <input type="email" name="e" required placeholder="ad@firma.com" autocomplete="email"><button>Giriş bağlantısı gönder</button><p id="lmsg"></p></form>`;
+      <form id="lpw"><h2>Müşteri Takibi</h2><p>E-posta ve şifrenizle giriş yapın.</p>
+      <input type="email" name="e" required placeholder="ad@firma.com" autocomplete="username">
+      <input type="password" name="p" required placeholder="Şifre" autocomplete="current-password">
+      <button>Giriş yap</button><p id="lmsg"></p>
+      <p><a href="#" id="lml">Şifrem yok / unuttum: e-postama giriş bağlantısı gönder</a></p></form>`;
       document.body.appendChild(w);
-      w.querySelector('form').onsubmit=async e=>{e.preventDefault();const email=e.target.elements.e.value.trim();const m=w.querySelector('#lmsg');m.textContent='Gönderiliyor…';
+      const m=w.querySelector('#lmsg'),f=w.querySelector('#lpw');
+      const explain=t=>/rate limit|too many|security purposes/i.test(t)?'Çok fazla e-posta istendi. Supabase ücretsiz planda saatte sadece birkaç e-posta gönderir; bir süre sonra tekrar deneyin ya da şifreyle giriş yapın. ('+t+')'
+        :/invalid login|invalid credentials/i.test(t)?'E-posta veya şifre hatalı. ('+t+')'
+        :/email not confirmed/i.test(t)?'Bu hesap henüz onaylanmamış. Supabase > Authentication > Users bölümünde kullanıcıyı oluştururken "Auto Confirm User" seçeneğini işaretleyin. ('+t+')'
+        :/signups? not allowed|signup.*disabled/i.test(t)?'Bu e-posta Supabase\'de kullanıcı değil. Supabase > Authentication > Users > "Add user" ile ekleyin. ('+t+')'
+        :'Giriş yapılamadı: '+t;
+      f.onsubmit=async e=>{e.preventDefault();const email=f.elements.e.value.trim(),password=f.elements.p.value;m.textContent='Giriş yapılıyor…';
+        const {error}=await sb.auth.signInWithPassword({email,password});if(error){console.error('[CRM]',error);m.textContent=explain(String(error.message||error))}};
+      w.querySelector('#lml').onclick=async e=>{e.preventDefault();const email=f.elements.e.value.trim();if(!email){m.textContent='Önce e-posta adresinizi yazın.';return}m.textContent='Gönderiliyor…';
         const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:location.origin+location.pathname}});
-        m.textContent=error?'Bağlantı gönderilemedi. Biraz sonra tekrar deneyin.':'E-postanıza giriş bağlantısı gönderildi. Bağlantıya tıklayın.'};
+        m.textContent=error?explain(String(error.message||error)):'E-postanıza giriş bağlantısı gönderildi (gelen kutusu/spam). Girdikten sonra sağ alttaki "Şifre belirle" ile kendinize şifre koyabilirsiniz.'};
       sb.auth.onAuthStateChange((ev,s)=>{if(s){w.remove();res(s)}});
     });
   }
@@ -270,7 +281,10 @@ window.CRM_CONFIG={
     if(ae)throw new Error(/relation|does not exist|schema cache/i.test(ae.message)?'Veritabanı tabloları bulunamadı. 1-supabase-kurulum.sql dosyasını SQL Editor\'de çalıştırdınız mı? ('+ae.message+')':ae.message);
     if(!ok){document.body.innerHTML=`<div style="font-family:system-ui;padding:40px;max-width:520px;margin:auto"><h2>Erişim yetkiniz yok</h2><p>${s.user.email} adresi CRM kullanıcı listesinde değil. Yöneticinizden eklenmesini isteyin.</p><button id="lo">Farklı e-posta ile giriş</button></div>`;document.getElementById('lo').onclick=async()=>{await sb.auth.signOut();location.reload()};await new Promise(()=>{})}
     return s}
-  function logoutBtn(s){const b=document.createElement('button');b.textContent='Çıkış ('+s.user.email+')';b.style.cssText='position:fixed;right:10px;bottom:10px;z-index:50;font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#333;opacity:.8;cursor:pointer';b.onclick=async()=>{await sb.auth.signOut();location.reload()};document.body.appendChild(b)}
+  function logoutBtn(s){const box=document.createElement('div');box.style.cssText='position:fixed;right:10px;bottom:10px;z-index:50;display:flex;gap:6px';
+    const mk=(t,fn)=>{const b=document.createElement('button');b.textContent=t;b.style.cssText='font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#333;opacity:.85;cursor:pointer';b.onclick=fn;box.appendChild(b)};
+    mk('Şifre belirle',async()=>{const p=prompt('Yeni şifre (en az 8 karakter):');if(!p)return;if(p.length<8){alert('Şifre en az 8 karakter olmalı.');return}const {error}=await sb.auth.updateUser({password:p});alert(error?'Şifre kaydedilemedi: '+error.message:'Şifreniz kaydedildi. Bundan sonra e-posta ve şifreyle giriş yapabilirsiniz.')});
+    mk('Çıkış ('+s.user.email+')',async()=>{await sb.auth.signOut();location.reload()});document.body.appendChild(box)}
   window.claude={async use(k){
     if(k==='db'){try{const s=await session();logoutBtn(s);
       const {error:te}=await sb.from(T).select('id').limit(1);if(te)throw new Error(te.message);
