@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Müşteri Takibi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Sofia+Sans+Condensed:wght@700;800&display=swap">
+<style>
+/* VOICE: calm field tool for a sales team, fast to scan, no decoration
+   IDEA: a rep's route clipboard — today's list on top, the customer card beside it
+   PICTURE: the working list + customer card themselves, under a modest title
+   COLOUR and TYPE: white / near-black / vermilion accent; Sofia Sans Condensed 800 + Instrument Sans
+   LAYOUT: header, rep chips, four count tiles, list | detail (stacks under 900px, detail becomes a sheet) */
+:root{color-scheme:light dark;--bg:light-dark(#fff,#120d0b);--ink:light-dark(#15110f,#f4eeea);--mut:light-dark(#6d635e,#a99f99);--line:light-dark(#e8e2de,#2e2622);--card:light-dark(#f8f6f5,#1b1512);--acc:#ff4a1c;--accInk:light-dark(#c2300c,#ff7a57);--soft:light-dark(#fff0ea,#2b1610);--ok:light-dark(#1f7a4d,#5fd39a)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Instrument Sans",system-ui,sans-serif;overflow-x:clip}
+h1,h2,h3{font-family:"Sofia Sans Condensed","Arial Narrow",sans-serif;font-weight:800;line-height:1.05;margin:0;text-wrap:balance}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 max(4vw,16px)}
+header.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between;padding-top:28px;padding-bottom:14px}
+header h1{font-size:clamp(32px,5vw,46px)}
+header p{margin:4px 0 0;color:var(--mut);font-size:14px}
+.acts{display:flex;flex-wrap:wrap;gap:8px}
+.primary,.ghost{min-height:44px;padding:0 16px;border-radius:10px;font-weight:600;border:1px solid var(--line);background:var(--bg)}
+.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+.ghost:hover{background:var(--card)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{min-height:40px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:var(--bg);font-size:15px}
+.chip.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.reps{padding-bottom:14px}
+.banner{margin:0 0 14px;padding:12px 16px;border-radius:10px;background:var(--soft);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;font-size:15px}
+.banner:empty{display:none}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:18px}
+.stat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--card)}
+.stat b{font:800 clamp(28px,4vw,40px)/1 "Sofia Sans Condensed",sans-serif;white-space:nowrap}
+.stat span{font-size:14px;color:var(--mut)}
+button.stat:hover{border-color:var(--ink)}
+.stat.on{background:var(--acc);border-color:var(--acc);color:#fff}.stat.on span{color:#fff}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.tab{min-height:44px;padding:0 14px;border:0;background:none;font-weight:600;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--ink);border-color:var(--acc)}
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:24px;align-items:start;padding-bottom:48px}
+.filters{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}
+input,select,textarea{width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px}
+textarea{resize:vertical}
+.meta{display:flex;justify-content:space-between;color:var(--mut);font-size:14px;padding:4px 2px 8px}
+.list{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.row{width:100%;display:grid;grid-template-columns:var(--segw,124px) minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 8px;border:0;border-bottom:1px solid var(--line);background:none;text-align:left}
+.row:hover{background:var(--card)}.row.sel{background:var(--soft)}
+.rm b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm small{display:block;color:var(--mut);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.seg{display:inline-block;min-width:30px;max-width:120px;height:30px;line-height:28px;padding:0 7px;text-align:center;border-radius:8px;font-weight:700;font-size:14px;background:var(--card);border:1px solid var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sA{background:var(--ink);color:var(--bg);border-color:var(--ink)}.sB{background:var(--soft);border-color:var(--acc);color:var(--accInk)}
+.sPla,.sGol,.sSil,.sBro,.sGas,.sTop,.sKio,.sPot{background:transparent;color:var(--ink);border-color:light-dark(#c9c2bd,#4a403b)}.sPla::before,.sGol::before,.sSil::before,.sBro::before,.sGas::before,.sTop::before,.sKio::before,.sPot::before{content:'';display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:0;background:var(--dot)}.sPla{--dot:#c9d1d9}.sGol{--dot:#d4a017}.sSil{--dot:#8d949b}.sBro{--dot:#b06232}.sGas{--dot:#c62828}.sTop{--dot:#2e7d32}.sKio{--dot:#7b4fc4}.sPot{--dot:transparent}.sPot::before{box-sizing:border-box;border:2px solid #1e88e5}
+.lc{font-size:13px;color:var(--mut);white-space:nowrap;display:flex;align-items:center;gap:6px}
+.lc.cold{color:var(--accInk);font-weight:600}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--acc);display:inline-block}.tk-tag{font-style:normal;font-size:11px;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--ink);color:var(--bg)}
+.empty{padding:28px 8px;color:var(--mut);list-style:none}
+.detail{border:1px solid var(--line);border-radius:14px;padding:clamp(16px,2.4vw,28px);background:var(--bg);position:sticky;top:12px}
+.ph h2{font-size:32px;margin-bottom:8px}.ph p,.ph li{color:var(--mut)}.ph ul{padding-left:20px}
+.back{display:none}
+.dh{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:flex-start}
+.dh h2{font-size:clamp(30px,3.4vw,40px)}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 0}
+.tag{padding:3px 10px;border-radius:99px;background:var(--card);border:1px solid var(--line);font-size:13px}
+.act{display:flex;gap:6px}
+.info{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 20px;margin:18px 0}
+.info div{border-top:1px solid var(--line);padding-top:6px}
+dt{font-size:13px;color:var(--mut)}dd{margin:0;overflow-wrap:anywhere}
+dd a{color:var(--accInk);font-weight:600}
+.notes{background:var(--card);padding:10px 14px;border-radius:10px;white-space:pre-wrap;margin:0 0 18px}
+.aform{background:var(--card);border-radius:12px;padding:16px;display:grid;gap:10px;margin-bottom:22px}
+.aform h3,.detail>h3{font-size:22px}
+.aform label,.sheet label{display:grid;gap:4px;font-size:14px;color:var(--mut)}
+.aform label>input,.aform label>select,.aform label>textarea,.sheet label>*{color:var(--ink)}
+.typ label{display:block}.typ input{position:absolute;opacity:0;width:1px;height:1px}
+.typ span{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:var(--bg);color:var(--ink);font-size:15px;cursor:pointer}
+.typ input:checked+span{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.typ input:focus-visible+span{outline:3px solid var(--acc);outline-offset:2px}
+.g2,.g3{display:grid;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.qd{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:14px;color:var(--mut)}
+.qd button{min-height:36px;padding:0 12px;border-radius:99px;border:1px solid var(--line);background:var(--bg);font-size:14px}
+.aform .primary{justify-self:start;min-width:140px}
+.tl{list-style:none;margin:12px 0 0;padding:0}
+.tl>li{display:grid;grid-template-columns:110px minmax(0,1fr);gap:12px;padding:12px 0;border-top:1px solid var(--line)}
+.tm{display:grid;gap:4px;align-content:start;font-size:14px}
+.ty{justify-self:start;font-size:12px;font-weight:600;padding:2px 8px;border-radius:6px;background:var(--card);border:1px solid var(--line)}
+.t3{background:var(--soft);border-color:var(--acc);color:var(--accInk)}.t4{background:var(--ink);color:var(--bg)}
+.tb{position:relative;padding-right:56px}.tb p{margin:2px 0;white-space:pre-wrap}.tb small{color:var(--mut)}
+.amt{margin-left:8px;font-weight:700;white-space:nowrap}
+.nx{display:flex!important;align-items:center;gap:8px;margin-top:6px;font-size:14px;padding:6px 10px;border-radius:8px;background:var(--card);cursor:pointer}
+.nx input,.tk input{width:20px;height:20px;min-height:0;accent-color:var(--acc);flex:none}
+.nx.late{background:var(--soft);color:var(--accInk);font-weight:600}.nx.done{text-decoration:line-through;color:var(--mut)}
+.x{position:absolute;right:0;top:0;min-height:32px;padding:0 8px;border:0;background:none;color:var(--mut);font-size:13px}
+.x:hover,.x.arm{color:var(--accInk);font-weight:600}
+.tasks h3{font-size:24px;margin:18px 0 6px}.tasks h3 small{color:var(--mut);font-family:"Instrument Sans";font-size:15px;font-weight:500}
+.tk{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.tk li{display:grid;grid-template-columns:28px 96px minmax(0,1.2fr) minmax(0,2fr) auto;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)}
+.tk li.late .td{color:var(--accInk);font-weight:700}
+.td{white-space:nowrap;font-size:14px}.tk small{color:var(--mut);white-space:nowrap}
+.lnk{border:0;background:none;padding:0;text-align:left;font-weight:600;color:var(--ink);text-decoration:underline;text-decoration-color:var(--acc);text-underline-offset:3px;min-height:32px}
+.modal{position:fixed;inset:0;background:rgb(0 0 0/.45);display:grid;place-items:center;padding:16px;z-index:50}
+.modal[hidden]{display:none}
+.sheet{width:min(680px,100%);max-height:calc(100vh - 32px);overflow:auto;background:var(--bg);border-radius:16px;padding:24px;display:grid;gap:14px}
+.sheet h2{font-size:30px}.sheet p{margin:0;color:var(--mut);font-size:15px}
+.w2{grid-column:1/-1}
+.mb{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;align-items:center}
+.mb span{margin-right:auto;color:var(--mut);font-size:14px}
+.file{display:inline-flex!important;align-items:center;justify-self:start;min-height:44px;padding:0 16px;border:1px dashed var(--line);border-radius:10px;cursor:pointer;color:var(--ink)!important}
+.file input{position:absolute;opacity:0;width:1px;height:1px}
+.prev{font-size:14px;overflow-x:auto}.prev table{border-collapse:collapse;width:100%}.prev td,.prev th{border-bottom:1px solid var(--line);padding:5px 8px;text-align:left;white-space:nowrap}
+.toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,20px);opacity:0;background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:10px;z-index:60;pointer-events:none;transition:.2s;max-width:calc(100vw - 32px)}
+.toast.show{opacity:1;transform:translate(-50%,0)}.toast.bad{background:var(--acc);color:#fff}
+.cmp{grid-column:1/-1}.cmp dd{font-weight:600}.up{color:var(--ok);margin-left:6px}.down{color:light-dark(#c62828,#ff6b6b);margin-left:6px}.fixed{display:flex;align-items:center;min-height:44px;color:var(--ink);font-size:16px}
+.warn{color:light-dark(#c62828,#ff6b6b)}
+.sample{font-size:13px;color:var(--mut);margin:-4px 0 12px}
+@media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}.detail{display:none;position:fixed;inset:0;z-index:40;border-radius:0;border:0;overflow:auto;padding-bottom:40px}.detail.open{display:block}.back{display:inline-flex;align-items:center;min-height:44px;margin:-6px 0 8px;padding:0 4px;border:0;background:none;font-weight:600;color:var(--accInk)}}
+@media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters input{grid-column:1/-1}.g3,.g2,.info{grid-template-columns:minmax(0,1fr)}.tl>li{grid-template-columns:minmax(0,1fr);gap:4px}.tm{grid-auto-flow:column;justify-content:start;align-items:center;gap:8px}.tk li{grid-template-columns:28px minmax(0,1fr) auto;row-gap:2px}.tk .ta{grid-column:2/-1}.tk small{grid-column:2}.sheet{padding:18px}}
+@media(prefers-reduced-motion:reduce){.toast{transition:none}}
+.pas{color:light-dark(#c62828,#ff6b6b)!important}
+.row>.seg{width:100%;max-width:none;text-align:left}
+.ret dd{font-weight:400}.rl{display:grid;grid-template-columns:minmax(0,1fr) auto 70px 56px;gap:8px;align-items:baseline;padding:3px 0}.rl b{text-align:right}.rl small{color:var(--mut);text-align:right}.rp{text-align:right;font-weight:600}.rn{margin:4px 0 0;font-size:13px;color:var(--mut)}
+.ordp{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px 16px;margin:-8px 0 18px}.ordp .oh{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;margin-bottom:8px}.ordp small{color:var(--mut)}.ordp table{width:100%;border-collapse:collapse;font-size:15px}.ordp th,.ordp td{padding:6px 8px;text-align:right;border-bottom:1px solid var(--line)}.ordp th:first-child,.ordp td:first-child{text-align:left}.ordp tfoot td{font-weight:700;border-bottom:0}.ordp tr.on td{background:var(--soft)}.lnk{background:none;border:0;padding:0;color:var(--accInk);font:inherit;cursor:pointer;text-decoration:underline}
+</style>
+</head>
+<body>
+<header class="wrap top">
+  <div><h1>Müşteri takibi</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
+  <div class="acts" id="topActs">
+    <button class="ghost" id="xexp" type="button">Excel'e aktar</button>
+    <label class="ghost file" id="ximpBtn" style="display:inline-flex;align-items:center">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx"></label>
+  </div>
+</header>
+<div class="wrap">
+  <div class="chips reps" id="reps" role="group" aria-label="Temsilci"></div>
+  <div class="banner" id="banner"></div>
+  <div class="stats" id="stats"></div>
+  <div id="ordp"></div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" data-view="list" role="tab">Müşteriler</button>
+    <button class="tab" data-view="tasks" role="tab" id="tabT">Takipler</button>
+  </nav>
+  <main class="grid" id="listView">
+    <section>
+      <div class="filters">
+        <input id="q" type="search" placeholder="Ara: market, zincir, şehir, posta kodu…" aria-label="Ara">
+        <select id="fseg" aria-label="Segment"><option value="">Segment: tümü</option></select>
+        <select id="fstat" aria-label="Durum"><option value="">Durum: tümü</option><option>Aktif</option><option>Pasif</option></select>
+        <select id="fsort" aria-label="Sırala"><option value="name">Ada göre</option><option value="last">En eski temas önce</option></select>
+      </div>
+      <div class="meta"><span id="count"></span><span><i class="dot"></i> 30+ gün temas yok · <em class="tk-tag">takip</em> takip zamanı gelmiş <span id="qf"></span></span></div>
+      <ul class="list" id="list"></ul>
+    </section>
+    <section class="detail" id="detail" aria-live="polite"></section>
+  </main>
+  <section class="tasks" id="tasksView" hidden><div id="tasks"></div></section>
+</div>
+
+<div class="modal" id="modal" hidden>
+  <form class="sheet" id="cform" autocomplete="off">
+    <h2 id="mt">Müşteriyi düzenle</h2>
+    <div class="g2">
+      <label class="w2">Market adı *<input name="name" required></label>
+      <label>Zincir / grup<input name="chain" placeholder="örn. Sahan"></label>
+      <label>Temsilci<input name="rep" autocomplete="off"></label>
+      <label>Segment<input name="segment" list="segDL" autocomplete="off"><datalist id="segDL"></datalist></label>
+      <label>Durum<select name="status"><option value="">–</option><option>Aktif</option><option>Pasif</option></select></label>
+      <label>Rut günü<select name="visitDay"><option value="">–</option><option>Pazartesi</option><option>Salı</option><option>Çarşamba</option><option>Perşembe</option><option>Cuma</option></select></label>
+      <label>Yetkili kişi<input name="contact"></label>
+      <label>Telefon<input name="phone" type="tel"></label>
+      <label class="w2">Adres<input name="address"></label>
+      <label>Posta kodu<input name="postcode"></label>
+      <label>Şehir<input name="city"></label>
+      <label class="w2">Notlar<textarea name="notes" rows="3" placeholder="Ödeme şekli, teslim saatleri, özel istekler…"></textarea></label>
+    </div>
+    <div class="mb"><button type="button" class="ghost" data-close>Vazgeç</button><button class="primary" type="submit">Kaydet</button></div>
+  </form>
+</div>
+
+<div class="modal" id="imodal" hidden>
+  <div class="sheet">
+    <h2>Excel'den içe aktar</h2>
+    <p>Dosyadaki "Müşteriler" sayfası okunur ve müşteriler Kod ile eşleştirilir. Excel'deki bilgiler CRM'deki bilgilerin yerine geçer; ziyaret notları ve takipler etkilenmez, Excel'de olmayan müşteriler silinmez.</p>
+    <div class="prev" id="iprev"></div>
+    <div class="mb"><span id="ipr"></span><button type="button" class="ghost" data-close>Vazgeç</button><button type="button" class="primary" id="irun" disabled>Uygula</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+const REPS=['Özgür Firat','Gökhan Genç','Mehmet Halici','Lütfi Kaplan','Baran Sengül'];
+const DAYS=['Pazartesi','Salı','Çarşamba','Perşembe','Cuma'];
+const TYPES=['Ziyaret','Telefon','WhatsApp','Sipariş','Şikayet','Not'];
+const FIELDS=['name','chain','segment','status','rep','visitDay','contact','phone','address','postcode','city','notes'];
+const iso=d=>{const x=new Date(d);x.setMinutes(x.getMinutes()-x.getTimezoneOffset());return x.toISOString().slice(0,10)};
+const TODAY=iso(new Date());
+const addDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return iso(d)};
+const fmt=d=>d?String(d).split('-').reverse().join('.'):'';
+const ago=d=>d?Math.round((new Date(TODAY)-new Date(d))/864e5):null;
+const TODAYNAME=['','Pazartesi','Salı','Çarşamba','Perşembe','Cuma',''][new Date().getDay()];
+const eur=n=>'€ '+Math.round(n||0).toLocaleString('nl-NL');
+const low=s=>String(s||'').toLocaleLowerCase('tr');
+
+let db=null,canWrite=true,loaded=false;
+let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,MON=null;
+const code=c=>c.code||String(c.id||'').replace(/^c/,'');
+const has=(c,k)=>Object.prototype.hasOwnProperty.call(c,k);
+const inv=c=>(c.lastInvoice||c.sales2026!=null||c.invoices2026!=null)?{last:c.lastInvoice||'',no:c.lastInvoiceNo||'',sales:c.sales2026,n:c.invoices2026}:null;
+const ciroOf=c=>(c.ciro2025==null&&c.ciro2026==null)?null:[c.ciro2025,c.ciro2026];
+const st={q:'',rep:'',seg:'',status:'',quick:'',sort:'name',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
+try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.sort)st.sort=s.sort;if(s.view)st.view=s.view}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,sort:st.sort,view:st.view}))}catch(e){}};
+
+let tt;
+const toast=(m,bad)=>{const t=$('#toast');t.textContent=m;t.className='toast show'+(bad?' bad':'');clearTimeout(tt);tt=setTimeout(()=>{t.className='toast'},3400)};
+const fail=e=>{const c=e&&e.code;if(c==='invalid_argument'){canWrite=false;render();toast('Kaydedilemedi: bu sayfada değişiklik yapma izniniz yok.',1)}else if(c==='quota_exceeded')toast('Depolama sınırı doldu; eski kayıtları silin.',1);else toast('Kaydedilemedi, lütfen tekrar deneyin.',1)};
+async function w(fn){
+  if(!db||!canWrite){toast('Şu an kayıt yapılamıyor.',1);return false}
+  try{await fn();return true}catch(e){
+    if(e&&e.code==='unavailable'){await new Promise(r=>setTimeout(r,500+Math.random()*700));try{await fn();return true}catch(e2){fail(e2);return false}}
+    fail(e);return false}
+}
+const SEGCOL=[['sPla',['platin','platinum']],['sGol',['gold','altın','altin']],['sSil',['silver','gümüş','gumus']],['sBro',['bronze','bronz','bakır','bakir']],['sGas',['gastronomi','gastronomy']],['sTop',['toptan']],['sKio',['kiosk','kioks','kiosks','kiosk market']],['sPot',['potential','potantial','potansiyel','potensiyel']]];
+const segCls=v=>{if(v==='A')return ' sA';if(v==='B')return ' sB';const n=String(v||'').trim().toLocaleLowerCase('tr');if(!n)return '';
+  for(const [cl,keys] of SEGCOL)if(keys.some(k=>n===k||n.startsWith(k+' ')))return ' '+cl;return ''};
+const allSegs=()=>[...new Set(C.map(c=>c.segment).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'tr'));
+const allReps=()=>[...new Set([...REPS,...C.map(c=>c.rep).filter(Boolean)])];
+
+function derive(){
+  const last={},open={};
+  for(const c of C){const v=inv(c);if(v&&v.last)last[c.id]=v.last}
+  for(const a of A){if(!a.customerId)continue;
+    if(a.date&&(!last[a.customerId]||a.date>last[a.customerId]))last[a.customerId]=a.date;
+    if(a.nextDate&&!a.done)(open[a.customerId]=open[a.customerId]||[]).push(a)}
+  D={last,open};
+}
+const noContact30=c=>{const d=ago(D.last[c.id]);return d===null||d>30};
+const isCold=c=>c.status!=='Pasif'&&noContact30(c);
+const isDue=c=>(D.open[c.id]||[]).some(a=>a.nextDate<=TODAY);
+
+function visible(){
+  const q=low(st.q);
+  let r=C.filter(c=>(!st.rep||c.rep===st.rep)&&(!st.seg||(st.seg==='__bos'?!c.segment:c.segment===st.seg))&&(!st.status||(c.status||'')===st.status)&&(!q||low([c.name,c.chain,c.city,c.postcode,c.contact,c.address].join(' ')).includes(q)));
+  if(st.quick==='route')r=r.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME);
+  if(st.quick==='due')r=r.filter(isDue);
+  if(st.quick==='cold')r=r.filter(isCold);
+  r.sort(st.sort==='last'?(a,b)=>(D.last[a.id]||'').localeCompare(D.last[b.id]||''):(a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'));
+  return r;
+}
+
+function renderTop(){
+  $('#reps').innerHTML=['',...allReps()].map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}">${r?esc(r):'Tüm temsilciler'}</button>`).join('');
+  $('#ximpBtn').style.display=canWrite?'inline-flex':'none';
+  $('#sub').textContent=INVTO?`Fatura verisi ${fmt(INVTO)} tarihine kadar (Power BI) · son temas faturaları da kapsar`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde';
+  let b='';
+  if(st.nodb)b='<span>Kayıtlara ulaşılamıyor. Bu sayfayı claude.ai üzerinde oturum açmış olarak açın.</span>';
+  else if(st.err)b='<span>Kayıtlar okunamadı. Sayfayı daha sonra tekrar açın.</span>';
+  else if(st.slow&&!loaded)b='<span>Veriye henüz ulaşılamıyor; bağlantınızı kontrol edin. Gösterilenler güncel olmayabilir.</span>';
+  else if(!canWrite)b='<span>Salt okunur görünüm: kayıt eklemek için sayfa sahibinden “Contributor” yetkisi isteyin.</span>';
+  else if(C.some(c=>c.sample))b=`<span><b>Örnek kayıtlar gösteriliyor.</b> Kendi listenizi “İçe aktar” ile ekleyin; örnekleri tek tıkla silebilirsiniz.</span><button class="ghost" id="clearSample" type="button">${st.arm==='samples'?'Emin misiniz? Evet, sil':'Örnekleri sil'}</button>`;
+  $('#banner').innerHTML=b;
+}
+function renderStats(){
+  const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
+  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['due',mine.filter(isDue).length,'Takip zamanı gelmiş'],['cold',mine.filter(isCold).length,'30+ gündür temas yok (aktif)']];
+  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span></button>`).join('')+ordStat(mine);
+  renderOrd();
+}
+const MONTHS_LONG=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+const OUT_CRM="CRM'de olmayan",NO_REP='Temsilci yok';
+function monRows(){
+  if(!MON||!MON.map)return null;const byCode=new Map(C.map(c=>[code(c),c]));const reps={};
+  for(const [k,[amt,n]] of Object.entries(MON.map)){const c=byCode.get(k);const r=c?(c.rep||NO_REP):OUT_CRM;const o=reps[r]||(reps[r]={amt:0,n:0,cust:0});o.amt+=amt;o.n+=n;o.cust++}
+  return reps;
+}
+function ordStat(mine){
+  const reps=monRows();const mname=MON&&MON.month?MONTHS_LONG[+MON.month.slice(5,7)-1]:'';
+  let v='–';if(reps){v=eur(st.rep?(reps[st.rep]?.amt||0):Object.values(reps).reduce((a,o)=>a+o.amt,0))}
+  return `<button class="stat${st.ord?' on':''}" id="ordBtn" aria-pressed="${!!st.ord}"><b>${v}</b><span>Bu ay sipariş${mname?` (${mname})`:''}${st.rep?'':' · temsilci dağılımı'}</span></button>`;
+}
+function renderOrd(){
+  const el=$('#ordp');if(!st.ord){el.innerHTML='';return}
+  const reps=monRows();if(!reps){el.innerHTML='<div class="ordp"><p>Bu ayın sipariş verisi henüz yüklenmedi.</p></div>';return}
+  const rows=Object.entries(reps).sort((a,b)=>b[1].amt-a[1].amt);const tot=rows.reduce((a,[,o])=>a+o.amt,0);
+  const upd=MON.updatedAt?` · güncelleme ${fmt(MON.updatedAt)}`:'';
+  el.innerHTML=`<div class="ordp"><div class="oh"><b>Bu ay sipariş – temsilci bazında (${MONTHS_LONG[+MON.month.slice(5,7)-1]} ${MON.month.slice(0,4)})</b><small>Power BI satış faturaları${upd}</small></div>
+  <table><thead><tr><th>Temsilci</th><th>Tutar</th><th>Fatura</th><th>Müşteri</th><th>Pay</th></tr></thead><tbody>
+  ${rows.map(([r,o])=>`<tr${st.rep===r?' class="on"':''}><td>${r===OUT_CRM||r===NO_REP?esc(r):`<button class="lnk" data-rep="${esc(st.rep===r?'':r)}">${esc(r)}</button>`}</td><td>${eur(o.amt)}</td><td>${o.n}</td><td>${o.cust}</td><td>${tot?(o.amt/tot*100).toFixed(1).replace('.',','):'0'}%</td></tr>`).join('')}
+  </tbody><tfoot><tr><td>Toplam</td><td>${eur(tot)}</td><td>${rows.reduce((a,[,o])=>a+o.n,0)}</td><td>${rows.reduce((a,[,o])=>a+o.cust,0)}</td><td>100%</td></tr></tfoot></table></div>`;
+}
+function renderList(){
+  const r=visible();
+  $('#count').textContent=`${r.length} müşteri`;
+  $('#qf').textContent=st.quick?{route:'Filtre: bugünkü rut',due:'Filtre: takibi gelenler',cold:'Filtre: 30+ gün temas yok'}[st.quick]:'';
+  if(!C.length){$('#list').innerHTML=`<li class="empty">${loaded?'Henüz müşteri yok. <b>İçe aktar</b> ile Excel listenizi yükleyin.':'Yükleniyor…'}</li>`;return}
+  if(!r.length){$('#list').innerHTML='<li class="empty">Bu filtrelere uyan müşteri yok.</li>';return}
+  $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]);
+    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b><small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small></span><span class="lc${noContact30(c)?' cold':''}">${isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
+}
+function actRow(a){
+  const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
+  return `<li><div class="tm"><b>${fmt(a.date)}</b><span class="ty t${TYPES.indexOf(a.type)}">${esc(a.type||'Not')}</span></div><div class="tb"><small>${esc(a.rep||'')}</small>${+a.amount?`<span class="amt">${eur(+a.amount)}</span>`:''}${a.note?`<p>${esc(a.note)}</p>`:''}${a.nextAction||a.nextDate?`<label class="nx${a.done?' done':''}${late?' late':''}"><input type="checkbox" data-done="${esc(a.id)}" ${a.done?'checked':''} ${canWrite?'':'disabled'}> <span>${esc(a.nextAction||'Takip')}${a.nextDate?' · '+fmt(a.nextDate):''}</span></label>`:''}</div></li>`;
+}
+function renderDetail(){
+  const el=$('#detail'),c=C.find(x=>x.id===st.sel);
+  el.classList.toggle('open',!!c);
+  if(!c){st.formFor=null;el.innerHTML=`<div class="ph"><h2>Bir müşteri seçin</h2><p>Listeden bir market seçtiğinizde bilgileri, geçmiş ziyaretleri ve sıradaki takip burada görünür.</p><ul><li>Üstteki kutulara tıklayarak bugünkü rutu, takibi gelmiş ya da uzun süredir ziyaret edilmeyen müşterileri süzebilirsiniz.</li><li>Her ziyaretten sonra kısa bir not girin; not o günün tarihiyle kaydedilir.</li></ul></div>`;return}
+  const acts=A.filter(a=>a.customerId===c.id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt||0)-(a.createdAt||0));
+  const reps=allReps();if(c.rep&&!reps.includes(c.rep))reps.push(c.rep);
+  const lastD=D.last[c.id],iv=inv(c);
+  const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',c.contact],['Telefon',c.phone],['Temsilci',c.rep],['Rut günü',c.visitDay],['Ziyaret',[c.freq,c.weeks?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],['2026 net satış',iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
+  el.innerHTML=`<button class="back" id="back" type="button">← Listeye dön</button>
+  <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${c.status?`<span class="tag">${esc(c.status)}</span>`:''}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
+</div>
+  <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="tel:${esc(String(v).replace(/[^+\d]/g,''))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
+  ${c.notes?`<p class="notes">${esc(c.notes)}</p>`:''}
+  ${canWrite?`<form class="aform" id="aform" autocomplete="off"><h3>Yeni kayıt</h3>
+    <div class="g2"><label>Tarih<span class="fixed">${fmt(iso(new Date()))}</span></label><label>Temsilci<span class="fixed">${esc(c.rep||'–')}</span></label></div>
+    <label>Not<textarea name="note" rows="3" required placeholder="Ne konuşuldu? Raf durumu, rakip, şikayet, istek…"></textarea></label>
+    <button class="primary" type="submit">Kaydet</button></form>`:''}
+  <h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`;
+}
+function renderTasks(){
+  const cm=Object.fromEntries(C.map(c=>[c.id,c]));
+  const t=A.filter(a=>a.nextDate&&!a.done&&cm[a.customerId]&&(!st.rep||(a.rep||cm[a.customerId].rep)===st.rep)).sort((a,b)=>a.nextDate.localeCompare(b.nextDate));
+  $('#tabT').textContent=`Takipler (${t.length})`;
+  if(st.view!=='tasks')return;
+  const wk=addDays(7);
+  const g=[['Gecikmiş',t.filter(a=>a.nextDate<TODAY)],['Bugün',t.filter(a=>a.nextDate===TODAY)],['Önümüzdeki 7 gün',t.filter(a=>a.nextDate>TODAY&&a.nextDate<=wk)],['Daha sonra',t.filter(a=>a.nextDate>wk)]];
+  $('#tasks').innerHTML=t.length?g.filter(x=>x[1].length).map(([h,l])=>`<h3>${h} <small>${l.length}</small></h3><ul class="tk">${l.map(a=>`<li class="${h==='Gecikmiş'?'late':''}"><input type="checkbox" data-done="${esc(a.id)}" aria-label="Tamamlandı" ${canWrite?'':'disabled'}><span class="td">${fmt(a.nextDate)}</span><button class="lnk" type="button" data-open="${esc(a.customerId)}">${esc(cm[a.customerId].name)}</button><span class="ta">${esc(a.nextAction||'Takip')}</span><small>${esc(a.rep||cm[a.customerId].rep||'')}</small></li>`).join('')}</ul>`).join(''):'<p class="empty">Açık takip yok. Bir müşteriye kayıt girerken “Sıradaki adım” ve tarih yazarsanız burada listelenir.</p>';
+}
+function render(){
+  derive();
+  {const segs=allSegs();if(st.seg&&st.seg!=='__bos'&&!segs.includes(st.seg))st.seg='';const html='<option value="">Segment: tümü</option>'+segs.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__bos">Segment: boş</option>';if($('#fseg').innerHTML!==html)$('#fseg').innerHTML=html}
+  $('#fseg').value=st.seg;$('#fstat').value=st.status;$('#fsort').value=st.sort;
+  document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';
+  renderTop();renderStats();renderList();renderTasks();
+  const f=$('#aform');let keep=null,foc=null;
+  if(f&&st.formFor===st.sel){keep=Object.fromEntries(new FormData(f));const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.name&&ae.type!=='radio')foc=ae.name}
+  renderDetail();
+  const g=$('#aform');
+  if(g){if(keep)for(const[k,v]of Object.entries(keep)){const e=g.elements[k];if(e)e.value=v}
+    if(foc&&g.elements[foc])g.elements[foc].focus();st.formFor=st.sel}
+}
+
+function cmpRow(c){
+  const r=ciroOf(c);
+  if(!r)return `<div class="cmp"><dt>Ciro 2025 (FY) → 2026 YTD</dt><dd>–</dd></div>`;
+  const [a,b]=r,has=x=>x!=null&&x!=='';let p='';
+  if(has(a)&&has(b)&&a>0){const g=(b-a)/a*100;p=`<span class="${g<0?'down':'up'}">${g>0?'+':''}${g.toFixed(1).replace('.',',')}%</span>`}
+  return `<div class="cmp"><dt>Ciro 2025 (FY) → 2026 YTD</dt><dd>${has(a)?eur(a):'–'} → ${has(b)?eur(b):'–'} ${p}</dd></div>`;
+}
+
+const MONTHS_TR=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
+function retRows(c){
+  if(!RET||!RET.map)return '';
+  const mn=m=>MONTHS_TR[+String(m).slice(5,7)-1]||'',yr=m=>String(m).slice(0,4);
+  const per=yr(RET.from)===yr(RET.to)?`${mn(RET.from)}–${mn(RET.to)} ${yr(RET.to)}`:`${mn(RET.from)} ${yr(RET.from)}–${mn(RET.to)} ${yr(RET.to)}`;
+  const r=RET.map[code(c)];
+  if(!r)return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>Bu dönemde kayıt yok</dd></div>`;
+  const [sales,iade,iadeN,ff,ffN]=r;
+  const base=typeof c.ciro2026==='number'?c.ciro2026:null;
+  const pct=v=>base>0&&v?`<span class="rp">%${(Math.abs(v)/base*100).toFixed(1).replace('.',',')}</span>`:'';
+  const line=(l,v,n,p)=>`<div class="rl"><span>${l}</span><b>${v?eur(v):'€ 0'}</b><small>${n||0} fatura</small>${p?pct(v):'<span></span>'}</div>`;
+  return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar Excel'deki Ciro 2026 YTD'ye (${eur(base)}) göre.`:'Ciro 2026 YTD boş olduğu için oran gösterilemiyor.'}</p></dd></div>`;
+}
+
+/* customer modal */
+function openModal(c){
+  if(!c)return;
+  const f=$('#cform');f.reset();f.dataset.id=c?c.id:'';
+    $('#segDL').innerHTML=allSegs().map(v=>`<option value="${esc(v)}">`).join('');
+  for(const k of FIELDS){if(f.elements[k])f.elements[k].value=c[k]||''}
+  f.elements.rep.readOnly=true;f.elements.rep.title='Temsilci değiştirilemez';
+  $('#modal').hidden=false;f.elements.name.focus();
+}
+const closeModals=()=>{$('#modal').hidden=true;$('#imodal').hidden=true};
+
+/* Excel round-trip (dynamic workbook) */
+async function loadXLSX(){
+  if(window.XLSX)return window.XLSX;
+  await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)});
+  return window.XLSX;
+}
+const TYPE_DEFAULT='Satis Faturasi';
+// [header, field, type, isFormula]
+const COLS=[['Kod','code','t'],['Müşteri','name','t'],['Zincir','chain','t'],
+ ['Segment','segment','seg'],['Durum','status','st',1],['Durum (elle)','statusManual','st0'],
+ ['Temsilci','rep','t'],['Rut günü','visitDay','day'],['Ziyaret sıklığı','freq','t'],['Ziyaret haftaları','weeks','t'],['Ödeme vadesi','pay','t'],
+ ['Yetkili','contact','t'],['Telefon','phone','t'],['Adres','address','t'],['Posta kodu','postcode','t'],['Şehir','city','t'],
+ ['Son fatura tarihi','lastInvoice','d',1],['Son fatura no','lastInvoiceNo','t',1],['2026 net satış (€)','sales2026','n',1],['2026 fatura sayısı','invoices2026','n',1],
+ ['Ciro 2025 (€)','ciro2025','n'],['Ciro 2026 (€)','ciro2026','n'],['Büyüme %','_growth','f',1],['Notlar','notes','t']];
+const DATA_KEYS=COLS.filter(c=>!c[1].startsWith('_')).map(c=>c[1]);
+const PBI_KEYS=['lastInvoice','lastInvoiceNo'];
+const PBI_HEAD=['Datum','BelegNr','Belegart','Distributor','DebitorenNr','DebitorenBez','Segment','Ort','Land','EUR','KTN','TON','Verkaeufer'];
+const XL=n=>{let s='';n++;while(n){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s};
+const colOf=k=>XL(COLS.findIndex(c=>c[1]===k));
+const serial=d=>{const [y,m,dd]=d.split('-').map(Number);return (Date.UTC(y,m-1,dd)-Date.UTC(1899,11,30))/864e5};
+const fromSerial=n=>new Date(Date.UTC(1899,11,30)+Math.round(n)*864e5).toISOString().slice(0,10);
+const normKod=v=>{const s=String(v??'').trim();return /^\d+$/.test(s)?String(parseInt(s,10)):s};
+const normH=h=>low(h).replace(/\s+/g,' ').trim();
+const num=x=>{if(x===''||x==null)return null;if(typeof x==='number')return x;const n=parseFloat(String(x).replace(/[€\s.]/g,'').replace(',','.'));return isNaN(n)?null:n};
+
+function cellVal(x,t){
+  if(t==='d'){if(Object.prototype.toString.call(x)==='[object Date]')return iso(x);if(typeof x==='number'&&x>20000&&x<80000)return fromSerial(x);const s=String(x||'').trim();if(/^\d\d[.\-/]\d\d[.\-/]\d{4}$/.test(s))return s.slice(6,10)+'-'+s.slice(3,5)+'-'+s.slice(0,2);return /^\d{4}-\d\d-\d\d/.test(s)?s.slice(0,10):''}
+  if(t==='n'){const n=num(x);return n==null?null:Math.round(n*100)/100}
+  const s=String(x??'').trim();
+  if(t==='seg')return s;
+  if(t==='st')return ['Aktif','Pasif'].find(v=>low(v)===low(s))||'';
+  if(t==='st0')return ['Aktif','Pasif'].find(v=>low(v)===low(s))||'';
+  if(t==='day'){const d=s&&DAYS.find(dn=>low(dn).startsWith(low(s).slice(0,3)));return d||''}
+  return s;
+}
+// same rules as the Excel formulas
+const statusOf=(last,S)=>!last?'Pasif':(serial(S.ref)-serial(last)>S.pasif?'Pasif':'Aktif');
+function aggPBI(rows,type){
+  const m={};let to=0;
+  for(const [d,b,t,k,e] of rows){if(!k)continue;const x=m[k]||(m[k]=[0,'',0,0]);x[2]=Math.round((x[2]+(+e||0))*100)/100;if(d>to)to=d;
+    if(t===type){x[3]++;if(d>x[0]){x[0]=d;x[1]=b}}}
+  return {map:m,to:to?fromSerial(to):''};
+}
+function readSettings(wb){
+  const S={pasif:90,ref:TODAY,type:TYPE_DEFAULT};const ws=wb.Sheets['Ayarlar'];if(!ws)return S;
+  for(let r=1;r<=30;r++){const k=low(String((ws['A'+r]||{}).v||''));const c=ws['B'+r];if(!c||!k)continue;const v=c.v;
+    if(k.startsWith('pasif')){const n=num(v);if(n)S.pasif=n}
+    else if(k.startsWith('referans')){if(!c.f){const d=cellVal(v,'d');if(d)S.ref=d}}
+    else if(k.includes('fatura') && k.includes('tür')){const s=String(v||'').trim();if(s)S.type=s}}
+  return S;
+}
+function readPBI(X,wb){
+  let ws=wb.Sheets['PowerBI_Veri'];
+  if(!ws)for(const n of wb.SheetNames){const h=((X.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''})[0])||[]).map(normH);if(h.includes('datum')&&h.includes('debitorennr')&&h.includes('eur')){ws=wb.Sheets[n];break}}
+  if(!ws)return null;
+  const rows=X.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});const h=(rows[0]||[]).map(normH);
+  const iD=h.indexOf('datum'),iB=h.indexOf('belegnr'),iT=h.indexOf('belegart'),iK=h.indexOf('debitorennr'),iE=h.indexOf('eur');
+  if(iD<0||iK<0||iE<0)return null;
+  const out=[];
+  for(const r of rows.slice(1)){const ds=cellVal(r[iD],'d');if(!ds)continue;const k=normKod(r[iK]);if(!k)continue;
+    out.push([serial(ds),String(r[iB]??'').trim(),String(r[iT]??'').trim(),k,Math.round((num(r[iE])||0)*100)/100])}
+  return out.length?out:null;
+}
+async function getPBI(){
+  if(db){try{const m=await db.doc('pbi/meta').get();if(m.exists){const d=m.data();const out=[];for(let i=0;i<d.chunks;i++){const c=await db.doc('pbi/c'+i).get();if(c.exists)out.push(...c.data().rows)}if(out.length)return {rows:out,to:d.to}}}catch(e){}}
+  return null;
+}
+const HELP=[['Bu dosya nasıl kullanılır'],
+['1. Power BI "Daily Sales (Sell Out)" raporundan 2026 verisini Excel olarak dışa aktarın ve "PowerBI_Veri" sayfasında A1 hücresinden itibaren yapıştırın (başlık satırı dahil). N ve O sütunlarındaki formüllere dokunmayın.'],
+['2. "Müşteriler" sayfasında Son fatura tarihi, Son fatura no, 2026 net satış, 2026 fatura sayısı, Durum ve Büyüme % formüldür; kendiliğinden güncellenir. Bu sütunlara yazmayın.'],
+['3. Segment sütununa ne yazarsanız CRM\'de aynen o görünür (ör. A, B, C, Key Account). CRM segmenti ciroya göre hesaplamaz. Durumu elle sabitlemek isterseniz "Durum (elle)" sütununa yazın.'],
+['4. Kurallar "Ayarlar" sayfasındadır: Pasif gün sınırı, referans tarih ve satış faturası türü.'],
+['5. CRM\'de "Excel\'den içe aktar" ile yükleyin. CRM aynı kuralları kendisi de uygular; Excel\'de hesaplanmamış bir hücre olsa bile sonuç aynı olur.'],
+['6. Eşleştirme Kod ile yapılır; yeni Kod = yeni müşteri. Boş hücre o bilgiyi CRM\'de de boşaltır. Excel\'de olmayan müşteriler silinmez; ziyaret notları ve takipler etkilenmez.'],
+[''],['Kurallar'],
+['Segment: Hesaplanmaz. Excel\'deki Segment hücresinde yazan değer aynen kullanılır; boşsa boş kalır.'],
+['Durum: Son satış faturası yoksa ya da referans tarihten Pasif gün sınırından daha eskiyse Pasif, değilse Aktif.'],
+['Son fatura: PowerBI_Veri\'de Belegart = satış faturası türü olan en son tarihli belge. Aynı gün birden fazla fatura varsa listede ilk görünen numara alınır.'],
+['2026 net satış: Müşterinin PowerBI_Veri\'deki tüm belgelerinin EUR toplamı (satış + iade + fiyat farkı).']];
+function setCell(ws,a,c){ws[a]=c}
+async function exportXLSX(){
+  try{
+    const X=await loadXLSX();toast('Excel hazırlanıyor…');
+    const pb=await getPBI();const S={pasif:90,ref:TODAY,type:TYPE_DEFAULT};
+    const list=[...C].sort((a,b)=>String(a.rep||'').localeCompare(String(b.rep||''),'tr')||String(a.name||'').localeCompare(String(b.name||''),'tr'));
+    const LR=list.length+1;const ws={};
+    COLS.forEach((c,j)=>setCell(ws,XL(j)+1,{t:'s',v:c[0]}));
+    const A=colOf('code'),G=colOf('statusManual'),R=colOf('lastInvoice'),T=colOf('sales2026'),V=colOf('ciro2025'),W=colOf('ciro2026');
+    const P='PowerBI_Veri!',ty='Ayarlar!$B$4';
+    list.forEach((c,i)=>{const r=i+2,iv=inv(c),cr=ciroOf(c);
+      const val={...c,code:code(c),statusManual:c.statusManual||'',lastInvoice:iv?iv.last:'',lastInvoiceNo:iv?iv.no:'',sales2026:iv?iv.sales:0,invoices2026:iv?iv.n:0,ciro2025:cr?cr[0]:null,ciro2026:cr?cr[1]:null};
+      val._growth=(typeof val.ciro2025==='number'&&val.ciro2025>0&&typeof val.ciro2026==='number')?(val.ciro2026-val.ciro2025)/val.ciro2025:'';
+      COLS.forEach(([h,k,t,isF],j)=>{const a=XL(j)+r;let v=val[k];let cell;
+        if(t==='d')cell=v?{t:'n',v:serial(v),z:'dd.mm.yyyy'}:{t:'s',v:''};
+        else if(t==='n'||t==='f')cell=(v==null||v==='')?{t:'s',v:''}:{t:'n',v:+v,z:k==='invoices2026'?'0':k==='_growth'?'0.0%':'#,##0.00'};
+        else cell={t:'s',v:v==null?'':String(v)};
+        if(k==='status')cell.f=`IF(${G}${r}<>"",${G}${r},IF(${R}${r}="","Pasif",IF(Ayarlar!$B$3-${R}${r}>Ayarlar!$B$2,"Pasif","Aktif")))`;
+        if(k==='_growth'){cell.f=`IF(AND(ISNUMBER(${V}${r}),${V}${r}>0),(${W}${r}-${V}${r})/${V}${r},"")`;cell.z='0.0%'}
+        const lit=k==='lastInvoice'?(val.lastInvoice?`DATE(${val.lastInvoice.slice(0,4)},${+val.lastInvoice.slice(5,7)},${+val.lastInvoice.slice(8,10)})`:'""'):k==='lastInvoiceNo'?`"${String(val.lastInvoiceNo||'').replace(/"/g,'""')}"`:String(+val[k]||0);
+        const keep=f=>`IF(COUNTA(${P}$A:$A)<=1,${lit},${f})`;
+        if(k==='lastInvoice'){cell.f=keep(`IF(COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})=0,"",_xlfn.MAXIFS(${P}$A:$A,${P}$N:$N,$${A}${r},${P}$C:$C,${ty}))`);cell.z='dd.mm.yyyy'}
+        if(k==='lastInvoiceNo')cell.f=keep(`IF(${R}${r}="","",IFERROR(INDEX(${P}$B:$B,MATCH($${A}${r}&"|"&${R}${r}&"|"&${ty},${P}$O:$O,0)),""))`);
+        if(k==='sales2026'){cell.f=keep(`SUMIFS(${P}$J:$J,${P}$N:$N,$${A}${r})`);if(cell.t==='s')Object.assign(cell,{t:'n',v:0});cell.z='#,##0.00'}
+        if(k==='invoices2026'){cell.f=keep(`COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})`);if(cell.t==='s')Object.assign(cell,{t:'n',v:0});cell.z='0'}
+        setCell(ws,a,cell)})});
+    ws['!ref']=`A1:${XL(COLS.length-1)}${LR}`;
+    ws['!cols']=[10,36,14,9,14,10,15,11,13,12,11,16,15,32,11,18,13,15,15,12,14,14,10,40].map(w=>({wch:w}));
+    ws['!autofilter']={ref:`A1:${XL(COLS.length-1)}${LR}`};
+    // Ayarlar
+    const st={};const A2=[['Ayar','Değer','Açıklama'],['Pasif gün sınırı',S.pasif,'Son satış faturası bundan eskiyse Pasif'],['Referans tarih',null,'Varsayılan: bugünün tarihi (=BUGÜN()). Sabit bir tarih de yazabilirsiniz.'],['Satış faturası türü',S.type,'PowerBI_Veri sayfasındaki Belegart değeri']];
+    A2.forEach((row,ri)=>row.forEach((v,ci)=>{const a=XL(ci)+(ri+1);if(v==null)return;st[a]=typeof v==='number'?{t:'n',v}:{t:'s',v}}));
+    st.B3={t:'n',v:serial(TODAY),f:'TODAY()',z:'dd.mm.yyyy'};
+    st['!ref']='A1:C4';st['!cols']=[{wch:22},{wch:16},{wch:70}];
+    // PowerBI_Veri
+    const pv={};PBI_HEAD.forEach((h,j)=>pv[XL(j)+1]={t:'s',v:h});pv.N1={t:'s',v:'Kod (formül)'};pv.O1={t:'s',v:'Anahtar (formül)'};
+    const rows=pb?pb.rows:[];const LV=Math.max(rows.length+2001,15001);
+    for(let r=2;r<=LV;r++){const x=rows[r-2];
+      if(x){pv['A'+r]={t:'n',v:x[0],z:'dd.mm.yyyy'};pv['B'+r]={t:'s',v:x[1]};pv['C'+r]={t:'s',v:x[2]};pv['E'+r]={t:'s',v:x[3]};pv['J'+r]={t:'n',v:x[4]}}
+      pv['N'+r]={t:'s',v:x?x[3]:'',f:`IF(E${r}="","",IFERROR(VALUE(E${r})&"",TRIM(E${r})))`};
+      pv['O'+r]={t:'s',v:x?`${x[3]}|${x[0]}|${x[2]}`:'',f:`IF(N${r}="","",N${r}&"|"&A${r}&"|"&C${r})`}}
+    pv['!ref']=`A1:O${LV}`;pv['!cols']=[12,15,22,10,12,30,8,14,10,12,8,8,15,12,30].map(w=>({wch:w}));
+    const wb=X.utils.book_new();
+    X.utils.book_append_sheet(wb,ws,'Müşteriler');X.utils.book_append_sheet(wb,st,'Ayarlar');X.utils.book_append_sheet(wb,pv,'PowerBI_Veri');
+    const hs=X.utils.aoa_to_sheet(HELP);hs['!cols']=[{wch:130}];X.utils.book_append_sheet(wb,hs,'Açıklama');
+    const buf=X.write(wb,{type:'array',bookType:'xlsx'});
+    const dl=await (window.claude?claude.use('downloads'):null);
+    if(!dl){toast('Bu görünümde dosya indirilemiyor.',1);return}
+    await dl.save({filename:`CRM_Musteriler_${fmt(TODAY)}.xlsx`,data:buf});
+  }catch(err){if(err&&err.code==='declined')return;toast('Excel dosyası oluşturulamadı.',1)}
+}
+let plan=null;
+async function readImport(f){
+  try{
+    const X=await loadXLSX();const wb=X.read(await f.arrayBuffer(),{type:'array'});
+    const ws=wb.Sheets['Müşteriler']||wb.Sheets[wb.SheetNames[0]];
+    const rows=X.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+    const head=(rows[0]||[]).map(normH);
+    const idx=COLS.filter(c=>!c[1].startsWith('_')).map(([h,k,t])=>[k,t,head.indexOf(normH(h))]).filter(x=>x[2]>=0);
+    if(!idx.some(x=>x[0]==='code')||!idx.some(x=>x[0]==='name')){toast('Dosyada "Kod" ve "Müşteri" sütunları bulunamadı.',1);return}
+    const known=new Set(COLS.map(c=>normH(c[0])));const ignored=(rows[0]||[]).filter(h=>String(h).trim()&&!known.has(normH(h)));
+    const seen=new Set(),parsed=[];let bad=0,dup=0;const odd={status:0};
+    for(const r of rows.slice(1)){
+      const o={};for(const [k,t,i] of idx){o[k]=cellVal(r[i],t);if(k==='status'&&String(r[i]).trim()&&!o[k])odd[k]++}
+      o.code=normKod(o.code);
+      if(!o.code||!o.name){if(r.some(x=>String(x).trim()))bad++;continue}
+      if(seen.has(o.code)){dup++;continue}seen.add(o.code);parsed.push(o);
+    }
+    const keys=[...new Set(idx.map(x=>x[0]))];
+    const dflt=k=>['sales2026','invoices2026','ciro2025','ciro2026'].includes(k)?null:'';
+    const byCode=new Map(C.map(c=>[code(c),c]));const writes=[];let same=0;
+    for(const o of parsed){const old=byCode.get(o.code);
+      const d={};for(const k of DATA_KEYS)d[k]=PBI_KEYS.includes(k)?(old?(old[k]??dflt(k)):dflt(k)):keys.includes(k)?(o[k]??dflt(k)):dflt(k);
+      if(old&&DATA_KEYS.every(k=>JSON.stringify(old[k]??dflt(k))===JSON.stringify(d[k]))){same++;continue}
+      d.createdAt=(old&&old.createdAt)||Date.now();d.updatedAt=Date.now();
+      writes.push({id:old?old.id:'c'+o.code,isNew:!old,data:d})}
+    const gone=C.filter(c=>!seen.has(code(c)));const goneIds=new Set(gone.map(c=>c.id));
+    const goneActs=A.filter(a=>goneIds.has(a.customerId));
+    const nNew=writes.filter(w=>w.isNew).length;
+    const miss=COLS.filter(c=>!c[1].startsWith('_')&&!PBI_KEYS.includes(c[1])&&!idx.some(x=>x[0]===c[1])).map(c=>c[0]);
+    plan={writes,gone,goneActs};
+    $('#iprev').innerHTML=`<p><b>${parsed.length}</b> müşteri okundu: <b>${writes.length-nNew}</b> güncellenecek, <b>${nNew}</b> yeni eklenecek, ${same} müşteride değişiklik yok.</p><p>Son fatura tarihi ve no Excel'den alınmaz; her sabah Power BI'dan güncellenir.</p>
+      ${gone.length?`<p class="warn"><b>${gone.length} müşteri Excel'de olmadığı için CRM'den kalıcı olarak silinecek</b>${goneActs.length?` (bu müşterilere ait ${goneActs.length} ziyaret/not kaydıyla birlikte)`:''}. Bu işlem geri alınamaz: ${esc(gone.slice(0,8).map(c=>c.name).join(', '))}${gone.length>8?` ve ${gone.length-8} müşteri daha`:''}.</p>`:''}
+      <p>Okunan sütunlar: ${esc(idx.filter(x=>!PBI_KEYS.includes(x[0])).map(x=>COLS.find(c=>c[1]===x[0])[0]).join(', '))}.${miss.length?` Dosyada olmayan sütunlar CRM'de boş olacak: ${esc(miss.join(', '))}.`:''}${ignored.length?` Tanınmayan sütunlar okunmadı: ${esc(ignored.join(', '))}.`:''}</p>
+      ${bad||dup||odd.status?`<p>${bad?`${bad} satır Kod veya Müşteri adı eksik olduğu için atlandı. `:''}${dup?`${dup} tekrar eden Kod atlandı (ilk satır alındı). `:''}${odd.status?`${odd.status} satırda Durum Aktif/Pasif değil, boş yazılacak.`:''}</p>`:''}`;
+    $('#irun').textContent=gone.length?'Uygula ve sil':'Uygula';
+    $('#irun').disabled=!writes.length&&!gone.length;$('#ipr').textContent='';$('#imodal').hidden=false;
+  }catch(err){toast('Dosya okunamadı. .xlsx formatında bir Excel dosyası seçin.',1)}
+}
+async function applyImport(){
+  if(!plan)return;const {writes,gone,goneActs}=plan;plan=null;$('#irun').disabled=true;let n=0,del=0,ok=true;
+  for(const wv of writes){if(!await w(()=>db.collection('customers').doc(wv.id).set(wv.data))){ok=false;break}n++;if(n%10===0||n===writes.length)$('#ipr').textContent=`${n}/${writes.length} müşteri yazıldı`}
+  if(ok){for(const a of goneActs){if(!await w(()=>db.collection('activities').doc(a.id).delete())){ok=false;break}}}
+  if(ok){for(const c of gone){if(!await w(()=>db.collection('customers').doc(c.id).delete())){ok=false;break}del++;$('#ipr').textContent=`${del}/${gone.length} müşteri silindi`}}
+  if(ok&&gone.some(c=>c.id===st.sel))st.sel=null;
+  toast(ok?`${n} müşteri yazıldı${del?`, ${del} müşteri silindi`:''}`:`İşlem yarıda kaldı: ${n} müşteri yazıldı, ${del} silindi`,!ok);if(ok)closeModals();render();
+}
+
+/* events */
+document.addEventListener('click',async e=>{
+  const t=e.target.closest('button,[data-close]');
+  if(e.target.classList.contains('modal')){closeModals();return}
+  if(!t)return;
+  if(t.id!=='clearSample'&&!t.dataset.delact&&st.arm){st.arm=null;render()}
+  if(t.matches('[data-close]')){closeModals();return}
+  if(t.id==='ordBtn'){st.ord=!st.ord;if(st.ord)st.quick='';render();return}
+  if(t.dataset.rep!==undefined){st.rep=t.dataset.rep;saveUi();render();return}
+  if(t.dataset.quick!==undefined){st.ord=false;st.quick=st.quick===t.dataset.quick?'':t.dataset.quick;st.view='list';render();return}
+  if(t.dataset.view){st.view=t.dataset.view;saveUi();render();return}
+  if(t.dataset.id){st.sel=t.dataset.id;render();if(innerWidth<=900)$('#detail').scrollTop=0;return}
+  if(t.dataset.open){st.view='list';st.sel=t.dataset.open;saveUi();render();return}
+  if(t.id==='back'){st.sel=null;render();return}
+  if(t.id==='irun'){applyImport();return}
+  if(t.id==='xexp'){exportXLSX();return}
+  if(t.id==='clearSample'){if(st.arm!=='samples'){st.arm='samples';render();return}
+    st.arm=null;for(const a of A.filter(x=>x.sample))await w(()=>db.collection('activities').doc(a.id).delete());
+    for(const c of C.filter(x=>x.sample))await w(()=>db.collection('customers').doc(c.id).delete());
+    st.sel=null;toast('Örnek kayıtlar silindi');render();return}
+});
+document.addEventListener('change',async e=>{
+  const t=e.target;
+  if(t.dataset.done){const ok=await w(()=>db.collection('activities').doc(t.dataset.done).update({done:t.checked,doneAt:t.checked?TODAY:''}));if(ok&&t.checked)toast('Takip tamamlandı');if(!ok)t.checked=!t.checked;return}
+  if(t.name==='type'&&t.closest('#aform')){st.type=t.value;return}
+  if(t.id==='fseg'){st.seg=t.value;render()}
+  if(t.id==='fstat'){st.status=t.value;render()}
+  if(t.id==='fsort'){st.sort=t.value;saveUi();render()}
+  if(t.id==='ximp'&&t.files[0]){const f=t.files[0];t.value='';readImport(f);return}
+});
+$('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
+document.addEventListener('submit',async e=>{
+  e.preventDefault();const f=e.target;
+  if(f.id==='cform'){
+    const v={};for(const k of FIELDS)v[k]=String(f.elements[k].value||'').trim();
+    if(!v.name)return;
+    const id=f.dataset.id;const old=id&&C.find(c=>c.id===id);if(!old){toast('Müşteri bulunamadı.',1);return}
+    const now=Date.now();
+    const obj={...old,...v,rep:old.rep||'',updatedAt:now};delete obj.id;
+    if(await w(()=>db.collection('customers').doc(id).set(obj))){closeModals();st.sel=id;st.view='list';toast('Güncellendi');render()}
+    return}
+  if(f.id==='aform'){
+    const c=C.find(x=>x.id===st.sel);if(!c)return;const fd=Object.fromEntries(new FormData(f));
+    const note=String(fd.note||'').trim();if(!note){toast('Boş not kaydedilmedi.',1);return}
+    const obj={customerId:c.id,type:'Not',date:iso(new Date()),rep:c.rep||'',note,amount:0,nextAction:'',nextDate:'',done:false,createdAt:Date.now()};
+    const ref=db.collection('activities').doc();
+    if(await w(()=>ref.set(obj))){st.formFor=null;toast('Kaydedildi');render()}
+  }
+});
+
+render();
+(async()=>{
+  const timer=setTimeout(()=>{if(!loaded){st.slow=true;render()}},10000);
+  const cl=window.claude;
+  db=cl?await cl.use('db'):null;
+  if(!db){clearTimeout(timer);st.nodb=true;loaded=true;canWrite=false;render();return}
+  try{const u=await cl.use('user');const cw=u?await u.can('data.write'):null;if(cw===false)canWrite=false}catch(err){}
+  db.collection('customers').onSnapshot(s=>{
+    C=s.docs.map(d=>({...d.data(),id:d.id}));
+    if(!s.metadata.fromCache){loaded=true;st.slow=false;clearTimeout(timer)}
+    if(st.sel&&!C.some(c=>c.id===st.sel))st.sel=null;
+    render()},err=>{clearTimeout(timer);loaded=true;st.err=true;render()});
+  db.doc('sync/month').onSnapshot(d=>{MON=d.exists?d.data():null;render()},()=>{});
+  db.doc('sync/returns').onSnapshot(d=>{RET=d.exists?d.data():null;render()},()=>{});
+  db.collection('activities').orderBy('date','desc').limit(1000).onSnapshot(s=>{A=s.docs.map(d=>({...d.data(),id:d.id}));render()},err=>{st.err=true;render()});
+})();
+}
+</script>
+</body>
+</html>
