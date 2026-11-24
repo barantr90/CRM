@@ -127,11 +127,13 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isHidden('#listView')&&await page.isVisible('#boardView'),'Karne açıkken müşteri listesi gizli');
 
   const br=await page.$$eval('#boardT tbody tr',rs=>Object.fromEntries(rs.map(r=>{const t=[...r.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim());return [t[0],t]})));
-  ok(br['Lütfi Kaplan'][7].startsWith('2 ·'),'Lütfi: 2 riskli müşteri');
-  ok(br['Gökhan Genç'][7].startsWith('1 ·'),'Gökhan: 1 riskli (kapanan hariç)');
+  ok(br['Lütfi Kaplan'][5].startsWith('2 ·'),'Lütfi: 2 riskli müşteri');
+  ok(br['Gökhan Genç'][5].startsWith('1 ·'),'Gökhan: 1 riskli (kapanan hariç)');
   ok(!(await page.$$eval('#boardT th',t=>t.map(x=>x.textContent))).some(t=>t.startsWith('Kayıt')),'karnede ziyaret kaydı sütunu yok');
   ok(br['Mehmet Halici'][2]==='€ 50.500','Mehmet ciro 2025 toplamı € 50.500 → '+JSON.stringify(br['Mehmet Halici'][2]));
-  ok(br['Özgür Firat'][8]==='0'&&br['Lütfi Kaplan'][8]==='1','telefonsuz aktif müşteri sayıları doğru');
+  {const h=await page.$$eval('#boardT th',t=>t.map(x=>x.textContent));
+   ok(JSON.stringify(h)==='["Temsilci","Müşteri","Ciro 2025","2026 bugüne","Tempo","Kayıp riski"]','karne sütunları: '+h.join(', '));
+   ok(Object.values(br).every(r=>r.length===6),'satırlarda da 6 hücre var')}
   const rt=await page.$$eval('#retT tbody tr',rs=>rs.map(r=>r.cells[0].textContent));
   ok(JSON.stringify(rt)==='["İadeci Market","Yeni Market"]','iade tablosu orana göre: İadeci, Yeni');
   await page.screenshot({path:path.join(SHOTS,'6-karne.png'),fullPage:true});
@@ -163,7 +165,6 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(/^%66/.test(await txt(page,'#tform [data-tp="_all"]')),'toplam gerçekleşme %66 (9.200 / 14.000)');
   await page.screenshot({path:path.join(SHOTS,'7-hedefler-sekme.png'),fullPage:true});
   await page.click('#tabB');
-  {const v=await page.$$eval('#boardT tbody tr',rs=>rs.find(r=>r.cells[0].textContent.includes('Lütfi')).cells[5].textContent.replace(/\u00a0/g,' '));ok(/€ 1\.200\s*\/ € 4\.000 · %30/.test(v),'karnede Lütfi: € 1.200 / € 4.000 · %30 → '+JSON.stringify(v))}
   await page.click('[data-view=list]');
   await page.click('.chip[data-rep="Lütfi Kaplan"]');
   {const v=await txt(page,'#ordBtn');ok(/hedef € 4\.000 \(%30\)/.test(v),'Lütfi seçiliyken sipariş kutusunda hedef ve yüzde → '+JSON.stringify(v))}

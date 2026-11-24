@@ -564,12 +564,12 @@ function renderBoard(){
   T.s26b=rows.reduce((a,o)=>a+o.s26b,0);
   const pace=o=>o.c25b>0?(()=>{const g=o.s26b/(o.c25b*YF)-1;return `<span class="${g<0?'down':'up'}">${g>0?'+':''}${pct1(g)}%</span>`})():'–';
   const ordC=o=>`${eur(o.ord)}${o.t?` <span class="sm">/ ${eur(o.t)} · %${Math.round(o.ord/o.t*100)}</span>`:''}`;
-  const tr=(o,tot)=>`<tr><td>${tot?'Toplam':`<button class="lnk" data-brep="${esc(o.r)}">${esc(o.r)}</button>`}</td><td>${o.n} <span class="sm">(${o.ak} aktif)</span></td><td>${eur(o.c25)}</td><td>${eur(o.s26)}</td><td>${pace(o)}</td><td>${ordC(o)}</td>${VISIT_LOG?`<td>${o.a7} / ${o.a30}</td>`:''}<td>${o.late?`<b class="warn">${o.late}</b>`:'0'}</td><td>${tot?`${o.rk} · ${eur(o.rkv)}`:`<button class="lnk" data-brisk="${esc(o.r)}">${o.rk} · ${eur(o.rkv)}</button>`}</td><td>${o.np}</td></tr>`;
+  const tr=(o,tot)=>`<tr><td>${tot?'Toplam':`<button class="lnk" data-brep="${esc(o.r)}">${esc(o.r)}</button>`}</td><td>${o.n} <span class="sm">(${o.ak} aktif)</span></td><td>${eur(o.c25)}</td><td>${eur(o.s26)}</td><td>${pace(o)}</td>${VISIT_LOG?`<td>${o.a7} / ${o.a30}</td>`:''}<td>${tot?`${o.rk} · ${eur(o.rkv)}`:`<button class="lnk" data-brisk="${esc(o.r)}">${o.rk} · ${eur(o.rkv)}</button>`}</td></tr>`;
   const top=C.map(c=>[c,retOf(c)]).filter(([,r])=>r&&r.warn).sort((a,b)=>b[1].p-a[1].p).slice(0,10);
   const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`,TG=(TGS[mk]||{}).reps||{};
   $('#board').innerHTML=`<h3>Temsilci karnesi</h3>
   <div class="ordp"><div class="oh"><b>Tempo: 2026 bugüne kadar satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}'i)</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
-  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 bugüne</th><th>Tempo</th><th>Bu ay sipariş / hedef</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Gecikmiş takip</th><th>Kayıp riski</th><th>Telefonsuz aktif</th></tr></thead>
+  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 bugüne</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp riski</th></tr></thead>
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
   <h3>En yüksek iade oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}'i ve üzeri</small></h3>
   ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
