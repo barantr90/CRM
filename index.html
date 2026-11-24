@@ -524,7 +524,7 @@ function ctaHtml(c,ct){
 function visitForm(c){
   const due=(D.open[c.id]||[]).filter(a=>a.nextDate<=TODAY);
   const radio=(name,v,on)=>`<label><input type="radio" name="${name}" value="${esc(v)}"${on?' checked':''}><span>${esc(v)}</span></label>`;
-  return `<form class="aform" id="aform" autocomplete="off"><h3>Ziyaret kaydı</h3>
+  return `<form class="aform" id="aform" autocomplete="off"><h3>Ziyaret Kaydı</h3>
     <fieldset class="typ"><legend>Kanal</legend>${CHANNELS.map(x=>radio('ch',x,x===(CHANNELS.includes(st.type)?st.type:'Ziyaret'))).join('')}</fieldset>
     <fieldset class="typ"><legend>Sonuç</legend>${OUTCOMES.map(o=>radio('out',o[0],false)).join('')}</fieldset>
     <label class="amtf" hidden>Sipariş tutarı (€, isteğe bağlı)<input name="amount" inputmode="decimal" placeholder="örn. 850"></label>
@@ -567,11 +567,11 @@ function renderBoard(){
   const tr=(o,tot)=>`<tr><td>${tot?'Toplam':`<button class="lnk" data-brep="${esc(o.r)}">${esc(o.r)}</button>`}</td><td>${o.n} <span class="sm">(${o.ak} aktif)</span></td><td>${eur(o.c25)}</td><td>${eur(o.s26)}</td><td>${pace(o)}</td>${VISIT_LOG?`<td>${o.a7} / ${o.a30}</td>`:''}<td>${tot?`${o.rk} · ${eur(o.rkv)}`:`<button class="lnk" data-brisk="${esc(o.r)}">${o.rk} · ${eur(o.rkv)}</button>`}</td></tr>`;
   const top=C.map(c=>[c,retOf(c)]).filter(([,r])=>r&&r.warn).sort((a,b)=>b[1].p-a[1].p).slice(0,10);
   const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`,TG=(TGS[mk]||{}).reps||{};
-  $('#board').innerHTML=`<h3>Temsilci karnesi</h3>
-  <div class="ordp"><div class="oh"><b>Tempo: 2026 bugüne kadar satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}'i)</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
-  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 bugüne</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp riski</th></tr></thead>
+  $('#board').innerHTML=`<h3>Temsilci Karnesi</h3>
+  <div class="ordp"><div class="oh"><b>Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}'i)</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
+  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 YTD</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp Riski</th></tr></thead>
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
-  <h3>En yüksek iade oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}'i ve üzeri</small></h3>
+  <h3>En Yüksek İade Oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}'i ve üzeri</small></h3>
   ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
 `;
 }
@@ -588,7 +588,7 @@ function targetsHtml(mk){
   const cell=(r,c)=>{const v=+((G[r]||{})[c])||0;return adm?`<td><span class="eurin"><i aria-hidden="true">€</i><input name="${esc(r)}|${esc(c)}" inputmode="decimal" autocomplete="off" aria-label="${esc(r)} – ${esc(c)} hedefi" placeholder="0" value="${eurIn(v)}"></span></td>`:`<td>${v?eur(v):'–'}</td>`};
   const tot=r=>`<td class="tt" data-tt="${esc(r)}">${rowSum(r)?eur(rowSum(r)):'–'}${legacy(r)?' <span class="sm">kategorisiz</span>':''}</td>`;
   const all=reps.reduce((a,r)=>a+rowSum(r),0),allOrd=reps.reduce((a,r)=>a+ord(r),0);
-  const tableHtml=`<div class="ordp tgrid"><table id="tgT"><thead><tr><th>Temsilci</th>${CATS.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Hedef</th><th>Bu ay sipariş</th><th>Gerçekleşme</th></tr></thead>
+  const tableHtml=`<div class="ordp tgrid"><table id="tgT"><thead><tr><th>Temsilci</th>${CATS.map(c=>`<th>${esc(c)}</th>`).join('')}<th>Hedef</th><th>Bu Ay Sipariş</th><th>Gerçekleşme</th></tr></thead>
     <tbody>${reps.map(r=>`<tr><td>${esc(r)}</td>${CATS.map(c=>cell(r,c)).join('')}${tot(r)}<td>${eur(ord(r))}</td><td class="tp" data-tp="${esc(r)}" data-ord="${ord(r)}">${tpHtml(ord(r),rowSum(r))}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td>Toplam</td>${CATS.map(c=>`<td data-ct="${esc(c)}">${catSum(c)?eur(catSum(c)):'–'}</td>`).join('')}<td data-ct="_all">${all?eur(all):'–'}</td><td>${eur(allOrd)}</td><td class="tp" data-tp="_all" data-ord="${allOrd}">${tpHtml(allOrd,all)}</td></tr></tfoot></table></div>`;
   if(!adm)return Object.keys(G).length||Object.keys(L).length?tableHtml:'<p class="empty">Bu ay için hedef girilmemiş.</p>';
@@ -599,7 +599,7 @@ function renderTargets(){
   if(st.view!=='targets')return;
   const mk=monthKey(),mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`;
   const adm=window.CRM_IS_ADMIN===true&&canWrite;
-  $('#targets').innerHTML=`<h3>Aylık hedef takibi <small class="sm">${mname} · ayın %${Math.round(monthFrac()*100)}'i geçti${adm?'':' · yalnızca görüntüleme'}</small></h3>${targetsHtml(mk)}
+  $('#targets').innerHTML=`<h3>Aylık Hedef Takibi <small class="sm">${mname} · ayın %${Math.round(monthFrac()*100)}'i geçti${adm?'':' · yalnızca görüntüleme'}</small></h3>${targetsHtml(mk)}
   <p class="sm">Sipariş: Power BI satış faturaları${MON&&MON.updatedAt?` (güncelleme ${fmt(MON.updatedAt)})`:''}. Çubuk turuncuysa temsilci ayın geçen kısmına göre hedefin gerisinde.</p>`;
 }
 function tformTotals(f){

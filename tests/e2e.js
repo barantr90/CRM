@@ -132,7 +132,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(!(await page.$$eval('#boardT th',t=>t.map(x=>x.textContent))).some(t=>t.startsWith('Kayıt')),'karnede ziyaret kaydı sütunu yok');
   ok(br['Mehmet Halici'][2]==='€ 50.500','Mehmet ciro 2025 toplamı € 50.500 → '+JSON.stringify(br['Mehmet Halici'][2]));
   {const h=await page.$$eval('#boardT th',t=>t.map(x=>x.textContent));
-   ok(JSON.stringify(h)==='["Temsilci","Müşteri","Ciro 2025","2026 bugüne","Tempo","Kayıp riski"]','karne sütunları: '+h.join(', '));
+   ok(JSON.stringify(h)==='["Temsilci","Müşteri","Ciro 2025","2026 YTD","Tempo","Kayıp Riski"]','karne sütunları: '+h.join(', '));
    ok(Object.values(br).every(r=>r.length===6),'satırlarda da 6 hücre var')}
   const rt=await page.$$eval('#retT tbody tr',rs=>rs.map(r=>r.cells[0].textContent));
   ok(JSON.stringify(rt)==='["İadeci Market","Yeni Market"]','iade tablosu orana göre: İadeci, Yeni');
@@ -147,7 +147,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.click('#tabH');
   ok(await page.isVisible('#targetsView')&&await page.isHidden('#boardView')&&await page.isHidden('#listView'),'Hedefler sekmesi ayrı açılıyor');
   const heads7=await page.$$eval('#tform thead th',t=>t.map(x=>x.textContent));
-  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Hedef","Bu ay sipariş","Gerçekleşme"]','hedef tablosu: Temsilci, A–E, Hedef, Bu ay sipariş, Gerçekleşme');
+  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Hedef","Bu Ay Sipariş","Gerçekleşme"]','hedef tablosu: Temsilci, A–E, Hedef, Bu Ay Sipariş, Gerçekleşme');
   ok((await page.$$('#tform .eurin i')).length===25&&await txt(page,'#tform .eurin i')==='€','her hücrede € simgesi (5 temsilci × 5 kategori)');
   await page.fill('#tform [name="Lütfi Kaplan|A"]','abc');await page.click('#tform button[type=submit]');
   ok(/€ tutarı olmalı/.test(await txt(page,'#toast')),'geçersiz hedef reddedildi');
