@@ -35,8 +35,8 @@ header p{margin:4px 0 0;color:var(--mut);font-size:14px}
 .reps{padding-bottom:14px}
 .banner{margin:0 0 14px;padding:12px 16px;border-radius:10px;background:var(--soft);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;font-size:15px}
 .banner:empty{display:none}
-.stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:18px}
-@media(max-width:1100px){.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.stats{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:10px;margin-bottom:18px}
+@media(max-width:1100px){.stats{grid-template-columns:repeat(var(--m,3),minmax(0,1fr))}}
 .stat{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:14px 16px;border-radius:12px;border:1px solid var(--line);background:var(--card)}
 .stat b{font:800 clamp(28px,4vw,40px)/1 "Sofia Sans Condensed",sans-serif;white-space:nowrap}
 .stat span{font-size:14px;color:var(--mut)}
@@ -167,7 +167,7 @@ dd a{color:var(--accInk);font-weight:600}
         <select id="fstat" aria-label="Durum"><option value="">Durum: tümü</option><option>Aktif</option><option>Pasif</option></select>
         <select id="fsort" aria-label="Sırala"><option value="name">Ada göre</option><option value="last">En eski temas önce</option></select>
       </div>
-      <div class="meta"><span id="count"></span><span><i class="dot"></i> 30+ gün temas yok · <em class="tk-tag">takip</em> takip zamanı gelmiş <span id="qf"></span></span></div>
+      <div class="meta"><span id="count"></span><span><i class="dot"></i> 30+ gün temas yok <span id="dueLeg">· <em class="tk-tag">takip</em> takip zamanı gelmiş</span> <span id="qf"></span></span></div>
       <ul class="list" id="list"></ul>
     </section>
     <section class="detail" id="detail" aria-live="polite"></section>
@@ -426,7 +426,8 @@ function renderTop(){
 function renderStats(){
   const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
   const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0);
-  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],['due',mine.filter(isDue).length,'Takip zamanı gelmiş'],['cold',mine.filter(isCold).length,'30+ gündür temas yok (aktif)']];
+  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,'30+ gündür temas yok (aktif)']];
+  $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
   $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span></button>`).join('')+ordStat(mine);
   renderOrd();
 }
@@ -463,7 +464,7 @@ function renderList(){
   if(!r.length){$('#list').innerHTML='<li class="empty">Bu filtrelere uyan müşteri yok.</li>';return}
   $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]),rk=RK[c.id],rt=retOf(c);
     const sub=st.quick==='risk'&&rk?`<small class="rk">${esc(riskText(rk))}</small>`:`<small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small>`;
-    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${rt&&rt.warn?`<em class="rtag" title="İade oranı yüksek">iade %${Math.round(rt.p*100)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
+    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${rt&&rt.warn?`<em class="rtag" title="İade oranı yüksek">iade %${Math.round(rt.p*100)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
 }
 function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
@@ -561,6 +562,8 @@ function render(){
   {const segs=allSegs();if(st.seg&&st.seg!=='__bos'&&!segs.includes(st.seg))st.seg='';const html='<option value="">Segment: tümü</option>'+segs.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__bos">Segment: boş</option>';if($('#fseg').innerHTML!==html)$('#fseg').innerHTML=html}
   $('#fseg').value=st.seg;$('#fstat').value=st.status;$('#fsort').value=st.sort;
   if(st.view==='board'&&window.CRM_IS_ADMIN===false)st.view='list';
+  if(st.view==='tasks'&&!VISIT_LOG)st.view='list';
+  $('#tabT').hidden=!VISIT_LOG;$('#dueLeg').hidden=!VISIT_LOG;
   document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
   $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';
   // açık formlardaki yazılanları yeniden çizimde koru
