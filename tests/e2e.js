@@ -160,6 +160,13 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.screenshot({path:path.join(SHOTS,'7-hedef.png')});
   await ctx.close();
 
+  step('0c. Raci Öner');
+  ({ctx,page}=await open(browser,{admin:false,user:'Raci.Oener@akar-gmbh.de'}));
+  ok(await txt(page,'#avBtn')==='RÖ','baş harfler: RÖ');
+  await page.click('#avBtn');ok(await txt(page,'#umName')==='Raci Öner','menüde ad: Raci Öner');
+  ok(!(await page.$('.chip[data-rep="Raci Öner"]')),'temsilci butonlarına eklenmedi');
+  await ctx.close();
+
   step('6/7. Temsilci (yönetici olmayan) görünümü');
   ({ctx,page}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'}));
   ok(await page.isHidden('#tabB'),'temsilci Karne sekmesini görmüyor');

@@ -348,9 +348,11 @@ const VISIT_LOG=false;
 const pct1=x=>(x*100).toFixed(1).replace('.',',');
 /* oturum açan kişi: e-postadan ad soyad (temsilci listesiyle eşleşirse oradaki yazım) ve baş harfler */
 const fold=s=>String(s||'').toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/[^a-z]/g,'');
-function personOf(email){const parts=String(email||'').split('@')[0].split(/[._\-]+/).filter(Boolean);
+// temsilci listesinde olmayan kullanıcıların adı (e-posta küçük harfle)
+const NAMES={'raci.oener@akar-gmbh.de':'Raci Öner'};
+function personOf(email){const fixed=NAMES[String(email||'').trim().toLowerCase()];const parts=String(email||'').split('@')[0].split(/[._\-]+/).filter(Boolean);
   const hit=REPS.find(r=>fold(r)===fold(parts.join('')));
-  const name=hit||parts.map(p=>p.charAt(0).toLocaleUpperCase('tr')+p.slice(1).toLocaleLowerCase('tr')).join(' ');
+  const name=fixed||hit||parts.map(p=>p.charAt(0).toLocaleUpperCase('tr')+p.slice(1).toLocaleLowerCase('tr')).join(' ');
   const w=name.split(/\s+/).filter(Boolean);const ini=(w.length>1?w[0][0]+w[w.length-1][0]:(w[0]||'?').slice(0,2)).toLocaleUpperCase('tr');
   return {name,ini}}
 function renderUser(){const a=window.CRM_AUTH,box=$('#umenu');if(!a||!a.email){box.hidden=true;return}
