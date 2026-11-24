@@ -30,7 +30,7 @@ header.top{position:relative}header.top .acts{align-self:center;align-items:cent
 .av:hover,.av[aria-expanded=true]{background:var(--acc);color:#fff}
 .umd{position:absolute;right:0;top:calc(100% + 8px);min-width:230px;max-width:calc(100vw - 32px);background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgb(0 0 0/.16);padding:6px;z-index:70;display:grid}
 .umd .who{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px}.umd .who b{display:block}.umd .who small{display:block;color:var(--mut);font-size:13px;overflow-wrap:anywhere}
-.umd button{min-height:42px;text-align:left;padding:0 10px;border:0;border-radius:8px;background:none;font-size:15px}.umd button:hover{background:var(--card)}.umd .lo{color:var(--accInk);font-weight:600}
+.umd button,.umd label{display:flex;align-items:center;min-height:42px;text-align:left;padding:0 10px;border:0;border-radius:8px;background:none;font-size:15px;cursor:pointer;color:var(--ink)}.umd button:hover,.umd label:hover,.umd label:focus-visible{background:var(--card)}.umd label input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}.umd hr{border:0;border-top:1px solid var(--line);margin:4px 0;width:100%}.umd .lo{color:var(--accInk);font-weight:600}
 header p{margin:4px 0 0;color:var(--mut);font-size:14px}
 .acts{display:flex;flex-wrap:wrap;gap:8px}
 .primary,.ghost{min-height:44px;padding:0 16px;border-radius:10px;font-weight:600;border:1px solid var(--line);background:var(--bg)}
@@ -156,10 +156,8 @@ dd a{color:var(--accInk);font-weight:600}
 <header class="wrap top">
   <div><h1>Akar Benelux NL CRM</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
   <div class="acts" id="topActs">
-    <button class="ghost" id="xexp" type="button">Excel'e aktar</button>
-    <label class="ghost file" id="ximpBtn" style="display:inline-flex;align-items:center">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx"></label>
     <div class="umenu" id="umenu" hidden><button class="av" id="avBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="umDrop"></button>
-      <div class="umd" id="umDrop" role="menu" hidden><div class="who"><b id="umName"></b><small id="umMail"></small></div><button type="button" role="menuitem" data-um="pw">Şifre belirle</button><button type="button" role="menuitem" class="lo" data-um="out">Çıkış</button></div></div>
+      <div class="umd" id="umDrop" role="menu" hidden><div class="who"><b id="umName"></b><small id="umMail"></small></div><button type="button" role="menuitem" id="xexp">Excel'e aktar</button><label role="menuitem" tabindex="0" id="ximpBtn">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx" tabindex="-1"></label><hr id="umSep"><button type="button" role="menuitem" data-um="pw">Şifre belirle</button><button type="button" role="menuitem" class="lo" data-um="out">Çıkış</button></div></div>
   </div>
 </header>
 <div class="wrap">
@@ -441,7 +439,7 @@ function renderTop(){
   renderUser();
   $('#reps').innerHTML=['',...allReps()].map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}">${r?esc(r):'Tüm temsilciler'}</button>`).join('');
   const isAdm=window.CRM_IS_ADMIN!==false;
-  $('#ximpBtn').hidden=!(canWrite&&isAdm);$('#xexp').style.display=isAdm?'':'none';
+  $('#ximpBtn').hidden=!(canWrite&&isAdm);$('#xexp').hidden=!isAdm;$('#umSep').hidden=!isAdm;
   $('#sub').textContent=INVTO?`Fatura verisi ${fmt(INVTO)} tarihine kadar (Power BI) · son temas faturaları da kapsar`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde';
   let b='';
   if(st.nodb)b=`<span>Kayıtlara ulaşılamıyor. ${esc(window.CRM_DIAG||'Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.')}</span>`;
@@ -877,7 +875,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.open){st.view='list';st.sel=t.dataset.open;saveUi();render();return}
   if(t.id==='back'){st.sel=null;render();return}
   if(t.id==='irun'){applyImport();return}
-  if(t.id==='xexp'){if(window.CRM_IS_ADMIN===false)return;exportXLSX();return}
+  if(t.id==='xexp'){umOpen(false);if(window.CRM_IS_ADMIN===false)return;exportXLSX();return}
   if(t.id==='clearSample'){if(st.arm!=='samples'){st.arm='samples';render();return}
     st.arm=null;for(const a of A.filter(x=>x.sample))await w(()=>db.collection('activities').doc(a.id).delete());
     for(const c of C.filter(x=>x.sample))await w(()=>db.collection('customers').doc(c.id).delete());
@@ -892,11 +890,12 @@ document.addEventListener('change',async e=>{
   if(t.id==='fseg'){st.seg=t.value;render()}
   if(t.id==='fstat'){st.status=t.value;render()}
   if(t.id==='fsort'){st.sort=t.value;saveUi();render()}
+  if(t.id==='ximp')umOpen(false);
   if(t.id==='ximp'&&t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readImport(f);return}
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#tform'))tformTotals(t.closest('#tform'));if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
   e.preventDefault();const f=e.target;
   if(f.id==='cform'){
