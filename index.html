@@ -334,6 +334,8 @@ const RET_WARN=0.08,RET_MIN=1000;
 const YF=(()=>{const y=+TODAY.slice(0,4);if(y>2026)return 1;const s=Date.UTC(y,0,1),n=Date.UTC(y,+TODAY.slice(5,7)-1,+TODAY.slice(8,10));const len=(Date.UTC(y+1,0,1)-s)/864e5;return ((n-s)/864e5+1)/len})();
 const OUTCOMES=[['Sipariş alındı',0,''],['Tekrar gel',7,'Tekrar ziyaret et'],['Fiyat itirazı',14,'Fiyat itirazını yeniden görüş'],['Rakip var',30,'Rakip durumunu kontrol et'],['Kapalıydı / yetkili yok',3,'Tekrar uğra'],['Bilgi notu',0,'']];
 const CHANNELS=['Ziyaret','Telefon','WhatsApp'];
+// Ziyaret kaydı ve Geçmiş şimdilik kapalı. Yeniden açmak için true yapın.
+const VISIT_LOG=false;
 const pct1=x=>(x*100).toFixed(1).replace('.',',');
 
 let db=null,canWrite=true,loaded=false;
@@ -470,7 +472,7 @@ function actRow(a){
 function renderDetail(){
   const el=$('#detail'),c=C.find(x=>x.id===st.sel);
   el.classList.toggle('open',!!c);
-  if(!c){st.formFor=null;el.innerHTML=`<div class="ph"><h2>Bir müşteri seçin</h2><p>Listeden bir market seçtiğinizde bilgileri, geçmiş ziyaretleri ve sıradaki takip burada görünür.</p><ul><li>Üstteki kutulara tıklayarak bugünkü rutu, takibi gelmiş ya da uzun süredir ziyaret edilmeyen müşterileri süzebilirsiniz.</li><li>Her ziyaretten sonra kısa bir not girin; not o günün tarihiyle kaydedilir.</li></ul></div>`;return}
+  if(!c){st.formFor=null;el.innerHTML=`<div class="ph"><h2>Bir müşteri seçin</h2><p>Listeden bir market seçtiğinizde bilgileri, geçmiş ziyaretleri ve sıradaki takip burada görünür.</p><ul><li>Üstteki kutulara tıklayarak bugünkü rutu, takibi gelmiş ya da uzun süredir ziyaret edilmeyen müşterileri süzebilirsiniz.</li>${VISIT_LOG?'<li>Her ziyaretten sonra kısa bir not girin; not o günün tarihiyle kaydedilir.</li>':''}</ul></div>`;return}
   const acts=A.filter(a=>a.customerId===c.id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt||0)-(a.createdAt||0));
   const reps=allReps();if(c.rep&&!reps.includes(c.rep))reps.push(c.rep);
   const lastD=D.last[c.id],iv=inv(c),ct=ctOf(c),rk=RK[c.id],rt=retOf(c);
@@ -482,8 +484,8 @@ function renderDetail(){
   ${ctaHtml(c,ct)}
   <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
   ${c.notes?`<p class="notes">${esc(c.notes)}</p>`:''}
-  ${canWrite?visitForm(c):''}
-  <h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`;
+  ${VISIT_LOG&&canWrite?visitForm(c):''}
+  ${VISIT_LOG?`<h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`:''}`;
 }
 function ctaHtml(c,ct){
   const edit=st.ctEdit===c.id;
@@ -533,12 +535,12 @@ function renderBoard(){
   T.s26b=rows.reduce((a,o)=>a+o.s26b,0);
   const pace=o=>o.c25b>0?(()=>{const g=o.s26b/(o.c25b*YF)-1;return `<span class="${g<0?'down':'up'}">${g>0?'+':''}${pct1(g)}%</span>`})():'–';
   const ordC=o=>`${eur(o.ord)}${o.t?` <span class="sm">/ ${eur(o.t)} · %${Math.round(o.ord/o.t*100)}</span>`:''}`;
-  const tr=(o,tot)=>`<tr><td>${tot?'Toplam':`<button class="lnk" data-brep="${esc(o.r)}">${esc(o.r)}</button>`}</td><td>${o.n} <span class="sm">(${o.ak} aktif)</span></td><td>${eur(o.c25)}</td><td>${eur(o.s26)}</td><td>${pace(o)}</td><td>${ordC(o)}</td><td>${o.a7} / ${o.a30}</td><td>${o.late?`<b class="warn">${o.late}</b>`:'0'}</td><td>${tot?`${o.rk} · ${eur(o.rkv)}`:`<button class="lnk" data-brisk="${esc(o.r)}">${o.rk} · ${eur(o.rkv)}</button>`}</td><td>${o.np}</td></tr>`;
+  const tr=(o,tot)=>`<tr><td>${tot?'Toplam':`<button class="lnk" data-brep="${esc(o.r)}">${esc(o.r)}</button>`}</td><td>${o.n} <span class="sm">(${o.ak} aktif)</span></td><td>${eur(o.c25)}</td><td>${eur(o.s26)}</td><td>${pace(o)}</td><td>${ordC(o)}</td>${VISIT_LOG?`<td>${o.a7} / ${o.a30}</td>`:''}<td>${o.late?`<b class="warn">${o.late}</b>`:'0'}</td><td>${tot?`${o.rk} · ${eur(o.rkv)}`:`<button class="lnk" data-brisk="${esc(o.r)}">${o.rk} · ${eur(o.rkv)}</button>`}</td><td>${o.np}</td></tr>`;
   const top=C.map(c=>[c,retOf(c)]).filter(([,r])=>r&&r.warn).sort((a,b)=>b[1].p-a[1].p).slice(0,10);
   const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`,TG=(TGS[mk]||{}).reps||{};
   $('#board').innerHTML=`<h3>Temsilci karnesi</h3>
-  <div class="ordp"><div class="oh"><b>Tempo: 2026 bugüne kadar satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}'i)</b><small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small></div>
-  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 bugüne</th><th>Tempo</th><th>Bu ay sipariş / hedef</th><th>Kayıt 7g / 30g</th><th>Gecikmiş takip</th><th>Kayıp riski</th><th>Telefonsuz aktif</th></tr></thead>
+  <div class="ordp"><div class="oh"><b>Tempo: 2026 bugüne kadar satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}'i)</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
+  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 bugüne</th><th>Tempo</th><th>Bu ay sipariş / hedef</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Gecikmiş takip</th><th>Kayıp riski</th><th>Telefonsuz aktif</th></tr></thead>
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
   <h3>En yüksek iade oranı <small class="sm">ilk 10 · satışın %${Math.round(RET_WARN*100)}'i ve üzeri</small></h3>
   ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
