@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Müşteri Takibi</title>
+<title>Akar Benelux NL CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Sofia+Sans+Condensed:wght@700;800&display=swap">
 <style>
@@ -24,6 +24,13 @@ button{cursor:pointer}
 .wrap{max-width:1600px;margin:0 auto;padding:0 max(2.5vw,16px)}
 header.top{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:flex-end;justify-content:space-between;padding-top:28px;padding-bottom:14px}
 header h1{font-size:clamp(32px,5vw,46px)}
+header.top{position:relative}header.top .acts{align-self:center;align-items:center}
+.umenu{position:relative}
+.av{width:44px;height:44px;border-radius:50%;border:0;background:var(--ink);color:var(--bg);font:700 15px/1 "Instrument Sans",system-ui,sans-serif;letter-spacing:.03em}
+.av:hover,.av[aria-expanded=true]{background:var(--acc);color:#fff}
+.umd{position:absolute;right:0;top:calc(100% + 8px);min-width:230px;max-width:calc(100vw - 32px);background:var(--bg);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgb(0 0 0/.16);padding:6px;z-index:70;display:grid}
+.umd .who{padding:8px 10px 10px;border-bottom:1px solid var(--line);margin-bottom:4px}.umd .who b{display:block}.umd .who small{display:block;color:var(--mut);font-size:13px;overflow-wrap:anywhere}
+.umd button{min-height:42px;text-align:left;padding:0 10px;border:0;border-radius:8px;background:none;font-size:15px}.umd button:hover{background:var(--card)}.umd .lo{color:var(--accInk);font-weight:600}
 header p{margin:4px 0 0;color:var(--mut);font-size:14px}
 .acts{display:flex;flex-wrap:wrap;gap:8px}
 .primary,.ghost{min-height:44px;padding:0 16px;border-radius:10px;font-weight:600;border:1px solid var(--line);background:var(--bg)}
@@ -122,7 +129,7 @@ dd a{color:var(--accInk);font-weight:600}
 .sample{font-size:13px;color:var(--mut);margin:-4px 0 12px}
 @media(max-width:900px){.grid{grid-template-columns:minmax(0,1fr)}.detail{display:none;position:fixed;inset:0;z-index:40;border-radius:0;border:0;overflow:auto;padding-bottom:40px}.detail.open{display:block}.back{display:inline-flex;align-items:center;min-height:44px;margin:-6px 0 8px;padding:0 4px;border:0;background:none;font-weight:600;color:var(--accInk)}}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.filters{grid-template-columns:repeat(2,minmax(0,1fr))}.filters input{grid-column:1/-1}.g3,.g2,.info{grid-template-columns:minmax(0,1fr)}.tl>li{grid-template-columns:minmax(0,1fr);gap:4px}.tm{grid-auto-flow:column;justify-content:start;align-items:center;gap:8px}.tk li{grid-template-columns:28px minmax(0,1fr) auto;row-gap:2px}.tk .ta{grid-column:2/-1}.tk small{grid-column:2}.sheet{padding:18px}}
-@media(max-width:600px){body{font-size:14px}header.top{padding-top:18px;padding-bottom:10px}header h1{font-size:26px}header p{font-size:12.5px}.primary,.ghost{min-height:40px;padding:0 12px;font-size:14px}.chip{min-height:34px;padding:0 11px;font-size:13px}.stats{gap:8px}.stat{padding:10px 12px}.stat b{font-size:24px}.stat span{font-size:12.5px;line-height:1.35}.tab{min-height:40px;font-size:14px;padding:0 10px}.meta{font-size:12.5px;flex-wrap:wrap;gap:2px 10px}.meta>span:first-child{white-space:nowrap}.row{padding:10px 6px;gap:10px;--segw:92px}.rm b{font-size:15px}.rm small{font-size:12px}.seg{font-size:12.5px;height:26px;line-height:24px}.lc{font-size:12px}.dh h2{font-size:24px}.ph h2{font-size:24px}.tag{font-size:12px}.alert{font-size:13px;padding:7px 10px}.cta a,.cta button{min-height:40px;padding:0 12px;font-size:14px}dt{font-size:12px}dd{font-size:14px}.info{gap:8px 16px;margin:14px 0}.ordp{padding:10px 12px}.ordp table{font-size:13px}.ordp th,.ordp td{padding:5px 6px}.board h3{font-size:20px}.sheet h2{font-size:24px}.toast{font-size:14px}}
+@media(max-width:600px){body{font-size:14px}header.top{padding-top:18px;padding-bottom:10px}header h1{font-size:26px;padding-right:52px}.umenu{position:absolute;top:14px;right:max(2.5vw,16px)}.av{width:38px;height:38px;font-size:13px}header p{font-size:12.5px}.primary,.ghost{min-height:40px;padding:0 12px;font-size:14px}.chip{min-height:34px;padding:0 11px;font-size:13px}.stats{gap:8px}.stat{padding:10px 12px}.stat b{font-size:24px}.stat span{font-size:12.5px;line-height:1.35}.tab{min-height:40px;font-size:14px;padding:0 10px}.meta{font-size:12.5px;flex-wrap:wrap;gap:2px 10px}.meta>span:first-child{white-space:nowrap}.row{padding:10px 6px;gap:10px;--segw:92px}.rm b{font-size:15px}.rm small{font-size:12px}.seg{font-size:12.5px;height:26px;line-height:24px}.lc{font-size:12px}.dh h2{font-size:24px}.ph h2{font-size:24px}.tag{font-size:12px}.alert{font-size:13px;padding:7px 10px}.cta a,.cta button{min-height:40px;padding:0 12px;font-size:14px}dt{font-size:12px}dd{font-size:14px}.info{gap:8px 16px;margin:14px 0}.ordp{padding:10px 12px}.ordp table{font-size:13px}.ordp th,.ordp td{padding:5px 6px}.board h3{font-size:20px}.sheet h2{font-size:24px}.toast{font-size:14px}}
 @media(prefers-reduced-motion:reduce){.toast{transition:none}}
 .pas{color:light-dark(#c62828,#ff6b6b)!important}
 .row>.seg{width:100%;max-width:none;text-align:left}
@@ -144,10 +151,12 @@ dd a{color:var(--accInk);font-weight:600}
 </head>
 <body>
 <header class="wrap top">
-  <div><h1>Müşteri takibi</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
+  <div><h1>Akar Benelux NL CRM</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
   <div class="acts" id="topActs">
     <button class="ghost" id="xexp" type="button">Excel'e aktar</button>
     <label class="ghost file" id="ximpBtn" style="display:inline-flex;align-items:center">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx"></label>
+    <div class="umenu" id="umenu" hidden><button class="av" id="avBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="umDrop"></button>
+      <div class="umd" id="umDrop" role="menu" hidden><div class="who"><b id="umName"></b><small id="umMail"></small></div><button type="button" role="menuitem" data-um="pw">Şifre belirle</button><button type="button" role="menuitem" class="lo" data-um="out">Çıkış</button></div></div>
   </div>
 </header>
 <div class="wrap">
@@ -272,7 +281,7 @@ window.CRM_CONFIG={
     return new Promise(res=>{
       const w=document.createElement('div');w.id='login';
       w.innerHTML=`<style>#login{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:var(--bg,#fff);font-family:system-ui,sans-serif}#login form{width:min(380px,90vw);display:grid;gap:12px;padding:28px;border:1px solid #ddd;border-radius:14px}#login h2{margin:0;font-size:24px}#login input,#login button{min-height:46px;border-radius:10px;font-size:16px;padding:0 14px;border:1px solid #ccc}#login button{background:#ff4a1c;color:#fff;border-color:#ff4a1c;font-weight:600;cursor:pointer}#login p{margin:0;color:#666;font-size:14px}</style>
-      <form id="lpw"><h2>Müşteri Takibi</h2><p>E-posta ve şifrenizle giriş yapın.</p>
+      <form id="lpw"><h2>Akar Benelux NL CRM</h2><p>E-posta ve şifrenizle giriş yapın.</p>
       <input type="email" name="e" required placeholder="ad@firma.com" autocomplete="username">
       <input type="password" name="p" required placeholder="Şifre" autocomplete="current-password">
       <button>Giriş yap</button><p id="lmsg"></p>
@@ -298,10 +307,9 @@ window.CRM_CONFIG={
     if(ae)throw new Error(/relation|does not exist|schema cache/i.test(ae.message)?'Veritabanı tabloları bulunamadı. 1-supabase-kurulum.sql dosyasını SQL Editor\'de çalıştırdınız mı? ('+ae.message+')':ae.message);
     if(!ok){document.body.innerHTML=`<div style="font-family:system-ui;padding:40px;max-width:520px;margin:auto"><h2>Erişim yetkiniz yok</h2><p>${s.user.email} adresi CRM kullanıcı listesinde değil. Yöneticinizden eklenmesini isteyin.</p><button id="lo">Farklı e-posta ile giriş</button></div>`;document.getElementById('lo').onclick=async()=>{await sb.auth.signOut();location.reload()};await new Promise(()=>{})}
     return s}
-  function logoutBtn(s){const box=document.createElement('div');box.style.cssText='position:fixed;right:10px;bottom:10px;z-index:50;display:flex;gap:6px';
-    const mk=(t,fn)=>{const b=document.createElement('button');b.textContent=t;b.style.cssText='font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#333;opacity:.85;cursor:pointer';b.onclick=fn;box.appendChild(b)};
-    mk('Şifre belirle',async()=>{const p=prompt('Yeni şifre (en az 8 karakter):');if(!p)return;if(p.length<8){alert('Şifre en az 8 karakter olmalı.');return}const {error}=await sb.auth.updateUser({password:p});alert(error?'Şifre kaydedilemedi: '+error.message:'Şifreniz kaydedildi. Bundan sonra e-posta ve şifreyle giriş yapabilirsiniz.')});
-    mk('Çıkış ('+s.user.email+')',async()=>{await sb.auth.signOut();location.reload()});document.body.appendChild(box)}
+  function logoutBtn(s){window.CRM_AUTH={email:s.user.email||'',
+    async setPassword(){const p=prompt('Yeni şifre (en az 8 karakter):');if(!p)return;if(p.length<8){alert('Şifre en az 8 karakter olmalı.');return}const {error}=await sb.auth.updateUser({password:p});alert(error?'Şifre kaydedilemedi: '+error.message:'Şifreniz kaydedildi. Bundan sonra e-posta ve şifreyle giriş yapabilirsiniz.')},
+    async signOut(){await sb.auth.signOut();location.reload()}}}
   window.claude={async use(k){
     if(k==='db'){try{const s=await session();window.CRM_USER=s.user.email||'';window.CRM_IS_ADMIN=String(s.user.email||'').toLowerCase()===ADMIN_EMAIL;logoutBtn(s);
       const {error:te}=await sb.from(T).select('id').limit(1);if(te)throw new Error(te.message);
@@ -338,6 +346,17 @@ const CHANNELS=['Ziyaret','Telefon','WhatsApp'];
 // Ziyaret kaydı ve Geçmiş şimdilik kapalı. Yeniden açmak için true yapın.
 const VISIT_LOG=false;
 const pct1=x=>(x*100).toFixed(1).replace('.',',');
+/* oturum açan kişi: e-postadan ad soyad (temsilci listesiyle eşleşirse oradaki yazım) ve baş harfler */
+const fold=s=>String(s||'').toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/[^a-z]/g,'');
+function personOf(email){const parts=String(email||'').split('@')[0].split(/[._\-]+/).filter(Boolean);
+  const hit=REPS.find(r=>fold(r)===fold(parts.join('')));
+  const name=hit||parts.map(p=>p.charAt(0).toLocaleUpperCase('tr')+p.slice(1).toLocaleLowerCase('tr')).join(' ');
+  const w=name.split(/\s+/).filter(Boolean);const ini=(w.length>1?w[0][0]+w[w.length-1][0]:(w[0]||'?').slice(0,2)).toLocaleUpperCase('tr');
+  return {name,ini}}
+function renderUser(){const a=window.CRM_AUTH,box=$('#umenu');if(!a||!a.email){box.hidden=true;return}
+  const p=personOf(a.email);box.hidden=false;$('#avBtn').textContent=p.ini;$('#avBtn').title=p.name;$('#avBtn').setAttribute('aria-label','Hesap: '+p.name);
+  $('#umName').textContent=p.name;$('#umMail').textContent=a.email}
+const umOpen=on=>{$('#umDrop').hidden=!on;$('#avBtn').setAttribute('aria-expanded',on)};
 
 let db=null,canWrite=true,loaded=false;
 let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,MON=null,K={},TGS={},RK={};
@@ -412,6 +431,7 @@ function visible(){
 }
 
 function renderTop(){
+  renderUser();
   $('#reps').innerHTML=['',...allReps()].map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}">${r?esc(r):'Tüm temsilciler'}</button>`).join('');
   const isAdm=window.CRM_IS_ADMIN!==false;
   $('#ximpBtn').hidden=!(canWrite&&isAdm);$('#xexp').style.display=isAdm?'':'none';
@@ -795,6 +815,9 @@ async function applyImport(){
 
 /* events */
 document.addEventListener('click',async e=>{
+  if(!$('#umDrop').hidden&&!e.target.closest('#umenu'))umOpen(false);
+  const um=e.target.closest('#avBtn,[data-um]');
+  if(um){if(um.id==='avBtn'){umOpen($('#umDrop').hidden);return}umOpen(false);const a=window.CRM_AUTH;if(!a)return;if(um.dataset.um==='pw')await a.setPassword();else if(um.dataset.um==='out')await a.signOut();return}
   const t=e.target.closest('button,[data-close]');
   if(e.target.classList.contains('modal')){closeModals();return}
   if(!t)return;
@@ -831,7 +854,7 @@ document.addEventListener('change',async e=>{
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('input',e=>{const t=e.target;if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
   e.preventDefault();const f=e.target;
   if(f.id==='cform'){
