@@ -56,6 +56,15 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.evaluate(()=>window.__pw)===1&&await page.isHidden('#umDrop'),'"Şifre belirle" çalışıyor ve menüyü kapatıyor');
   await page.click('#avBtn');await page.click('[data-um=out]');ok(await page.evaluate(()=>window.__out)===1,'"Çıkış" çalışıyor');
   ok(!(await page.$('body > div[style*="position:fixed"]')),'sol alttaki eski butonlar yok');
+  ok(await page.isHidden('#xexp')&&await page.isHidden('#ximpBtn'),'Excel butonları üst barda değil (menü kapalıyken görünmüyor)');
+  ok(await page.$eval('#xexp',e=>!!e.closest('#umDrop'))&&await page.$eval('#ximpBtn',e=>!!e.closest('#umDrop')),'Excel butonları BS menüsünün içinde');
+  await page.click('#avBtn');
+  ok(await page.isVisible('#xexp')&&await page.isVisible('#ximpBtn')&&await page.isVisible('#umSep'),'yönetici menüde Excel\'e aktar ve Excel\'den içe aktar görüyor');
+  {const items=await page.$$eval('#umDrop [role=menuitem]',e=>e.map(x=>x.textContent.trim()));ok(JSON.stringify(items)===JSON.stringify(["Excel'e aktar","Excel'den içe aktar",'Şifre belirle','Çıkış']),'menü sırası: '+items.join(' · '))}
+  await page.screenshot({path:path.join(SHOTS,'0-menu-excel.png'),clip:{x:900,y:0,width:500,height:330}});
+  {const [fc]=await Promise.all([page.waitForEvent('filechooser',{timeout:3000}).catch(()=>null),page.click('#ximpBtn')]);ok(!!fc,'Excel\'den içe aktar dosya seçme penceresini açıyor')}
+  await page.keyboard.press('Escape');await page.click('#avBtn');await page.click('#xexp');
+  ok(await page.isHidden('#umDrop'),'Excel\'e aktar tıklanınca menü kapanıyor');
 
   step('1. Kayıp riski listesi');
   const tile=await txt(page,'[data-quick=risk]');
@@ -189,6 +198,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isHidden('#tabB'),'temsilci Karne sekmesini görmüyor');
   ok(await txt(page,'#avBtn')==='LK','temsilcide baş harfler: LK');
   await page.click('#avBtn');ok(await txt(page,'#umName')==='Lütfi Kaplan','e-postadan Türkçe ad: Lütfi Kaplan');
+  ok(await page.isHidden('#xexp')&&await page.isHidden('#ximpBtn')&&await page.isHidden('#umSep'),'temsilcinin menüsünde Excel butonları yok');
   await page.keyboard.press('Escape');
   ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
   await sel(page,'Sessiz Market');
