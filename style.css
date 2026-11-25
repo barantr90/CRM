@@ -179,3 +179,8 @@ dd a{color:var(--accInk);font-weight:600}
 @media(max-width:1000px){.qtabs{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.qbig{font-size:30px}.qcats li{grid-template-columns:88px minmax(0,1fr) 44px;font-size:13px}.qctl .chip{padding:0 10px}}
 .qasof{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 12px;font-weight:600}.qasof input{width:auto;min-height:40px}.qasof .sm{font-weight:400;flex-basis:100%}
+/* karne: iade ilk 25 */
+.rethead{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:22px 0 8px}.rethead h3{margin:0!important}
+#retT td.rk,#retT th.rk{width:36px;color:var(--mut)!important;font-weight:400;text-align:right}#retT td:nth-child(2),#retT th:nth-child(2),#retT td:nth-child(3),#retT th:nth-child(3){text-align:left}
+#retT tr.sep td{border-top:1px solid var(--mut);border-bottom:0;padding-top:14px;font-size:13px;font-weight:600;color:var(--mut);text-align:left}
+#retT tr.pasr td{color:var(--mut)}#retT tr.pasr .lnk{color:var(--mut);text-decoration-color:var(--line)}

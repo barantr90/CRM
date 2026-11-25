@@ -180,12 +180,40 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   {const h=await page.$$eval('#boardT th',t=>t.map(x=>x.textContent));
    ok(JSON.stringify(h)==='["Temsilci","Müşteri","Ciro 2025","2026 YTD","Tempo","Kayıp Riski"]','karne sütunları: '+h.join(', '));
    ok(Object.values(br).every(r=>r.length===6),'satırlarda da 6 hücre var')}
-  const rt=await page.$$eval('#retT tbody tr',rs=>rs.map(r=>r.cells[0].textContent));
+  const rt=await page.$$eval('#retT tbody tr:not(.sep)',rs=>rs.map(r=>r.cells[1].textContent));
   ok(JSON.stringify(rt)==='["İadeci Market","Yeni Market"]','iade tablosu orana göre: İadeci, Yeni');
   await page.screenshot({path:path.join(SHOTS,'6-karne.png'),fullPage:true});
   await page.click('[data-brisk="Lütfi Kaplan"]');
   ok(await page.isVisible('#listView')&&JSON.stringify(await rows(page))==='["Düşüş Market","Sessiz Market"]','risk sayısına tıklayınca o temsilcinin risk listesi açılıyor');
   await page.click('.chip[data-rep=""]');await page.click('[data-quick=risk]');
+
+  step('6b. İade tablosu: ilk 25, aktif / pasif');
+  {const ctx2=await browser.newContext({viewport:{width:1400,height:1000}});const p=await ctx2.newPage();
+   p.on('pageerror',e=>errors.push(e.message));await p.route(offline,r=>r.abort());
+   // 32 ek müşteri: iade oranı %9,9'dan %6,8'e iner; 6, 12, 18, 24, 30. sıradakiler pasif
+   const EXTRA=`(()=>{const S=window.__SEED;for(let i=1;i<=32;i++){const code=String(900+i);S.customers['c'+code]={...S.customers.c3,code,name:'İade '+String(i).padStart(2,'0'),status:i%6===0?'Pasif':'Aktif',rep:'Mehmet Halici'};S.sync.returns.map[code]=[10000,-(1000-i*10),1,0,0,5]}})();`;
+   await p.addInitScript(`${FIX};${EXTRA};window.CRM_IS_ADMIN=true;window.CRM_AUTH={email:'baran.sengul@akar-group.com'};${MOCK}`);
+   await p.goto(BASE+'/index.html');await p.waitForSelector('#list .row');await p.click('#tabB');
+   const names=()=>p.$$eval('#retT tbody tr:not(.sep)',rs=>rs.map(r=>r.cells[1].textContent));
+   ok(await p.getAttribute('[data-rf=both]','aria-pressed')==='true','varsayılan filtre: Aktif + Pasif');
+   let n=await names();
+   const act=n.slice(0,25),pas=n.slice(25);
+   ok(act.length===25&&act[0]==='İadeci Market'&&act[24]==='İade 28','üstte en yüksek iade oranlı 25 aktif müşteri (1. İadeci Market, 25. İade 28)');
+   ok(!act.some(x=>['İade 06','İade 12','İade 18','İade 24'].includes(x)),'ilk 25 listesinde pasif yok');
+   ok(JSON.stringify(pas)==='["İade 06","İade 12","İade 18","İade 24"]','çizginin altında genel ilk 25\'teki 4 pasif: '+pas.join(', '));
+   ok(/Pasif · genel ilk 25'te yer alan 4 müşteri/.test(await txt(p,'#retT tr.sep')),'ayırıcı satır: '+await txt(p,'#retT tr.sep'));
+   ok(await p.$eval('#retT tr.sep td',e=>getComputedStyle(e).borderTopWidth)==='1px','ince çizgi (1 px)');
+   ok(await p.$$eval('#retT tr.pasr',r=>r.length)===4&&await p.$eval('#retT tr.pasr .rk',e=>e.textContent)==='1','pasifler soluk ve kendi sırasıyla');
+   ok(/29 aktif, 5 pasif müşteri bu eşiğin üzerinde/.test(await txt(p,'.rethead small')),'eşik üzerindeki sayılar: '+await txt(p,'.rethead small'));
+   await (await p.$('#retT')).screenshot({path:path.join(SHOTS,'6b-iade25.png')});
+   await p.click('[data-rf=aktif]');n=await names();
+   ok(n.length===25&&!(await p.$('#retT tr.sep'))&&!(await p.$('#retT tr.pasr')),'Aktif filtresi: yalnız 25 aktif, çizgi yok');
+   await p.click('[data-rf=pasif]');n=await names();
+   ok(JSON.stringify(n)==='["İade 06","İade 12","İade 18","İade 24","İade 30"]'&&!(await p.$('#retT tr.sep')),'Pasif filtresi: 5 pasif müşterinin hepsi, en yüksek oran üstte');
+   ok(await p.evaluate(()=>JSON.parse(localStorage.getItem('crm-ui')).rf)==='pasif','filtre seçimi hatırlanıyor');
+   await p.click('#retT tbody tr:first-child .lnk');
+   ok(await p.isVisible('#listView')&&(await txt(p,'#detail h2'))==='İade 06','müşteri adına tıklayınca kartı açılıyor');
+   await ctx2.close();}
 
   step('7. Çeyrek hedef takibi');
   await page.click('#tabB');
