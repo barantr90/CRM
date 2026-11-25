@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Müşteri Takibi</title>
+<title>Akar Benelux NL CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Sofia+Sans+Condensed:wght@700;800&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="wrap top">
-  <div><h1>Müşteri takibi</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
+  <div><h1>Akar Benelux NL CRM</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
   <div class="acts" id="topActs">
-    <button class="ghost" id="xexp" type="button">Excel'e aktar</button>
-    <label class="ghost file" id="ximpBtn" style="display:inline-flex;align-items:center">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx"></label>
+    <div class="umenu" id="umenu" hidden><button class="av" id="avBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="umDrop"></button>
+      <div class="umd" id="umDrop" role="menu" hidden><div class="who"><b id="umName"></b><small id="umMail"></small></div><button type="button" role="menuitem" id="xexp">Excel'e aktar</button><label role="menuitem" tabindex="0" id="ximpBtn">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx" tabindex="-1"></label><hr id="umSep"><button type="button" role="menuitem" data-um="pw">Şifre belirle</button><button type="button" role="menuitem" class="lo" data-um="out">Çıkış</button></div></div>
   </div>
 </header>
 <div class="wrap">
@@ -24,6 +24,8 @@
   <nav class="tabs" role="tablist">
     <button class="tab" data-view="list" role="tab">Müşteriler</button>
     <button class="tab" data-view="tasks" role="tab" id="tabT">Takipler</button>
+    <button class="tab" data-view="targets" role="tab" id="tabH">Hedefler</button>
+    <button class="tab" data-view="board" role="tab" id="tabB" hidden>Karne</button>
   </nav>
   <main class="grid" id="listView">
     <section>
@@ -33,12 +35,14 @@
         <select id="fstat" aria-label="Durum"><option value="">Durum: tümü</option><option>Aktif</option><option>Pasif</option></select>
         <select id="fsort" aria-label="Sırala"><option value="name">Ada göre</option><option value="last">En eski temas önce</option></select>
       </div>
-      <div class="meta"><span id="count"></span><span><i class="dot"></i> 30+ gün temas yok · <em class="tk-tag">takip</em> takip zamanı gelmiş <span id="qf"></span></span></div>
+      <div class="meta"><span id="count"></span><span><i class="dot"></i> 30+ gün temas yok <span id="dueLeg">· <em class="tk-tag">takip</em> takip zamanı gelmiş</span> <span id="qf"></span></span></div>
       <ul class="list" id="list"></ul>
     </section>
     <section class="detail" id="detail" aria-live="polite"></section>
   </main>
   <section class="tasks" id="tasksView" hidden><div id="tasks"></div></section>
+  <section class="board" id="targetsView" hidden><div id="targets"></div></section>
+  <section class="board" id="boardView" hidden><div id="board"></div></section>
 </div>
 
 <div class="modal" id="modal" hidden>

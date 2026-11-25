@@ -53,7 +53,7 @@
     return new Promise(res=>{
       const w=document.createElement('div');w.id='login';
       w.innerHTML=`<style>#login{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:var(--bg,#fff);font-family:system-ui,sans-serif}#login form{width:min(380px,90vw);display:grid;gap:12px;padding:28px;border:1px solid #ddd;border-radius:14px}#login h2{margin:0;font-size:24px}#login input,#login button{min-height:46px;border-radius:10px;font-size:16px;padding:0 14px;border:1px solid #ccc}#login button{background:#ff4a1c;color:#fff;border-color:#ff4a1c;font-weight:600;cursor:pointer}#login p{margin:0;color:#666;font-size:14px}</style>
-      <form id="lpw"><h2>Müşteri Takibi</h2><p>E-posta ve şifrenizle giriş yapın.</p>
+      <form id="lpw"><h2>Akar Benelux NL CRM</h2><p>E-posta ve şifrenizle giriş yapın.</p>
       <input type="email" name="e" required placeholder="ad@firma.com" autocomplete="username">
       <input type="password" name="p" required placeholder="Şifre" autocomplete="current-password">
       <button>Giriş yap</button><p id="lmsg"></p>
@@ -79,12 +79,11 @@
     if(ae)throw new Error(/relation|does not exist|schema cache/i.test(ae.message)?'Veritabanı tabloları bulunamadı. 1-supabase-kurulum.sql dosyasını SQL Editor\'de çalıştırdınız mı? ('+ae.message+')':ae.message);
     if(!ok){document.body.innerHTML=`<div style="font-family:system-ui;padding:40px;max-width:520px;margin:auto"><h2>Erişim yetkiniz yok</h2><p>${s.user.email} adresi CRM kullanıcı listesinde değil. Yöneticinizden eklenmesini isteyin.</p><button id="lo">Farklı e-posta ile giriş</button></div>`;document.getElementById('lo').onclick=async()=>{await sb.auth.signOut();location.reload()};await new Promise(()=>{})}
     return s}
-  function logoutBtn(s){const box=document.createElement('div');box.style.cssText='position:fixed;right:10px;bottom:10px;z-index:50;display:flex;gap:6px';
-    const mk=(t,fn)=>{const b=document.createElement('button');b.textContent=t;b.style.cssText='font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #ccc;background:#fff;color:#333;opacity:.85;cursor:pointer';b.onclick=fn;box.appendChild(b)};
-    mk('Şifre belirle',async()=>{const p=prompt('Yeni şifre (en az 8 karakter):');if(!p)return;if(p.length<8){alert('Şifre en az 8 karakter olmalı.');return}const {error}=await sb.auth.updateUser({password:p});alert(error?'Şifre kaydedilemedi: '+error.message:'Şifreniz kaydedildi. Bundan sonra e-posta ve şifreyle giriş yapabilirsiniz.')});
-    mk('Çıkış ('+s.user.email+')',async()=>{await sb.auth.signOut();location.reload()});document.body.appendChild(box)}
+  function logoutBtn(s){window.CRM_AUTH={email:s.user.email||'',
+    async setPassword(){const p=prompt('Yeni şifre (en az 8 karakter):');if(!p)return;if(p.length<8){alert('Şifre en az 8 karakter olmalı.');return}const {error}=await sb.auth.updateUser({password:p});alert(error?'Şifre kaydedilemedi: '+error.message:'Şifreniz kaydedildi. Bundan sonra e-posta ve şifreyle giriş yapabilirsiniz.')},
+    async signOut(){await sb.auth.signOut();location.reload()}}}
   window.claude={async use(k){
-    if(k==='db'){try{const s=await session();window.CRM_IS_ADMIN=String(s.user.email||'').toLowerCase()===ADMIN_EMAIL;logoutBtn(s);
+    if(k==='db'){try{const s=await session();window.CRM_USER=s.user.email||'';window.CRM_IS_ADMIN=String(s.user.email||'').toLowerCase()===ADMIN_EMAIL;logoutBtn(s);
       const {error:te}=await sb.from(T).select('id').limit(1);if(te)throw new Error(te.message);
       return db}catch(e){diag('Supabase hatası: '+(e.message||e));return null}}
     if(k==='user')return {can:async()=>true};
