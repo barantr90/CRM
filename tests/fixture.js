@@ -25,7 +25,7 @@
       a2:{customerId:'c3',type:'Telefon',date:day(-2),rep:'Mehmet Halici',note:'Sipariş verdi',amount:0,nextAction:'',nextDate:'',done:false,createdAt:2}
     },
     sync:{
-      month:{month:T.slice(0,7),updatedAt:T,map:{'1':[1200,2],'3':[5000,3],'6':[3000,1]}},
+      month:{month:T.slice(0,7),through:T,updatedAt:T,map:{'1':[1350,2,-100,-50],'3':[5000,3,0,0],'6':[3000,1,0,0]}},
       returns:{from:y+'-01',to:T.slice(0,7),map:{'1':[15000,-300,2,0,0,10],'3':[40000,-400,1,0,0,30],'6':[20000,-2400,5,-100,1,20],'8':[5000,-150,1,0,0,4]}}
     }
   };

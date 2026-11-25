@@ -156,7 +156,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.click('#tabH');
   ok(await page.isVisible('#targetsView')&&await page.isHidden('#boardView')&&await page.isHidden('#listView'),'Hedefler sekmesi ayrı açılıyor');
   const heads7=await page.$$eval('#tform thead th',t=>t.map(x=>x.textContent));
-  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Hedef","Bu Ay Sipariş","Gerçekleşme"]','hedef tablosu: Temsilci, A–E, Hedef, Bu Ay Sipariş, Gerçekleşme');
+  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Hedef","Bu Ay Net Ciro","Gerçekleşme"]','hedef tablosu: Temsilci, A–E, Hedef, Bu Ay Net Ciro, Gerçekleşme');
   ok((await page.$$('#tform .eurin i')).length===25&&await txt(page,'#tform .eurin i')==='€','her hücrede € simgesi (5 temsilci × 5 kategori)');
   await page.fill('#tform [name="Lütfi Kaplan|A"]','abc');await page.click('#tform button[type=submit]');
   ok(/€ tutarı olmalı/.test(await txt(page,'#toast')),'geçersiz hedef reddedildi');
@@ -182,7 +182,11 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(/hedef € 14\.000/.test(await txt(page,'#ordBtn')),'tüm temsilcilerde toplam hedef € 14.000');
   await page.click('#ordBtn');
   const heads=await page.$$eval('#ordp th',t=>t.map(x=>x.textContent));
-  ok(heads.includes('Hedef')&&heads.includes('Gerçekleşme'),'sipariş tablosunda Hedef ve Gerçekleşme sütunları');
+  ok(heads.includes('Hedef')&&heads.includes('Gerçekleşme'),'net ciro tablosunda Hedef ve Gerçekleşme sütunları');
+  ok(['Net ciro','Satış','İade','Fiyat farkı'].every(h=>heads.includes(h)),'net ciro tablosu: Net ciro, Satış, İade, Fiyat farkı');
+  {const r=await page.$$eval('#ordp tbody tr',rs=>{const x=rs.find(r=>r.cells[0].textContent.includes('Lütfi'));return [...x.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim())});
+   ok(r[1]==='€ 1.200'&&r[2]==='€ 1.350'&&r[3]==='€ -100'&&r[4]==='€ -50','Lütfi net ciro € 1.200 = satış 1.350 − iade 100 − fiyat farkı 50 → '+r.slice(1,5).join(' | '))}
+  ok(/Bu ay net ciro/.test(await txt(page,'#ordBtn')),'özet kutusu: Bu ay net ciro');
   await page.screenshot({path:path.join(SHOTS,'7-hedef.png')});
   await ctx.close();
 
