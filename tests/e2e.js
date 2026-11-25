@@ -500,7 +500,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   {ok(await page.isVisible('#tabA'),'yönetici "Yönetici" sekmesini görüyor');
    await page.click('#tabA');
    const vals=await page.$$eval('#rform input',i=>i.map(x=>[x.name,x.value]));
-   ok(JSON.stringify(vals)==='[["pasif","120"],["temas","30"],["arag","30"],["iade","2.5"],["riskPace","70"],["riskSilent","45"]]','6 kural, varsayılan değerlerle: '+JSON.stringify(vals));
+   ok(JSON.stringify(vals)==='[["pasif","120"],["temas","30"],["arag","30"],["iade","2.5"],["retMin","1000"],["riskPace","70"],["dropMin","3000"],["riskSilent","45"],["silentMax","365"],["silentMin","1000"]]','10 kural, varsayılan değerlerle: '+JSON.stringify(vals));
+   ok(JSON.stringify(await page.$$eval('#rform .rgrp',h=>h.map(x=>x.textContent)))==='["Durum ve temas","Açık faturalar","İade","Kayıp riski"]','kurallar 4 başlık altında gruplu');
+   ok(await txt(page,'#r_dropMin ~ em')==='€'&&/Varsayılan: € 3\.000/.test(await txt(page,'#rform .rrow:has(#r_dropMin) .rdef')),'tutar kuralları € ile ve varsayılanı € 3.000');
    ok(/Henüz değiştirilmedi/.test(await txt(page,'#admin')),'henüz değiştirilmedi notu');
    ok(/müşteri otomatik pasif olur/.test(await txt(page,'[data-rimp=pasif]')),'pasif gün etkisi: '+await txt(page,'[data-rimp=pasif]'));
    const before=await txt(page,'[data-rimp=pasif]');
@@ -534,6 +536,24 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(await page.inputValue('#r_pasif')==='120'&&/Kaydet/.test(await txt(page,'#rmsg')),'Varsayılanlara dön değerleri geri yazıyor (kaydetmeden)');
    await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
    const d2=await doc(page,'settings/rules');ok(d2&&d2.pasif===120&&d2.temas===30&&d2.arag===30,'varsayılanlar kaydedildi');
+   // sabit eşikler de ayardan
+   const riskN=async()=>+(await page.evaluate(()=>document.querySelector('[data-quick=risk] b').textContent));
+   await page.click('.tab[data-view=list]');const r0=await riskN();
+   ok(!!(await page.$('#list .row[data-id="c6"] .rtag.rt')),'İadeci Market iade uyarısı var (satış € 20.000 ≥ € 1.000)');
+   await page.click('#tabA');await page.fill('#r_retMin','50000');
+   ok(/0 müşteri iade uyarısı alır/.test(await txt(page,'[data-rimp=retMin]'))||/müşteri iade uyarısı alır/.test(await txt(page,'[data-rimp=retMin]')),'en az satış etkisi: '+await txt(page,'[data-rimp=retMin]'));
+   await page.fill('#r_dropMin','100000');await page.fill('#r_silentMax','60');
+   await page.fill('#r_riskSilent','60');
+   ok(await page.$eval('#r_silentMax',e=>e.closest('.rbox').classList.contains('bad'))&&/büyük olmalı/.test(await txt(page,'[data-rimp=silentMax]')),'en fazla faturasız gün, faturasız gün sınırından büyük olmalı');
+   await page.fill('#r_riskSilent','45');
+   await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
+   const d3=await doc(page,'settings/rules');ok(d3&&d3.retMin===50000&&d3.dropMin===100000&&d3.silentMax===60,'yeni eşikler kaydedildi');
+   await page.click('.tab[data-view=list]');
+   ok(!(await page.$('#list .row[data-id="c6"] .rtag.rt')),'en az satış € 50.000: İadeci Market (€ 20.000) artık iade uyarısı almıyor');
+   const r1=await riskN();ok(r1===r0-2,`en az ciro € 100.000 ve en fazla 60 gün: Düşüş (€ 60.000) ve Sessiz (70 gün) riskten çıktı (${r0} → ${r1})`);
+   await page.click('#tabA');await page.click('#rdef');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
+   await page.click('.tab[data-view=list]');ok(await riskN()===r0&&!!(await page.$('#list .row[data-id="c6"] .rtag.rt')),'varsayılanlara dönünce eski hâline geldi');
+   await page.click('#tabA');
    await page.screenshot({path:path.join(SHOTS,'9-yonetici.png'),fullPage:true});}
   await ctx.close();
 
