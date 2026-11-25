@@ -33,9 +33,18 @@ function personOf(email){const fixed=NAMES[String(email||'').trim().toLowerCase(
   const name=fixed||hit||parts.map(p=>p.charAt(0).toLocaleUpperCase('tr')+p.slice(1).toLocaleLowerCase('tr')).join(' ');
   const w=name.split(/\s+/).filter(Boolean);const ini=(w.length>1?w[0][0]+w[w.length-1][0]:(w[0]||'?').slice(0,2)).toLocaleUpperCase('tr');
   return {name,ini}}
-function renderUser(){const a=window.CRM_AUTH,box=$('#umenu');if(!a||!a.email){box.hidden=true;return}
-  const p=personOf(a.email);box.hidden=false;$('#avBtn').textContent=p.ini;$('#avBtn').title=p.name;$('#avBtn').setAttribute('aria-label','Hesap: '+p.name);
+function renderUser(){renderTheme();const a=window.CRM_AUTH;if(!a||!a.email){$('#avBtn').hidden=true;return}
+  const p=personOf(a.email);$('#avBtn').hidden=false;$('#avBtn').textContent=p.ini;$('#avBtn').title=p.name;$('#avBtn').setAttribute('aria-label','Hesap: '+p.name);
   $('#umName').textContent=p.name;$('#umMail').textContent=a.email}
+/* gündüz / gece modu: seçim tarayıcıda saklanır, seçim yoksa cihaz ayarı geçerli */
+const THEME_KEY='crm-theme';
+const sysDark=()=>!!(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches);
+const curTheme=()=>document.documentElement.dataset.theme||(sysDark()?'dark':'light');
+const ICON_SUN='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>';
+const ICON_MOON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>';
+function renderTheme(){const d=curTheme()==='dark',b=$('#thmBtn');if(!b)return;b.innerHTML=d?ICON_SUN:ICON_MOON;b.setAttribute('aria-pressed',d);b.title=d?'Gündüz moduna geç':'Gece moduna geç'}
+function setTheme(t){document.documentElement.dataset.theme=t;try{localStorage.setItem(THEME_KEY,t)}catch(e){}renderTheme()}
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderTheme)}catch(e){}
 const umOpen=on=>{$('#umDrop').hidden=!on;$('#avBtn').setAttribute('aria-expanded',on)};
 
 let db=null,canWrite=true,loaded=false;
@@ -531,6 +540,7 @@ async function applyImport(){
 
 /* events */
 document.addEventListener('click',async e=>{
+  if(e.target.closest('#thmBtn')){umOpen(false);setTheme(curTheme()==='dark'?'light':'dark');return}
   if(!$('#umDrop').hidden&&!e.target.closest('#umenu'))umOpen(false);
   const um=e.target.closest('#avBtn,[data-um]');
   if(um){if(um.id==='avBtn'){umOpen($('#umDrop').hidden);return}umOpen(false);const a=window.CRM_AUTH;if(!a)return;if(um.dataset.um==='pw')await a.setPassword();else if(um.dataset.um==='out')await a.signOut();return}

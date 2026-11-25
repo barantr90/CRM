@@ -66,6 +66,29 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.keyboard.press('Escape');await page.click('#avBtn');await page.click('#xexp');
   ok(await page.isHidden('#umDrop'),'Excel\'e aktar tıklanınca menü kapanıyor');
 
+  step('0d. Gündüz / gece modu');
+  {const bg=()=>page.evaluate(()=>getComputedStyle(document.body).backgroundColor);
+   ok(await page.isVisible('#thmBtn'),'sağ üstte tema düğmesi var');
+   ok(await bg()==='rgb(255, 255, 255)'&&await page.getAttribute('#thmBtn','aria-pressed')==='false','cihaz açık modda: sayfa gündüz modunda başlıyor');
+   ok(await page.getAttribute('#thmBtn','title')==='Gece moduna geç','düğme ipucu: Gece moduna geç');
+   await page.click('#thmBtn');
+   ok(await bg()==='rgb(18, 13, 11)'&&await page.getAttribute('#thmBtn','aria-pressed')==='true','tıklayınca gece modu');
+   ok(await page.evaluate(()=>localStorage.getItem('crm-theme'))==='dark','seçim tarayıcıda saklandı');
+   ok(await page.getAttribute('#thmBtn','title')==='Gündüz moduna geç','düğme ipucu: Gündüz moduna geç');
+   await page.screenshot({path:path.join(SHOTS,'0-gece.png')});
+   // aynı tarayıcıda yeni sekme: seçim hatırlanmalı
+   const p2=await ctx.newPage();await p2.route(/^https?:/,r=>r.abort());
+   await p2.addInitScript(`${FIX};window.CRM_IS_ADMIN=true;${MOCK}`);
+   await p2.goto('file://'+path.join(ROOT,'index.html'));await p2.waitForSelector('#list .row');
+   ok(await p2.evaluate(()=>document.documentElement.dataset.theme)==='dark'&&await p2.evaluate(()=>getComputedStyle(document.body).backgroundColor)==='rgb(18, 13, 11)','sayfa yeniden açılınca gece modu hatırlanıyor');
+   ok(await p2.isVisible('#thmBtn')&&await p2.isHidden('#avBtn'),'oturum bilgisi yokken de tema düğmesi görünüyor');
+   await p2.close();
+   await page.click('#thmBtn');
+   ok(await bg()==='rgb(255, 255, 255)'&&await page.evaluate(()=>localStorage.getItem('crm-theme'))==='light','tekrar tıklayınca gündüz modu');
+   await page.click('#avBtn');await page.click('#thmBtn');
+   ok(await page.isHidden('#umDrop'),'menü açıkken tema değişince menü kapanıyor');
+   await page.click('#thmBtn');}
+
   step('1. Kayıp riski listesi');
   const tile=await txt(page,'[data-quick=risk]');
   ok(tile.startsWith('3'),`risk kutusu 3 müşteri gösteriyor ("${tile}")`);
@@ -223,6 +246,8 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   step('8. Telefon ekranı (390 px) ve koyu tema');
   ({ctx,page}=await open(browser,{viewport:{width:390,height:844},scheme:'dark'}));
+  ok(await page.evaluate(()=>getComputedStyle(document.body).backgroundColor)==='rgb(18, 13, 11)'&&await page.getAttribute('#thmBtn','aria-pressed')==='true','cihaz koyu modda: seçim yokken gece modunda başlıyor');
+  ok(await page.$eval('#thmBtn',e=>{const r=e.getBoundingClientRect();return r.top<70&&r.right<=390})&&await page.$eval('header h1',e=>{const r=document.createRange();r.selectNodeContents(e);const h=r.getBoundingClientRect(),t=document.querySelector('#thmBtn').getBoundingClientRect();return h.right<=t.left}),'telefonda tema düğmesi sağ üstte, başlıkla çakışmıyor');
   ok(await page.$eval('#avBtn',e=>{const r=e.getBoundingClientRect();return r.right<=390&&r.top<70}),'telefonda baş harf butonu sağ üstte');
   await page.click('#avBtn');ok(await page.$eval('#umDrop',e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=390}),'telefonda menü ekrana sığıyor');
   await page.screenshot({path:path.join(SHOTS,'8-mobil-menu.png')});await page.keyboard.press('Escape');

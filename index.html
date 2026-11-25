@@ -6,13 +6,14 @@
 <title>Akar Benelux NL CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Sofia+Sans+Condensed:wght@700;800&display=swap">
+<script>try{var t=localStorage.getItem('crm-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t}catch(e){}</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="wrap top">
   <div><h1>Akar Benelux NL CRM</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
   <div class="acts" id="topActs">
-    <div class="umenu" id="umenu" hidden><button class="av" id="avBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="umDrop"></button>
+    <div class="umenu" id="umenu"><button class="thm" id="thmBtn" type="button" aria-pressed="false" aria-label="Gece modu"></button><button class="av" id="avBtn" hidden type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="umDrop"></button>
       <div class="umd" id="umDrop" role="menu" hidden><div class="who"><b id="umName"></b><small id="umMail"></small></div><button type="button" role="menuitem" id="xexp">Excel'e aktar</button><label role="menuitem" tabindex="0" id="ximpBtn">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx" tabindex="-1"></label><hr id="umSep"><button type="button" role="menuitem" data-um="pw">Şifre belirle</button><button type="button" role="menuitem" class="lo" data-um="out">Çıkış</button></div></div>
   </div>
 </header>

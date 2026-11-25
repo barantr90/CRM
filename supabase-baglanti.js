@@ -52,7 +52,7 @@
   function loginUI(){
     return new Promise(res=>{
       const w=document.createElement('div');w.id='login';
-      w.innerHTML=`<style>#login{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:var(--bg,#fff);font-family:system-ui,sans-serif}#login form{width:min(380px,90vw);display:grid;gap:12px;padding:28px;border:1px solid #ddd;border-radius:14px}#login h2{margin:0;font-size:24px}#login input,#login button{min-height:46px;border-radius:10px;font-size:16px;padding:0 14px;border:1px solid #ccc}#login button{background:#ff4a1c;color:#fff;border-color:#ff4a1c;font-weight:600;cursor:pointer}#login p{margin:0;color:#666;font-size:14px}</style>
+      w.innerHTML=`<style>#login{position:fixed;inset:0;z-index:999;display:grid;place-items:center;background:var(--bg,#fff);font-family:system-ui,sans-serif}#login form{width:min(380px,90vw);display:grid;gap:12px;padding:28px;border:1px solid var(--line,#ddd);border-radius:14px;color:var(--ink,#15110f)}#login h2{margin:0;font-size:24px}#login input,#login button{min-height:46px;border-radius:10px;font-size:16px;padding:0 14px;border:1px solid var(--line,#ccc)}#login button{background:#ff4a1c;color:#fff;border-color:#ff4a1c;font-weight:600;cursor:pointer}#login p{margin:0;color:var(--mut,#666);font-size:14px}#login a{color:var(--accInk,#c2300c)}</style>
       <form id="lpw"><h2>Akar Benelux NL CRM</h2><p>E-posta ve şifrenizle giriş yapın.</p>
       <input type="email" name="e" required placeholder="ad@firma.com" autocomplete="username">
       <input type="password" name="p" required placeholder="Şifre" autocomplete="current-password">
