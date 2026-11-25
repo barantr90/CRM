@@ -252,3 +252,20 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .stsub{font-size:12px;color:var(--mut);margin-top:2px}.stat.on .stsub{color:rgb(255 255 255/.85)}@media(max-width:600px){.stsub{font-size:11px}}
 
 .rgrp{font:700 12px "Instrument Sans",system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line)}.rgrp:first-child{margin-top:8px;border-top:0;padding-top:0}.rgrp+.rrow{border-top:0}
+
+/* Kredi limiti */
+.crsum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:0 0 16px}.crsum>div{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:10px 14px;display:grid;gap:2px}
+.crsum span{font-size:13px;color:var(--mut)}.crsum b{font:800 24px/1.1 "Sofia Sans Condensed",system-ui,sans-serif}.crsum small{font-size:12px;color:var(--mut)}.crsum .bad b{color:var(--bad)}
+#crT td.rk,#crT th:first-child{width:36px;color:var(--mut)!important;font-weight:400;text-align:right}#crT td:nth-child(2),#crT th:nth-child(2),#crT td:nth-child(3),#crT th:nth-child(3){text-align:left}
+#crT td{vertical-align:top}#crT .cru{display:block;font-size:12px;color:var(--mut);font-weight:400}#crT .crn{color:var(--bad)}#crT .crov{color:var(--bad)}#crT .up{color:var(--good,#2e7d32)}#crT .down{color:var(--bad)}#crT .odv{font-variant-numeric:tabular-nums}#crT td{font-variant-numeric:tabular-nums}
+.crnote{color:var(--mut);font-size:13px;line-height:1.5}
+@media(max-width:900px){.crsum{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.crsum b{font-size:20px}#crT th:nth-child(1),#crT td:nth-child(1),#crT th:nth-child(3),#crT td:nth-child(3),#crT th:nth-child(4),#crT td:nth-child(4),#crT th:nth-child(8),#crT td:nth-child(8){display:none}#crT th,#crT td{padding-left:4px;padding-right:4px}}
+/* Kullanıcı izinleri */
+#pT th,#pT td{text-align:center;vertical-align:middle}#pT th:first-child,#pT td:first-child{text-align:left;white-space:normal}#pT .cru,#uT .cru{display:block;font-size:12px;color:var(--mut);font-weight:400}
+#pT input[type=checkbox]{width:20px;height:20px;accent-color:var(--acc,#ff4a1c);cursor:pointer}#pT input:disabled{cursor:default}
+#pT tr.pg th{text-align:left;font:700 12px "Instrument Sans",system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding-top:16px}
+#uT td,#uT th{text-align:left;vertical-align:middle}#uT td:last-child{text-align:right}#uT select{min-height:36px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 8px}#uT .bad{color:var(--bad)}
+.uadd{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:14px 0 6px}.uadd label{display:grid;gap:4px;font-size:13px;color:var(--mut)}.uadd input,.uadd select{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 10px;font-size:15px}.uadd input{min-width:min(300px,80vw)}
+.umd .urole{color:var(--accInk)!important;font-weight:600;margin-top:2px}.umd button.on{background:var(--card);font-weight:600}
+@media(max-width:600px){#pT th,#pT td{padding-left:4px;padding-right:4px;font-size:13px}#uT td:nth-child(3),#uT th:nth-child(3){display:none}}

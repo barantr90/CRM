@@ -18,7 +18,7 @@ const low=s=>String(s||'').toLocaleLowerCase('tr');
 const RISK={dropPace:0.7,dropMin:3000,silentDays:45,silentMax:365,silentMin:1000};
 let RET_WARN=0.025;
 // Yönetici sekmesinden değiştirilebilen kurallar (settings/rules). Boş/geçersiz değer varsayılana düşer.
-const RDEF={pasif:120,temas:30,arag:30,iade:2.5,riskPace:70,dropMin:3000,riskSilent:45,silentMax:365,silentMin:1000};
+const RDEF={pasif:120,temas:30,arag:30,credDays:15,credCut:50,iade:2.5,riskPace:70,dropMin:3000,riskSilent:45,silentMax:365,silentMin:1000};
 let R={...RDEF},RMETA={};
 function applyRules(d){R={...RDEF};RMETA=d||{};for(const k in RDEF){const v=Number((d||{})[k]);if(Number.isFinite(v)&&v>0)R[k]=v}
   RET_WARN=R.iade/100;RISK.dropPace=R.riskPace/100;RISK.dropMin=R.dropMin;RISK.silentDays=R.riskSilent;RISK.silentMax=R.silentMax;RISK.silentMin=R.silentMin}
@@ -62,6 +62,36 @@ function renderTheme(){const d=curTheme()==='dark',b=$('#thmBtn');if(!b)return;b
 function setTheme(t){document.documentElement.dataset.theme=t;try{localStorage.setItem(THEME_KEY,t)}catch(e){}renderTheme()}
 try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderTheme)}catch(e){}
 const umOpen=on=>{$('#umDrop').hidden=!on;$('#avBtn').setAttribute('aria-expanded',on)};
+/* Roller ve izinler. Rol, oturum açılırken allowed_users tablosundan gelir (window.CRM_ROLE).
+   Satış temsilcisi ve Muhasebe izinleri settings/perms kaydında; Yönetici her şeye yetkilidir.
+   Aynı kurallar veritabanında da (Supabase RLS: has_perm) uygulanır. */
+const ROLES=[['admin','Yönetici'],['satis','Satış temsilcisi'],['muhasebe','Muhasebe']];
+const PERMS=[
+  ['v_targets','Hedefler sekmesini görür','','Görüntüleme'],
+  ['v_board','Karne sekmesini görür','','Görüntüleme'],
+  ['v_overdue','Açık faturaları ve Vadesi Geçen sekmesini görür','Müşteri kartındaki açık faturalar ve vadesi geçen kutusu dahil.','Görüntüleme'],
+  ['v_credit','Kredi Limiti sekmesini görür','Tanımlı limit, açık bakiye ve önerilen limit.','Görüntüleme'],
+  ['v_all','Tüm temsilcilerin müşterilerini görür','Kapalıysa kullanıcı yalnız kendi adına kayıtlı müşterileri görür (e-postası temsilci adıyla eşleşmeli).','Görüntüleme'],
+  ['e_notes','Telefon ve yetkili kişi bilgisini düzenler','','Düzenleme'],
+  ['e_status','Müşteri durumunu (Aktif / Pasif) elle değiştirir','','Düzenleme'],
+  ['e_targets','Hedefleri girer ve değiştirir','','Düzenleme'],
+  ['e_arag','ARAG sürecini başlatır ve kapatır','','Düzenleme'],
+  ['x_export',"Excel'e aktarır",'','Veri aktarımı'],
+  ['x_import',"Excel'den müşteri içe aktarır",'Müşteri bilgilerinin üzerine yazar; Excel\'de olmayan müşterileri silebilir.','Veri aktarımı'],
+  ['x_openinv','Açık faturaları içe aktarır','','Veri aktarımı'],
+  ['e_rules','Yönetici ayarlarını (kurallar) görür ve değiştirir','Pasif gün sınırı, temas günü, ARAG günü, kredi limiti ayarları vb.','Yönetim']];
+const PDEF={satis:{v_targets:true,v_overdue:true,v_all:true,e_notes:true},muhasebe:{v_overdue:true,v_credit:true,v_all:true,e_notes:true,e_arag:true,x_export:true,x_openinv:true}};
+let PM={},PMETA={},UL=null;
+const roleKnown=()=>!!window.CRM_ROLE||typeof window.CRM_IS_ADMIN==='boolean';
+const myRole=()=>{const r=window.CRM_ROLE;if(r&&ROLES.some(x=>x[0]===r))return r;return window.CRM_IS_ADMIN===true?'admin':'satis'};
+const roleName=r=>(ROLES.find(x=>x[0]===r)||[,r||'–'])[1];
+const permOf=(role,k)=>role==='admin'||!!{...(PDEF[role]||{}),...(PM[role]||{})}[k];
+const can=k=>permOf(myRole(),k);
+const isAdmin=()=>myRole()==='admin';
+// "tüm temsilciler" izni yoksa: yalnız kullanıcının kendi temsilci adı (eşleşmezse hiçbir müşteri)
+const ownRep=()=>{const n=personOf(window.CRM_USER||(window.CRM_AUTH||{}).email||'').name;return allReps().includes(n)?n:null};
+const repLock=()=>can('v_all')?null:(ownRep()||'—');
+const viewOk=v=>v==='board'?can('v_board'):v==='admin'?can('e_rules'):v==='perms'?isAdmin():v==='targets'?can('v_targets'):v==='overdue'?can('v_overdue'):v==='credit'?can('v_credit'):true;
 
 let db=null,canWrite=true,loaded=false;
 let C=[],A=[],D={last:{},open:{}},RET=null,OI=null,AR={},MON=null,K={},RK={};
@@ -103,7 +133,7 @@ const oiState=x=>x.rest<0?['cr','Alacak (müşteri lehine)']:x.days==null?['','V
 const aragOf=c=>AR[c.id]&&AR[c.id].active?AR[c.id]:null;
 const aragElig=o=>!!(o&&o.odn&&o.odMax>R.arag);
 function aragHtml(c,o){
-  const a=aragOf(c),adm=window.CRM_IS_ADMIN!==false&&canWrite;
+  const a=aragOf(c),adm=can('e_arag')&&canWrite;
   if(a)return `<div class="arag on" id="aragBox"><span class="aragtag">ARAG</span><span>ARAG süreci aktif${a.at?` · ${fmt(a.at)} tarihinden beri`:''}</span>${adm?`<button type="button" class="ghost" id="aragOff" data-cid="${esc(c.id)}">Süreci kapat</button>`:''}</div>`;
   if(!aragElig(o)||!adm)return '';
   return `<div class="arag" id="aragBox"><span>En eski vadesi geçen fatura <b>${o.odMax} gün</b> gecikmiş (${R.arag} günü aştı).</span><button type="button" class="primary" id="aragOn" data-cid="${esc(c.id)}">ARAG süreci</button></div>`;
@@ -117,6 +147,8 @@ const RULES=[
   ['pasif','Pasif gün sınırı','gün',7,730,1,'Son satış faturası bu kadar günden eskiyse müşteri otomatik <b>Pasif</b> olur. Elle belirlenen durum (kart / Excel) bunu geçersiz kılar. Excel\'e aktarmada da bu değer kullanılır.','Durum ve temas'],
   ['temas','Temas günü','gün',1,365,1,'Son temastan (fatura ya da kayıt) bu kadar gün geçen aktif müşteri "temas yok" kutusunda sayılır ve listede noktayla işaretlenir.','Durum ve temas'],
   ['arag','ARAG süreç günü','gün',1,365,1,'Müşterinin en eski vadesi geçen faturası bu kadar günü aşınca kartta <b>ARAG süreci</b> butonu çıkar.','Açık faturalar'],
+  ['credDays','Kredi limiti: ek gün','gün',1,180,1,'Önerilen limit, aylık ortalama satışın <b>ödeme vadesi + bu kadar gün</b> karşılığıdır (sipariş ile fatura arası ve ödeme toleransı).','Kredi limiti'],
+  ['credCut','Kredi limiti: gecikme kesintisi','%',1,100,1,'En eski vadesi geçen faturası ARAG süreç gününü aşan müşterinin önerilen limiti bu oranda düşürülür. ARAG süreci aktifse öneri 0 (peşin çalışma).','Kredi limiti'],
   ['iade','İade uyarı eşiği','%',0.1,50,0.1,'Aynı dönemdeki satış faturalarına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.','İade'],
   ['riskPace','Kayıp riski: ciro temposu','%',10,100,1,'Bu yılın satışı, geçen yılın cirosunun aynı dönemine göre bu yüzdenin altındaysa müşteri kayıp riskinde sayılır.','Kayıp riski'],
   ['dropMin','Ciro temposu: en az geçen yıl cirosu','€',0,10000000,100,'Ciro temposu kuralı yalnız geçen yıl cirosu bu tutar ve üzerindeki müşterilere uygulanır.','Kayıp riski'],
@@ -129,22 +161,49 @@ function ruleImpact(k,v){
   if(k==='pasif'){const n=C.filter(c=>!(c._st0&&c._st0.manual)&&!c.statusOv&&(c.lastInvoice?ago(c.lastInvoice)>v:((c._st0&&c._st0.status)||'Pasif')==='Pasif')).length;return `${n} müşteri otomatik pasif olur`}
   if(k==='temas'){const n=C.filter(c=>c.status!=='Pasif'&&(()=>{const d=ago(D.last[c.id]);return d===null||d>v})()).length;return `${n} aktif müşteri ${v}+ gündür temassız`}
   if(k==='arag'){if(!(OI&&OI.map))return '';const n=C.filter(c=>{const o=oiOf(c);return o&&o.odn&&o.odMax>v}).length;return `${n} müşteri ARAG'a uygun`}
+  if(k==='credDays'||k==='credCut'){if(!(OI&&OI.map))return '';const keep=R[k];R[k]=v;const L=creditRows().filter(x=>x.lim),n=L.filter(x=>x.r.rec<x.lim).length,m=L.filter(x=>x.r.rec>x.lim).length;R[k]=keep;return `${m} müşteride öneri mevcut limitin üstünde, ${n} müşteride altında`}
   if(k==='iade'){if(!(RET&&RET.map))return '';const n=C.filter(c=>{const r=retOf(c);return r&&r.p>=v/100}).length;return `${n} müşteri eşiğin üzerinde`}
   if(RKEY[k]){const keep={...RISK};RISK[RKEY[k]]=k==='riskPace'?v/100:v;const n=C.filter(c=>riskOf(c)).length;Object.assign(RISK,keep);return `${n} müşteri kayıp riskinde`}
   return '';
 }
 function renderAdmin(){
-  const isAdm=window.CRM_IS_ADMIN!==false;$('#tabA').hidden=!isAdm;
   if(st.view!=='admin')return;
-  const can=isAdm&&canWrite,m=RMETA||{};
+  const ed=can('e_rules')&&canWrite,m=RMETA||{};
   const upd=m.updatedAt?`Son güncelleme: ${fmt(iso(new Date(m.updatedAt)))}${m.by?' · '+esc(personOf(m.by).name||m.by):''}`:'Henüz değiştirilmedi: tüm değerler varsayılan.';
   $('#admin').innerHTML=`<div class="rethead"><h3>Kurallar ve Ayarlar <small class="sm">tüm kullanıcılar için geçerli</small></h3><span class="sm">${upd}</span></div>
   <form class="ordp rform" id="rform" autocomplete="off" novalidate>
   ${RULES.map(([k,l,u,mn,mx,stp,d,g],i)=>`${g!==(RULES[i-1]||[])[7]?`<h4 class="rgrp">${g}</h4>`:''}<div class="rrow"><label for="r_${k}"><b>${l}</b><small>${d}</small></label>
-   <div class="rin"><span class="rbox"><input id="r_${k}" name="${k}" type="number" inputmode="decimal" min="${mn}" max="${mx}" step="${stp}" value="${R[k]}" ${can?'':'disabled'}><em>${u}</em></span>
+   <div class="rin"><span class="rbox"><input id="r_${k}" name="${k}" type="number" inputmode="decimal" min="${mn}" max="${mx}" step="${stp}" value="${R[k]}" ${ed?'':'disabled'}><em>${u}</em></span>
    <small class="rdef">Varsayılan: ${u==='€'?eur(RDEF[k]):String(RDEF[k]).replace('.',',')+' '+u}${R[k]!==RDEF[k]?' · <b>değiştirildi</b>':''}</small><small class="rimp" data-rimp="${k}">${ruleImpact(k,R[k])}</small></div></div>`).join('')}
-  ${can?`<div class="qsave"><span class="sm" id="rmsg"></span><button type="button" class="ghost" id="rdef">Varsayılanlara dön</button><button type="submit" class="primary">Kaydet</button></div>`:''}
+  ${ed?`<div class="qsave"><span class="sm" id="rmsg"></span><button type="button" class="ghost" id="rdef">Varsayılanlara dön</button><button type="submit" class="primary">Kaydet</button></div>`:''}
   </form>`;
+}
+// Kullanıcı izinleri (yalnız Yönetici): rollerin izinleri ve kullanıcı listesi
+async function loadUsers(){if(!window.CRM_USERS||st.ulLoading)return;st.ulLoading=true;
+  try{UL=await window.CRM_USERS.list()}catch(e){UL=[];toast('Kullanıcı listesi okunamadı: '+(e.message||e),1)}st.ulLoading=false;render()}
+const MAIN_ADMIN='baran.sengul@akar-group.com';
+function renderPerms(){
+  if(st.view!=='perms')return;
+  const ed=isAdmin()&&canWrite,m=PMETA||{};
+  if(UL===null&&window.CRM_USERS)loadUsers();
+  const cnt=r=>UL?UL.filter(u=>(u.role||'satis')===r).length:null;
+  const upd=m.updatedAt?`Son güncelleme: ${fmt(iso(new Date(m.updatedAt)))}${m.by?' · '+esc(personOf(m.by).name||m.by):''}`:'Henüz değiştirilmedi: varsayılan izinler geçerli.';
+  const cb=(r,k)=>r==='admin'?'<input type="checkbox" checked disabled aria-label="Yönetici: her zaman">':`<input type="checkbox" name="${r}|${k}" aria-label="${esc(roleName(r))}: ${esc(PERMS.find(x=>x[0]===k)[1])}"${permOf(r,k)?' checked':''}${ed?'':' disabled'}>`;
+  const me=String(window.CRM_USER||(window.CRM_AUTH||{}).email||'').toLowerCase();
+  const urow=u=>{const e=String(u.email||''),lk=e.toLowerCase()===me||e.toLowerCase()===MAIN_ADMIN,r=u.role||'satis',p=personOf(e).name;
+    return `<tr data-urow="${esc(e)}"><td><b>${esc(p)}</b><small class="cru">${esc(e)}</small></td><td><select data-urole="${esc(e)}" aria-label="${esc(p)} rolü"${ed&&!lk?'':' disabled'}>${ROLES.map(([k,l])=>`<option value="${k}"${k===r?' selected':''}>${l}</option>`).join('')}</select></td>
+    <td>${r!=='admin'&&!permOf(r,'v_all')?(allReps().includes(p)?`<span class="sm">yalnız ${esc(p)}</span>`:'<span class="sm bad">temsilci adı eşleşmiyor: müşteri göremez</span>'):'<span class="sm">tüm müşteriler</span>'}</td>
+    <td>${ed&&!lk?`<button type="button" class="ghost" data-udel="${esc(e)}">Kaldır</button>`:lk?'<span class="sm">siz / ana yönetici</span>':''}</td></tr>`};
+  const users=!window.CRM_USERS?'<p class="empty">Kullanıcı listesi bu ortamda yönetilemiyor.</p>':UL===null?'<p class="empty">Kullanıcılar yükleniyor…</p>':
+   `<div class="ordp"><table id="uT"><thead><tr><th>Kullanıcı</th><th>Rol</th><th>Gördüğü müşteriler</th><th></th></tr></thead><tbody>${UL.slice().sort((a,b)=>ROLES.findIndex(x=>x[0]===(a.role||'satis'))-ROLES.findIndex(x=>x[0]===(b.role||'satis'))||personOf(a.email).name.localeCompare(personOf(b.email).name,'tr')).map(urow).join('')}</tbody></table>
+   ${ed?`<form class="uadd" id="uform" autocomplete="off"><label>Yeni kullanıcı e-postası<input name="email" type="email" required placeholder="ad.soyad@akar-bv.nl"></label><label>Rol<select name="role">${ROLES.map(([k,l])=>`<option value="${k}"${k==='satis'?' selected':''}>${l}</option>`).join('')}</select></label><button class="primary" type="submit">Ekle</button></form>
+   <p class="sm">Eklenen kişi giriş ekranında e-postasını yazıp “e-postama giriş bağlantısı gönder” ile ilk girişini yapar; sonra kendine şifre belirleyebilir. Kaldırılan kişi CRM'e giremez.</p>`:''}</div>`;
+  $('#perms').innerHTML=`<div class="rethead"><h3>Kullanıcı İzinleri <small class="sm">rol başına</small></h3><span class="sm">${upd}</span></div>
+  <form class="ordp" id="pform" autocomplete="off"><table id="pT"><thead><tr><th>İzin</th>${ROLES.map(([r,l])=>`<th>${l}${cnt(r)!=null?` <small>(${cnt(r)})</small>`:''}</th>`).join('')}</tr></thead>
+  <tbody>${PERMS.map(([k,l,d,g],i)=>`${g!==(PERMS[i-1]||[])[3]?`<tr class="pg"><th colspan="${ROLES.length+1}">${g}</th></tr>`:''}<tr data-perm="${k}"><td><b>${l}</b>${d?`<small class="cru">${d}</small>`:''}</td>${ROLES.map(([r])=>`<td>${cb(r,k)}</td>`).join('')}</tr>`).join('')}
+  <tr><td><b>Kullanıcı izinleri ve kullanıcılar</b><small class="cru">Bu sayfa; yalnız Yönetici.</small></td>${ROLES.map(([r])=>`<td><input type="checkbox" disabled${r==='admin'?' checked':''} aria-label="${roleName(r)}"></td>`).join('')}</tr></tbody></table>
+  ${ed?`<div class="qsave"><span class="sm" id="pmsg"></span><button type="button" class="ghost" id="pdef">Varsayılanlara dön</button><button type="submit" class="primary">Kaydet</button></div>`:''}</form>
+  <h3>Kullanıcılar</h3>${users}`;
 }
 // sayı kutusu değeri: ondalık ayırıcı nokta ya da virgül (binlik ayırıcı yok)
 const rnum=x=>{const n=parseFloat(String(x??'').trim().replace(',','.'));return Number.isFinite(n)?n:null};
@@ -153,7 +212,7 @@ function rformCheck(f){let bad=0;for(const [k,,,mn,mx] of RULES){const e=f.eleme
   {const a=rnum(f.elements.riskSilent.value),b=rnum(f.elements.silentMax.value);if(a!=null&&b!=null&&b<=a){f.elements.silentMax.closest('.rbox').classList.add('bad');const im=f.querySelector('[data-rimp="silentMax"]');if(im)im.textContent=`Faturasız gün sınırından (${a}) büyük olmalı`;bad++}}
   return !bad}
 function renderOverdue(){
-  const has=!!(OI&&OI.map);$('#tabV').hidden=!has;
+  const has=!!(OI&&OI.map)&&can('v_overdue');$('#tabV').hidden=!has;
   const all=has?overdueRows():[];
   $('#tabV').textContent=has?`Vadesi Geçen (${all.length})`:'Vadesi Geçen';
   if(st.view!=='overdue')return;
@@ -168,8 +227,46 @@ function renderOverdue(){
   ${L.length?`<div class="ordp"><table id="odT"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Vadesi geçen</th><th>Fatura</th><th>En eski</th><th>ARAG</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>`:'<p class="empty">Bu süzgeçte müşteri yok.</p>'}
   <p class="sm">Tutar: vadesi geçmiş faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Gün sayısı bugüne göre. Satıra tıklayınca müşteri kartı açılır.</p>`;
 }
+// Kredi limiti: tanımlı limit (açık fatura dosyasından), açık bakiye (net) ve önerilen limit
+const limOf=o=>o&&typeof o.lim==='number'&&o.lim>0?o.lim:null;
+const vadeOf=o=>o&&o.vade!=null&&o.vade!==''&&Number.isFinite(+o.vade)?+o.vade:null;
+// öneri = aylık ortalama satış × (vade + ek gün) / 30; gecikmede kesinti, ARAG'da 0; 500'e yukarı yuvarlanır
+function credRec(c,o){
+  const c25=typeof c.ciro2025==='number'?c.ciro2025:0,s26=typeof c.sales2026==='number'?c.sales2026:null;
+  const yearly=Math.max(0,s26!=null&&YF>0?s26/YF:c25),monthly=yearly/12,vd=vadeOf(o),vade=vd==null?30:vd,days=vade+R.credDays;
+  let f=1,note='';
+  if(aragOf(c)){f=0;note='ARAG süreci aktif: peşin çalışma'}
+  else if(o&&o.odn&&o.odMax>R.arag){f=1-R.credCut/100;note=`${o.odMax} gün gecikme: %${R.credCut} kesinti`}
+  return {rec:Math.ceil(monthly*days/30*f/500-1e-9)*500,monthly,vade,vdKnown:vd!=null,days,f,note};
+}
+function creditRows(){
+  return C.filter(c=>!st.rep||c.rep===st.rep).map(c=>{const o=oiOf(c);if(!o)return null;const lim=limOf(o);
+    return {c,o,lim,over:lim?o.tot-lim:o.tot,r:credRec(c,o)}}).filter(Boolean);
+}
+function renderCredit(){
+  const has=!!(OI&&OI.map),okv=has&&can('v_credit');$('#tabK').hidden=!okv;
+  const all=okv?creditRows():[],over=all.filter(x=>x.lim&&x.over>0),nol=all.filter(x=>!x.lim&&x.o.tot>0);
+  $('#tabK').textContent=okv?`Kredi Limiti (${over.length})`:'Kredi Limiti';
+  if(st.view!=='credit')return;
+  if(!okv){$('#credit').innerHTML='<p class="empty">Açık fatura verisi yok.</p>';return}
+  const f=['nolim','all'].includes(st.crf)?st.crf:'over';
+  const L=(f==='over'?over:f==='nolim'?nol:all).slice().sort((a,b)=>(b.lim?b.over:-1e12)-(a.lim?a.over:-1e12)||b.o.tot-a.o.tot);
+  const sOver=over.reduce((a,x)=>a+x.over,0),sOd=over.reduce((a,x)=>a+x.o.od,0),nUp=over.filter(x=>x.r.rec>x.lim).length,nDn=over.filter(x=>x.r.rec<=x.lim).length;
+  const fb=(k,l)=>`<button type="button" data-crf="${k}" aria-pressed="${f===k}">${l}</button>`;
+  const dif=x=>{if(!x.lim)return '<span class="sm">limit yok</span>';const d=x.r.rec-x.lim;return d===0?'<span class="sm">aynı</span>':`<b class="${d>0?'up':'down'}">${d>0?'+':'−'}${eur(Math.abs(d))}</b>`};
+  const row=(x,i)=>{const {c,o,lim,r}=x,tip=`Aylık ortalama satış ${eur(r.monthly)} × (vade ${r.vade}${r.vdKnown?'':' (varsayılan)'} + ${R.credDays} gün) ÷ 30${r.f<1?` × ${Math.round(r.f*100)}%`:''}`;
+    return `<tr data-crow="${esc(c.id)}"><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button>${aragOf(c)?' <em class="rtag ar">ARAG</em>':''}</td><td>${esc(c.rep||'')}</td><td>${r.vdKnown?r.vade+' gün':'–'}</td>
+    <td>${lim?eur(lim):'<span class="sm">tanımsız</span>'}</td><td><b>${eur(o.tot)}</b>${lim?`<small class="cru">%${Math.round(o.tot/lim*100)} kullanım</small>`:''}</td>
+    <td>${lim?(x.over>0?`<b class="crov">${eur(x.over)}</b>`:`<span class="sm">kalan ${eur(-x.over)}</span>`):'–'}</td><td>${o.od>0?`<span class="odv">${eur(o.od)}</span><small class="cru">en eski ${o.odMax} gün</small>`:'–'}</td>
+    <td title="${esc(tip)}"><b>${eur(r.rec)}</b>${r.note?`<small class="cru crn">${esc(r.note)}</small>`:''}</td><td>${dif(x)}</td></tr>`};
+  $('#credit').innerHTML=`<div class="rethead"><h3>Kredi Limiti <small class="sm">${fmt(OI.asOf)} açık fatura verisi${st.rep?' · '+esc(st.rep):''}</small></h3>
+  <div class="seg2" role="group" aria-label="Süz">${fb('over',`Limiti aşan (${over.length})`)}${fb('nolim',`Limit tanımsız (${nol.length})`)}${fb('all',`Tümü (${all.length})`)}</div></div>
+  <div class="crsum" id="crSum"><div class="bad"><span>Limiti aşan müşteri</span><b>${over.length}</b><small>${all.filter(x=>x.lim).length} limitli müşteriden</small></div><div class="bad"><span>Toplam aşım</span><b>${eur(sOver)}</b><small>açık bakiye − tanımlı limit</small></div><div><span>Aşanların vadesi geçen</span><b>${eur(sOd)}</b><small>${over.filter(x=>x.o.od>0).length} müşteride</small></div><div><span>Öneri</span><b>${nUp} artır · ${nDn} artırma</b><small>limiti aşanlar için</small></div></div>
+  ${L.length?`<div class="ordp"><table id="crT"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Vade</th><th>Tanımlı limit</th><th>Açık bakiye</th><th>Aşım</th><th>Vadesi geçen</th><th>Önerilen limit</th><th>Fark</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>`:'<p class="empty">Bu süzgeçte müşteri yok.</p>'}
+  <p class="sm crnote"><b>Mevcut durum:</b> açık faturaların net kalanı (iade ve fiyat farkı alacakları düşülür). <b>Önerilen limit</b> = aylık ortalama satış × (ödeme vadesi + ${R.credDays} gün) ÷ 30, € 500'e yukarı yuvarlanır. Aylık satış, ${CY} satışının yıllığa çevrilmesiyle bulunur (yılın %${Math.round(YF*100)}${pctEk(Math.round(YF*100))} geçti). En eski vadesi geçen faturası ${R.arag} günü aşan müşteride öneri %${R.credCut} düşürülür; ARAG süreci aktifse öneri € 0 (peşin). Vadesi bilinmeyen müşteride 30 gün alınır. Ek gün ve kesinti oranı Yönetici ayarlarından değiştirilir. Satıra tıklayınca müşteri kartı açılır.</p>`;
+}
 function oiHtml(c){
-  if(!OI||!OI.map)return '';
+  if(!OI||!OI.map||!can('v_overdue'))return '';
   const o=oiOf(c),asOf=OI.asOf?`${fmt(OI.asOf)} itibarıyla`:'';
   if(!o)return `<section class="oi" id="oi"><h3>Açık Faturalar</h3><p class="oi-none">${asOf} açık fatura yok.</p></section>`;
   const rank=x=>x.rest<0?2:x.days!=null&&x.days<0?0:1;
@@ -177,7 +274,7 @@ function oiHtml(c){
   const sh=all?L:L.slice(0,MAX);
   const lim=typeof o.lim==='number'&&o.lim>0?o.lim:null;
   return `<section class="oi" id="oi"><h3>Açık Faturalar <small>${asOf}</small></h3>
-  <div class="oi-sum"><div class="${o.od>0?'bad':''}"><span>Vadesi geçen</span><b>${eur(o.od)}</b><small>${o.odn?`${o.odn} fatura · en eski ${o.odMax} gün`:'yok'}</small></div><div><span>Vadesi gelmemiş</span><b>${eur(o.nd)}</b><small>${o.ndn} fatura</small></div><div><span>Toplam açık (net)</span><b>${eur(o.tot)}</b><small>${o.crn?`${eur(Math.abs(o.cr))} iade / fiyat farkı düşüldü`:'&nbsp;'}</small></div>${lim?`<div class="${o.tot>lim?'bad':''}"><span>Kredi limiti</span><b>${eur(lim)}</b><small>${o.tot>lim?`${eur(o.tot-lim)} aşıldı`:`kalan ${eur(lim-o.tot)}`}</small></div>`:''}</div>
+  <div class="oi-sum"><div class="${o.od>0?'bad':''}"><span>Vadesi geçen</span><b>${eur(o.od)}</b><small>${o.odn?`${o.odn} fatura · en eski ${o.odMax} gün`:'yok'}</small></div><div><span>Vadesi gelmemiş</span><b>${eur(o.nd)}</b><small>${o.ndn} fatura</small></div><div><span>Toplam açık (net)</span><b>${eur(o.tot)}</b><small>${o.crn?`${eur(Math.abs(o.cr))} iade / fiyat farkı düşüldü`:'&nbsp;'}</small></div>${lim?`<div class="${o.tot>lim?'bad':''}"><span>Kredi limiti</span><b>${eur(lim)}</b><small>${o.tot>lim?`${eur(o.tot-lim)} aşıldı`:`kalan ${eur(lim-o.tot)}`}${can('v_credit')?` · öneri ${eur(credRec(c,o).rec)}`:''}</small></div>`:''}</div>
   <ul class="oi-l">${sh.map(x=>{const [k,t]=oiState(x);return `<li class="${k}"><div class="oi-a"><b>${esc(x.no)}</b><span class="oi-t">${esc(OI_T[x.t]||'')}</span><b class="oi-r">${eurc(x.rest)}</b></div><div class="oi-b"><span>Fatura ${fmt(x.d)||'–'}${Math.abs(x.amt-x.rest)>=0.01?` · tutar ${eurc(x.amt)}`:''}</span><span>Vade ${fmt(x.due)||'–'}</span><em class="oi-s">${t}</em></div></li>`}).join('')}</ul>
   ${L.length>MAX?`<button type="button" class="ghost oi-more" data-oiall="${esc(c.id)}">${all?'Daha az göster':`Tümünü göster (${L.length})`}</button>`:''}
   ${o.vade!=null?`<p class="oi-note">Ödeme vadesi: ${o.vade} gün. Gün sayıları bugüne göre hesaplanır.</p>`:''}</section>`;
@@ -219,7 +316,7 @@ function applyStatus(){for(const c of C){if(!c._st0)c._st0={status:c.status||'',
   c.statusOv=ov;c.statusManual=ov||c._st0.manual;c.status=ov||c._st0.manual||autoSt(c)}}
 const statusAuto=c=>(c._st0&&c._st0.manual)||autoSt(c);
 function statusHtml(c){
-  const adm=window.CRM_IS_ADMIN===true&&canWrite;
+  const adm=can('e_status')&&canWrite;
   if(!adm)return c.status?`<span class="tag"${c.statusOv?' title="Durum elle belirlendi"':''}>${esc(c.status)}${c.statusOv?' · elle':''}</span>`:'';
   const a=statusAuto(c);
   return `<label class="tag stsel${c.statusOv?' ov':''}${c.status==='Pasif'?' pas':''}" title="Müşteri durumu"><span class="sr">Durum</span><select id="stSel" data-cid="${esc(c.id)}" aria-label="Müşteri durumu">`+
@@ -253,9 +350,11 @@ function visible(){
 
 function renderTop(){
   renderUser();
-  $('#reps').innerHTML=['',...allReps()].map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}">${r?esc(r):'Tüm temsilciler'}</button>`).join('');
-  const isAdm=window.CRM_IS_ADMIN!==false;
-  $('#ximpBtn').hidden=!(canWrite&&isAdm);$('#oimpBtn').hidden=!(canWrite&&isAdm);$('#xexp').hidden=!isAdm;$('#umSep').hidden=!isAdm;
+  {const lk=repLock();$('#reps').innerHTML=(lk!==null?[lk]:['',...allReps()]).map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}"${lk!==null?' disabled title="Yalnız kendi müşterilerinizi görüyorsunuz"':''}>${r==='—'?'Temsilci eşleşmedi':r?esc(r):'Tüm temsilciler'}</button>`).join('')}
+  $('#ximpBtn').hidden=!(canWrite&&can('x_import'));$('#oimpBtn').hidden=!(canWrite&&can('x_openinv'));$('#xexp').hidden=!can('x_export');$('#umSep').hidden=$('#ximpBtn').hidden&&$('#oimpBtn').hidden&&$('#xexp').hidden;
+  $('#umRules').hidden=!can('e_rules');$('#umPerms').hidden=!isAdmin();$('#umSep2').hidden=$('#umRules').hidden&&$('#umPerms').hidden;
+  $('#umRules').classList.toggle('on',st.view==='admin');$('#umPerms').classList.toggle('on',st.view==='perms');
+  if($('#umRole'))$('#umRole').textContent=roleKnown()?roleName(myRole()):'';
   {const dt=(RET&&RET.through)||(MON&&MON.through);$('#sub').textContent=dt?`Satış verisi ${fmt(dt)} tarihine kadar${OI&&OI.asOf?` · açık faturalar ${fmt(OI.asOf)}`:''}`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde'}
   let b='';
   if(st.nodb)b=`<span>Kayıtlara ulaşılamıyor. ${esc(window.CRM_DIAG||'Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.')}</span>`;
@@ -268,7 +367,8 @@ function renderTop(){
 function renderStats(){
   const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
   const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0),rkPasL=mine.filter(c=>c.status==='Pasif'),rkPas=rkPasL.length,sumOf=k=>rkPasL.reduce((a,c)=>a+(typeof c[k]==='number'?c[k]:0),0);
-  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,`${R.temas}+ gündür temas yok (aktif)`],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
+  const odOk=can('v_overdue');
+  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,`${R.temas}+ gündür temas yok (aktif)`],...(OI&&OI.map&&odOk?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
   $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
   $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Pasif müşterilerin tamamı (kayıp riskine sayılmaz)">Pasif müşteri: ${rkPas}</small><small class="stsub" id="rkPasC" title="Bu pasif müşterilerin toplam cirosu: ${PY} yılı ve ${CY} YTD (net satış)">${PY}: ${eur(sumOf('ciro2025'))} · ${CY}: ${eur(sumOf('sales2026'))}</small>`:''}</button>`).join('')+ordStat(mine);
   renderOrd();
@@ -340,7 +440,7 @@ function renderDetail(){
 }
 function ctaHtml(c,ct){
   const edit=st.ctEdit===c.id;
-  return `<div class="cta">${ct.phone?`<a class="call" id="ctCall" href="${esc(telHref(ct.phone))}">Ara</a><a id="ctWa" href="https://wa.me/${esc(waNum(ct.phone))}" target="_blank" rel="noopener">WhatsApp</a>`:''}<a id="ctMap" href="${esc(mapsHref(c))}" target="_blank" rel="noopener">Yol tarifi</a>${canWrite&&!edit?`<button type="button" id="ctEdit">${ct.phone||ct.contact?'İletişimi düzenle':'Telefon / yetkili ekle'}</button>`:''}</div>
+  return `<div class="cta">${ct.phone?`<a class="call" id="ctCall" href="${esc(telHref(ct.phone))}">Ara</a><a id="ctWa" href="https://wa.me/${esc(waNum(ct.phone))}" target="_blank" rel="noopener">WhatsApp</a>`:''}<a id="ctMap" href="${esc(mapsHref(c))}" target="_blank" rel="noopener">Yol tarifi</a>${canWrite&&can('e_notes')&&!edit?`<button type="button" id="ctEdit">${ct.phone||ct.contact?'İletişimi düzenle':'Telefon / yetkili ekle'}</button>`:''}</div>
   ${edit?`<form class="ctf" id="ctform" autocomplete="off"><label>Yetkili kişi<input name="contact" value="${esc(ct.contact)}"></label><label>Telefon<input name="phone" type="tel" inputmode="tel" placeholder="06 12345678" value="${esc(ct.phone)}"></label><button class="primary" type="submit">Kaydet</button><button class="ghost" type="button" id="ctCancel">Vazgeç</button></form>`:''}`;
 }
 function visitForm(c){
@@ -364,7 +464,7 @@ function syncOutcome(f,defaults){
   if(na.dataset.touched!=='1')na.value=o[2];if(nd.dataset.touched!=='1')nd.value=o[1]?addDays(o[1]):'';
 }
 function renderBoard(){
-  const isAdm=window.CRM_IS_ADMIN!==false;$('#tabB').hidden=!isAdm;
+  $('#tabB').hidden=!can('v_board');
   if(st.view!=='board')return;
   const mk=monthKey(),mon=monRows()||{},d7=addDays(-7),d30=addDays(-30);
   const cm=Object.fromEntries(C.map(c=>[c.id,c]));
@@ -527,9 +627,10 @@ function qPaste(e){
   const f=inp.closest('form');st.qdirty=true;qformTotals(f);toast(`${n} hücre yapıştırıldı`);
 }
 function renderTargets(){
+  $('#tabH').hidden=!can('v_targets');
   if(st.view!=='targets')return;
   if(!st.qp)st.qp=qNow();
-  const key=st.qp,y=key.slice(0,4),isM=isMonthKey(key),pace=qPace(key),adm=window.CRM_IS_ADMIN===true&&canWrite;
+  const key=st.qp,y=key.slice(0,4),isM=isMonthKey(key),pace=qPace(key),adm=can('e_targets')&&canWrite;
   if(!isM||!adm)st.qedit=false;
   const years=[...new Set([TODAY.slice(0,4),...Object.keys(QTS).map(k=>k.slice(0,4))])].sort();
   const chip=(k,l)=>`<button type="button" class="chip${key===k?' on':''}" data-qp="${k}" aria-pressed="${key===k}">${l}</button>`;
@@ -609,18 +710,19 @@ function render(){
   {const chs=[...new Set(C.map(chainOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));if(st.chain&&st.chain!=='__any'&&!chs.includes(st.chain))st.chain='';
    const html='<option value="">Zincir Tümü</option><option value="__any">Yalnız zincirler</option>'+chs.map(v=>`<option value="${esc(v)}">${esc(v)} (${chainStores(v).length})</option>`).join('');if($('#fchain').innerHTML!==html)$('#fchain').innerHTML=html;$('#fchain').value=st.chain||''}
   $('#fseg').value=st.seg;$('#fstat').value=st.status;
-  if((st.view==='board'||st.view==='admin')&&window.CRM_IS_ADMIN===false)st.view='list';
+  {const lk=repLock();if(lk!==null&&roleKnown())st.rep=lk}
+  if(roleKnown()&&!viewOk(st.view))st.view='list';
   if(st.view==='tasks'&&!VISIT_LOG)st.view='list';
-  if(st.view==='overdue'&&!(OI&&OI.map)&&loaded)st.view='list';
+  if((st.view==='overdue'||st.view==='credit')&&!(OI&&OI.map)&&loaded)st.view='list';
   $('#tabT').hidden=!VISIT_LOG;$('#tLeg').textContent=R.temas;$('#dueLeg').hidden=!VISIT_LOG;
   document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
-  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';$('#adminView').hidden=st.view!=='admin';
+  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';$('#creditView').hidden=st.view!=='credit';$('#adminView').hidden=st.view!=='admin';$('#permsView').hidden=st.view!=='perms';
   // açık formlardaki yazılanları yeniden çizimde koru
   const keep={};let foc=null;
-  for(const id of ['aform','ctform','qform','rform']){const f=$('#'+id);if(!f||(id==='rform'&&!st.rdirty)||(id!=='qform'&&id!=='rform'&&st.formFor!==st.sel))continue;
+  for(const id of ['aform','ctform','qform','rform','pform','uform']){const f=$('#'+id);if(!f||(id==='rform'&&!st.rdirty)||(id==='pform'&&!st.pdirty)||(!['qform','rform','pform','uform'].includes(id)&&st.formFor!==st.sel))continue;
     keep[id]=[...f.elements].filter(e=>e.name).map(e=>({n:e.name,t:e.type,v:e.value,c:e.checked,touched:e.dataset.touched}));
     const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.name&&ae.type!=='radio'&&ae.type!=='checkbox')foc=[id,ae.name]}
-  renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();renderOverdue();renderAdmin();
+  renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();renderOverdue();renderCredit();renderAdmin();renderPerms();
   renderDetail();fitDetail();
   for(const [id,vals] of Object.entries(keep)){const g=$('#'+id);if(!g)continue;
     for(const e of g.elements){if(!e.name)continue;const k=(e.type==='radio'||e.type==='checkbox')?vals.find(x=>x.n===e.name&&x.v===e.value):vals.find(x=>x.n===e.name);if(!k)continue;
@@ -887,14 +989,20 @@ document.addEventListener('click',async e=>{
   if(t.dataset.rep!==undefined){st.rep=t.dataset.rep;saveUi();render();return}
   if(t.id==='rdef'){st.rdirty=true;const f=$('#rform');for(const k in RDEF)f.elements[k].value=RDEF[k];rformCheck(f);$('#rmsg').textContent='Varsayılan değerler yazıldı; kaydetmek için Kaydet\'e basın';return}
   if(t.dataset.ovf!==undefined){st.ovf=t.dataset.ovf;render();return}
-  if(t.id==='aragOn'||t.id==='aragOff'){if(window.CRM_IS_ADMIN===false)return;const id=t.dataset.cid,c=C.find(x=>x.id===id);if(!c)return;
+  if(t.dataset.crf!==undefined){st.crf=t.dataset.crf;render();return}
+  if(t.id==='pdef'){st.pdirty=true;const f=$('#pform');for(const e of f.querySelectorAll('input[name*="|"]')){const [r,k]=e.name.split('|');e.checked=!!(PDEF[r]||{})[k]}$('#pmsg').textContent='Varsayılan izinler işaretlendi; kaydetmek için Kaydet\'e basın';return}
+  if(t.dataset.udel!==undefined){if(!isAdmin()||!window.CRM_USERS)return;const em=t.dataset.udel;if(!confirm(`${personOf(em).name} (${em}) CRM kullanıcılarından kaldırılsın mı? Bu kişi artık giriş yapamaz.`))return;
+    try{await window.CRM_USERS.remove(em);toast(`${personOf(em).name} kaldırıldı`);UL=null;render()}catch(err){toast('Kaldırılamadı: '+(err.message||err),1)}return}
+  if(t.id==='aragOn'||t.id==='aragOff'){if(!can('e_arag'))return;const id=t.dataset.cid,c=C.find(x=>x.id===id);if(!c)return;
     if(t.id==='aragOff'&&!confirm(`${c.name} için ARAG süreci kapatılsın mı?`))return;
     const o=oiOf(c)||{};
     const ok=await w(()=>t.id==='aragOn'?db.collection('arag').doc(id).set({active:true,at:TODAY,customer:c.name,code:code(c),od:Math.round((o.od||0)*100)/100,odMax:o.odMax||0,by:window.CRM_USER||''}):db.collection('arag').doc(id).delete());
     if(ok)toast(t.id==='aragOn'?`${c.name}: ARAG süreci aktif`:`${c.name}: ARAG süreci kapatıldı`);return}
   if(t.dataset.oiall!==undefined){st.oiAll=st.oiAll===t.dataset.oiall?null:t.dataset.oiall;render();return}
   if(t.dataset.quick!==undefined){st.ord=false;st.quick=st.quick===t.dataset.quick?'':t.dataset.quick;st.view='list';render();return}
-  if(t.dataset.view){if(st.view==='admin'&&t.dataset.view!=='admin'&&st.rdirty){if(!confirm('Kaydedilmemiş ayar değişiklikleri silinsin mi?'))return;st.rdirty=false}st.view=t.dataset.view;saveUi();render();return}
+  if(t.dataset.view){umOpen(false);if(st.view==='admin'&&t.dataset.view!=='admin'&&st.rdirty){if(!confirm('Kaydedilmemiş ayar değişiklikleri silinsin mi?'))return;st.rdirty=false}
+    if(st.view==='perms'&&t.dataset.view!=='perms'&&st.pdirty){if(!confirm('Kaydedilmemiş izin değişiklikleri silinsin mi?'))return;st.pdirty=false}
+    if(t.dataset.view==='perms')UL=null;st.view=t.dataset.view;saveUi();render();if(t.closest('#umDrop'))scrollTo({top:$('nav.tabs').offsetTop-8,behavior:'smooth'});return}
   if(t.id==='ctEdit'){st.ctEdit=st.sel;render();const f=$('#ctform');if(f)f.elements.phone.focus();return}
   if(t.id==='ctCancel'){st.ctEdit=null;render();return}
   if(t.dataset.nd!==undefined){const f=t.closest('form');const n=+t.dataset.nd;f.elements.nextDate.value=n?addDays(n):'';f.elements.nextDate.dataset.touched='1';if(!n){f.elements.nextAction.value='';f.elements.nextAction.dataset.touched='1'}else if(!f.elements.nextAction.value)f.elements.nextAction.value='Takip';return}
@@ -904,7 +1012,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.open){st.view='list';st.sel=t.dataset.open;saveUi();render();return}
   if(t.id==='back'){st.sel=null;render();return}
   if(t.id==='irun'){applyImport();return}
-  if(t.id==='xexp'){umOpen(false);if(window.CRM_IS_ADMIN===false)return;exportXLSX();return}
+  if(t.id==='xexp'){umOpen(false);if(!can('x_export'))return;exportXLSX();return}
   if(t.id==='clearSample'){if(st.arm!=='samples'){st.arm='samples';render();return}
     st.arm=null;for(const a of A.filter(x=>x.sample))await w(()=>db.collection('activities').doc(a.id).delete());
     for(const c of C.filter(x=>x.sample))await w(()=>db.collection('customers').doc(c.id).delete());
@@ -921,20 +1029,33 @@ document.addEventListener('change',async e=>{
   if(t.name==='out'&&t.closest('#aform')){syncOutcome(t.closest('form'),true);return}
   if(t.id==='fseg'){st.seg=t.value;render()}
   if(t.id==='fchain'){st.chain=t.value;render()}
-  if(t.id==='stSel'){if(window.CRM_IS_ADMIN!==true){render();return}const id=t.dataset.cid,v=t.value,c=C.find(x=>x.id===id);if(!c)return;
+  if(t.id==='stSel'){if(!can('e_status')){render();return}const id=t.dataset.cid,v=t.value,c=C.find(x=>x.id===id);if(!c)return;
     const ok=await w(()=>v?db.collection('statusov').doc(id).set({status:v,customer:c.name,updatedAt:Date.now(),by:window.CRM_USER||''}):db.collection('statusov').doc(id).delete());
     if(ok)toast(v?`${c.name}: ${v} olarak işaretlendi`:`${c.name}: durum yeniden otomatik (${statusAuto(c)||'–'})`);else render();return}
   if(t.id==='fstat'){st.status=t.value;render()}
-  if(t.id==='oimp'){umOpen(false);if(t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readOpenInv(f)}return}
+  if(t.closest&&t.closest('#pform')){st.pdirty=true;$('#pmsg').textContent='Kaydedilmemiş değişiklik var';return}
+  if(t.dataset.urole!==undefined){if(!isAdmin()||!window.CRM_USERS){render();return}const em=t.dataset.urole,r=t.value;
+    try{await window.CRM_USERS.save(em,r);toast(`${personOf(em).name}: ${roleName(r)}`);UL=null;render()}catch(err){toast('Rol kaydedilemedi: '+(err.message||err),1);render()}return}
+  if(t.id==='oimp'){umOpen(false);if(t.files[0]&&can('x_openinv')){const f=t.files[0];t.value='';readOpenInv(f)}return}
   if(t.id==='ximp')umOpen(false);
-  if(t.id==='ximp'&&t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readImport(f);return}
+  if(t.id==='ximp'&&t.files[0]&&can('x_import')){const f=t.files[0];t.value='';readImport(f);return}
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('paste',qPaste);
 document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#rform')){st.rdirty=true;rformCheck(t.closest('#rform'));$('#rmsg').textContent='Kaydedilmemiş değişiklik var'}if(t.closest&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('#qform'))}if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if((e.key==='Enter'||e.key===' ')&&e.target.id==='oimpBtn'){e.preventDefault();$('#oimp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
-  if(e.target.id==='rform'){e.preventDefault();if(window.CRM_IS_ADMIN===false)return;const f=e.target;
+  if(e.target.id==='pform'){e.preventDefault();if(!isAdmin())return;const f=e.target,d={};
+    for(const [r] of ROLES.slice(1)){d[r]={};for(const [k] of PERMS)d[r][k]=!!(f.elements[r+'|'+k]||{}).checked}
+    const ch=[];for(const [r,l] of ROLES.slice(1))for(const [k] of PERMS)if(d[r][k]!==permOf(r,k))ch.push(l);
+    if(!ch.length){st.pdirty=false;toast('Değişiklik yok.');render();return}
+    const meta={updatedAt:Date.now(),by:window.CRM_USER||''};
+    if(await w(()=>db.doc('settings/perms').set({...d,...meta}))){st.pdirty=false;PM=d;PMETA={...d,...meta};toast('İzinler kaydedildi: '+[...new Set(ch)].join(', '));render()}return}
+  if(e.target.id==='uform'){e.preventDefault();if(!isAdmin()||!window.CRM_USERS)return;const f=e.target,em=String(f.elements.email.value||'').trim().toLowerCase(),r=f.elements.role.value;
+    if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(em)){toast('Geçerli bir e-posta yazın.',1);f.elements.email.focus();return}
+    const ex=(UL||[]).find(u=>String(u.email).toLowerCase()===em);
+    try{await window.CRM_USERS.save(ex?ex.email:em,r);f.reset();toast(ex?`${personOf(em).name} zaten kayıtlı: rolü ${roleName(r)} yapıldı`:`${personOf(em).name} eklendi (${roleName(r)})`);UL=null;render()}catch(err){toast('Eklenemedi: '+(err.message||err),1)}return}
+  if(e.target.id==='rform'){e.preventDefault();if(!can('e_rules'))return;const f=e.target;
     if(!rformCheck(f)){toast('Hatalı değerleri düzeltin.',1);return}
     const d={};for(const k in RDEF)d[k]=rnum(f.elements[k].value);
     const ch=Object.keys(RDEF).filter(k=>d[k]!==R[k]);if(!ch.length){st.rdirty=false;toast('Değişiklik yok.');render();return}
@@ -965,13 +1086,14 @@ document.addEventListener('submit',async e=>{
       st.formFor=null;f.reset();toast('Kaydedildi'+(n?` · ${n} takip tamamlandı`:''));render()}
     return}
   if(f.id==='ctform'){
+    if(!can('e_notes')){toast('İletişim bilgisi düzenleme izniniz yok.',1);return}
     const c=C.find(x=>x.id===st.sel);if(!c)return;
     const phone=String(f.elements.phone.value||'').trim(),contact=String(f.elements.contact.value||'').trim();
     if(phone&&String(phone).replace(/\D/g,'').length<8){toast('Telefon numarası çok kısa görünüyor.',1);return}
     if(await w(()=>db.collection('contacts').doc(c.id).set({phone,contact,updatedAt:Date.now(),by:window.CRM_USER||''}))){st.ctEdit=null;st.formFor=null;toast('İletişim bilgisi kaydedildi');render()}
     return}
   if(f.id==='qform'){
-    if(window.CRM_IS_ADMIN!==true){toast('Hedefleri yalnızca yönetici girebilir.',1);return}
+    if(!can('e_targets')){toast('Hedef girme izniniz yok.',1);return}
     const key=f.dataset.key,reps={};let bad=0;
     for(const e of f.querySelectorAll('input[name*="|"]')){const v=String(e.value||'').trim();e.removeAttribute('aria-invalid');if(!v)continue;
       const n=num(v.replace(/−/g,'-')),[r,g,k,x]=e.name.split('|');
@@ -1002,6 +1124,7 @@ render();
   db.collection('qtargets').onSnapshot(s=>{QTS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('arag').onSnapshot(s=>{AR=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.doc('settings/rules').onSnapshot(d=>{applyRules(d.exists?d.data():null);render()},()=>{});
+  db.doc('settings/perms').onSnapshot(d=>{const x=d.exists?d.data():{};PMETA=x;PM={};for(const [r] of ROLES.slice(1))if(x[r]&&typeof x[r]==='object')PM[r]=x[r];render()},()=>{});
   db.doc('sync/openinv').onSnapshot(d=>{OI=d.exists?d.data():null;render()},()=>{});
   db.doc('sync/returns').onSnapshot(d=>{RET=d.exists?d.data():null;render()},()=>{});
   db.collection('activities').orderBy('date','desc').limit(1000).onSnapshot(s=>{A=s.docs.map(d=>({...d.data(),id:d.id}));render()},err=>{st.err=true;render()});
