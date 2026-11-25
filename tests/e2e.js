@@ -537,6 +537,80 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.screenshot({path:path.join(SHOTS,'9-yonetici.png'),fullPage:true});}
   await ctx.close();
 
+  step('10. Veri doğruluğu: ekrandaki rakamlar bağımsız hesapla aynı mı');
+  ({ctx,page}=await open(browser));
+  {// bağımsız hesap: ham kayıtlardan (sitenin kodunu kullanmadan)
+   const raw=await page.evaluate(()=>{const S=window.__store,cs=[],so={};for(const [k,v] of S.entries()){if(k.startsWith('customers/'))cs.push({id:k.slice(10),...v});if(k.startsWith('statusov/'))so[k.slice(9)]=v.status}
+     return {cs,so,ret:S.get('sync/returns'),mon:S.get('sync/month'),today:window.__FIX.TODAY}});
+   const days=(a,b)=>Math.round((Date.parse(b)-Date.parse(a))/864e5);
+   const stOf=c=>raw.so[c.id]||c.statusManual||(c.lastInvoice?(days(c.lastInvoice,raw.today)>120?'Pasif':'Aktif'):(c.status||'Pasif'));
+   const dt=raw.ret.through||raw.mon.through||raw.today,y=+dt.slice(0,4);
+   const yf=(Date.UTC(y,+dt.slice(5,7)-1,+dt.slice(8,10))-Date.UTC(y,0,1))/864e5+1;const YFx=yf/((Date.UTC(y+1,0,1)-Date.UTC(y,0,1))/864e5);
+   // 1) temsilci bazında müşteri / aktif / pasif
+   await page.click('#tabB');
+   const br=await page.$$eval('#boardT tbody tr',rs=>rs.map(r=>[...r.cells].map(c=>c.textContent.replace(/ /g,' ').trim())));
+   let okN=true,msg=[];for(const r of br){const rep=r[0],cs=raw.cs.filter(c=>c.rep===rep),ak=cs.filter(c=>stOf(c)!=='Pasif').length;
+     const exp=`${cs.length} (${ak} aktif)`;if(r[1]!==exp){okN=false;msg.push(rep+': '+r[1]+' ≠ '+exp)}}
+   ok(okN&&br.length>=4,'Karne: her temsilcinin müşteri ve aktif sayısı ham veriyle aynı '+(msg.join('; ')||'('+br.map(r=>r[0]+' '+r[1]).join(', ')+')'));
+   const sumN=br.reduce((a,r)=>a+parseInt(r[1]),0);ok(sumN===raw.cs.length,'temsilcilerin müşteri toplamı = tüm müşteriler ('+sumN+')');
+   // 2) tempo (büyüme): Karne, kart ve zincir aynı tanım
+   const tempo=(s26,c25)=>s26/(c25*YFx)-1,pctS=g=>{const t=(g*100).toFixed(1);return t==='0.0'||t==='-0.0'?'0,0%':(g>0?'+':'')+t.replace('.',',')+'%'};
+   for(const r of br){const cs=raw.cs.filter(c=>c.rep===r[0]&&typeof c.ciro2025==='number'&&typeof c.sales2026==='number');const c25=cs.reduce((a,c)=>a+c.ciro2025,0),s26=cs.reduce((a,c)=>a+c.sales2026,0);
+     if(c25>0)ok(r[4]===pctS(tempo(s26,c25)),`Karne tempo ${r[0]}: ${r[4]} = ${pctS(tempo(s26,c25))}`)}
+   ok(new RegExp(`${dt.split('-').reverse().join('\\.')} itibarıyla yılın %${Math.round(YFx*100)}`).test(await txt(page,'#board .oh b')),'tempo, satış verisinin tarihine göre: '+await txt(page,'#board .oh b'));
+   await page.click('.tab[data-view=list]');await sel(page,'Düşüş Market');
+   const c1=raw.cs.find(c=>c.id==='c1');
+   ok(await txt(page,'#cmpG')===pctS(tempo(c1.sales2026,c1.ciro2025)),'kartta büyüme = tempo (aynı döneme göre): '+await txt(page,'#cmpG'));
+   ok(/aynı döneme göre/.test(await txt(page,'#detail .cmp'))&&/Ciro \d{4} \(yıl\) → \d{4} YTD/.test(await txt(page,'#detail .cmp dt')),'kart etiketi: '+await txt(page,'#detail .cmp dt'));
+   // 3) iade oranı: liste etiketi, kart uyarısı, kart satırı ve Karne listesi aynı taban (aynı dönemdeki satış faturası)
+   const r6=raw.ret.map['6'],p6=Math.abs(r6[1])/r6[0],p6s=(p6*100).toFixed(1).replace('.',',');
+   ok((await txt(page,'#list .row[data-id="c6"] .rtag.rt'))===`iade %${p6s}`,'liste etiketi: iade %'+p6s);
+   await sel(page,'İadeci Market');
+   ok((await txt(page,'#retAlert')).includes(`%${p6s}`),'kart uyarısı aynı oran: '+await txt(page,'#retAlert'));
+   ok((await txt(page,'#detail .rl.bad .rp'))===`%${p6s}`,'kart İade satırı aynı oran (eskiden net satışa bölünüyordu): '+await txt(page,'#detail .rl.bad .rp'));
+   ok(/aynı dönemdeki satış faturalarına \(€ 20\.000\)/.test(await txt(page,'#detail .rn')),'kart notu tabanı söylüyor: '+await txt(page,'#detail .rn'));
+   await page.click('#tabB');
+   const rt=await page.$$eval('#retT tbody tr',rs=>rs.map(r=>[...r.cells].map(c=>c.textContent.trim())));
+   const r6row=rt.find(r=>r[1]==='İadeci Market');ok(r6row&&r6row[5]===`%${p6s}`,'Karne iade listesi aynı oran');
+   // 4) sabit yazılmış metinler / veriler
+   await page.click('.tab[data-view=list]');
+   ok(await page.$eval('#list .dot',e=>e.getAttribute('title'))==='30+ gündür temas yok','listedeki nokta ipucu çalışıyor (eskiden "${R.temas}" yazıyordu)');
+   ok((await txt(page,'#sub')).startsWith('Satış verisi '+raw.mon.through.split('-').reverse().join('.')),'başlık altında verinin tarihi: '+await txt(page,'#sub'));
+   // verinin tarihi değişince tempo da değişir (bugüne değil veriye bağlı)
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.doc('sync/returns').get().then(d=>db.doc('sync/returns').set({...d.data(),through:'2026-06-30'}))));await page.waitForTimeout(150);
+   await page.click('#tabB');ok(/30\.06\.2026 itibarıyla yılın %50/.test(await txt(page,'#board .oh b')),'veri tarihi 30.06 → yılın %50: '+await txt(page,'#board .oh b'));
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.doc('sync/returns').get().then(d=>{const x=d.data();delete x.through;return db.doc('sync/returns').set(x)})));await page.waitForTimeout(150);
+   // 5) hedef tablosu başlıkları seçilen yıla göre
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.doc('qtargets/2027-01').set({period:'2027-01',asOf:'2027-01-20',reps:{'Lütfi Kaplan':{c:{atis:{p:1,t:2,a:1}}}}})));await page.waitForTimeout(150);
+   await page.click('#tabH');await page.selectOption('#qYear','2027');await page.selectOption('#qMonth','2027-01');await page.click('[data-qv=tablo]');
+   const hd=await page.$$eval('[data-qblock="Lütfi Kaplan"] .ordp:first-child thead th',t=>t.map(x=>x.textContent));
+   ok(JSON.stringify(hd.slice(1))==='["2026 Sell-Out","2027 Hedef","2027 Sell-Out","Gerçekleşme","27 vs 26"]','2027 seçilince başlıklar: '+hd.join(' | '));
+   await page.selectOption('#qYear','2026');
+   // 6) temsilci listesi veriden: müşterisi olan yeni temsilci otomatik eklenir
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c777').set({code:'777',name:'Yeni Temsilci Market',rep:'Ayşe Yılmaz',status:'Aktif',lastInvoice:window.__FIX.day(-3)})));await page.waitForTimeout(150);
+   ok(!!(await page.$('.chip[data-rep="Ayşe Yılmaz"]')),'yeni temsilci (müşterisi var) butonlarda otomatik çıkıyor');}
+  await ctx.close();
+
+  // Excel'e aktar: SheetJS kütüphanesi yerel olarak verilirse çalışır (XLSX_LIB=/yol/xlsx.full.min.js node tests/e2e.js)
+  if(process.env.XLSX_LIB){
+  step('11. Excel\'e aktar');
+  {const c2=await browser.newContext();const p2=await c2.newPage();p2.on('pageerror',e=>errors.push(e.message));
+   await p2.route(offline,r=>/xlsx/.test(r.request().url())?r.fulfill({body:fs.readFileSync(process.env.XLSX_LIB),contentType:'text/javascript'}):r.abort());
+   await p2.addInitScript(`${FIX};window.CRM_IS_ADMIN=true;window.CRM_USER="baran.sengul@akar-group.com";window.CRM_AUTH={email:"baran.sengul@akar-group.com"};${MOCK};(()=>{const u=window.claude.use;window.claude.use=async k=>k==='downloads'?{async save({filename,data}){window.__xf=filename;window.__xb=data}}:u(k)})();`);
+   await p2.goto(BASE+'/index.html');await p2.waitForSelector('#list .row');
+   await p2.evaluate(()=>window.claude.use('db').then(db=>db.doc('settings/rules').set({pasif:60})));await p2.waitForTimeout(150);
+   await p2.click('#avBtn');await p2.click('#xexp');
+   const got=await p2.waitForFunction(()=>window.__xb,null,{timeout:20000}).then(()=>true).catch(()=>false);
+   ok(got,'Excel dosyası oluşturuldu (toast: '+await txt(p2,'#toast')+')');
+   if(got){const r=await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array'}),m=XLSX.utils.sheet_to_json(wb.Sheets['Müşteriler']),a=wb.Sheets['Ayarlar'];
+       return {f:window.__xf,h:Object.keys(m[0]),n:m.length,pasif:a.B2.v,yf:a.B5.v,ss:(m.find(x=>x['Müşteri']==='Sessiz Market')||{})['Durum'],
+         tf:wb.Sheets['Müşteriler'][XLSX.utils.encode_cell({r:1,c:Object.keys(m[0]).indexOf('Tempo % (aynı dönem)')})].f}});
+     ok(/^CRM_Musteriler_\d\d\.\d\d\.\d{4}\.xlsx$/.test(r.f)&&r.n===8,'dosya adı ve 8 müşteri: '+r.f);
+     ok(r.pasif===60,'Ayarlar: pasif gün sınırı Yönetici ayarından (60)');
+     ok(r.ss==='Pasif','Sessiz Market (70 gün) pasif sınırı 60 ile Pasif');
+     ok(r.h.includes('Tempo % (aynı dönem)')&&!r.h.includes('Büyüme %')&&r.yf>0&&r.yf<=1&&/Ayarlar!\$B\$5/.test(r.tf),'Tempo % sütunu ve formülü sitedeki tanımla aynı ('+r.tf+')')}
+   await c2.close();}}
+
   step('0c. Raci Öner');
   ({ctx,page}=await open(browser,{admin:false,user:'Raci.Oener@akar-gmbh.de'}));
   ok(await txt(page,'#avBtn')==='RÖ','baş harfler: RÖ');

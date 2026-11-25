@@ -22,8 +22,12 @@ const RDEF={pasif:120,temas:30,arag:30,iade:2.5,riskPace:70,riskSilent:45};
 let R={...RDEF},RMETA={};
 function applyRules(d){R={...RDEF};RMETA=d||{};for(const k in RDEF){const v=Number((d||{})[k]);if(Number.isFinite(v)&&v>0)R[k]=v}
   RET_WARN=R.iade/100;RISK.dropPace=R.riskPace/100;RISK.silentDays=R.riskSilent}
-// yılın geçen kısmı: 2026 satışını 2025 cirosunun aynı dönemine göre kıyaslamak için
-const YF=(()=>{const y=+TODAY.slice(0,4);if(y>2026)return 1;const s=Date.UTC(y,0,1),n=Date.UTC(y,+TODAY.slice(5,7)-1,+TODAY.slice(8,10));const len=(Date.UTC(y+1,0,1)-s)/864e5;return ((n-s)/864e5+1)/len})();
+// Verinin tarihi: satış / iade verisinin geçerli olduğu son gün (Power BI eşitlemesi). Yoksa bugün.
+const dataTo=()=>(RET&&RET.through)||(MON&&MON.through)||TODAY;
+// yılın geçen kısmı (o gün dahil): bu yılın satışını geçen yılın cirosunun aynı dönemine göre kıyaslamak için
+const yearFrac=d=>{const y=+d.slice(0,4),s=Date.UTC(y,0,1),n=Date.UTC(y,+d.slice(5,7)-1,+d.slice(8,10));return ((n-s)/864e5+1)/((Date.UTC(y+1,0,1)-s)/864e5)};
+// YF, CY (bu yıl), PY (geçen yıl) her çizimde verinin tarihinden yeniden hesaplanır (derive)
+let YF=yearFrac(TODAY),CY=+TODAY.slice(0,4),PY=CY-1;
 const OUTCOMES=[['Sipariş alındı',0,''],['Tekrar gel',7,'Tekrar ziyaret et'],['Fiyat itirazı',14,'Fiyat itirazını yeniden görüş'],['Rakip var',30,'Rakip durumunu kontrol et'],['Kapalıydı / yetkili yok',3,'Tekrar uğra'],['Bilgi notu',0,'']];
 const CHANNELS=['Ziyaret','Telefon','WhatsApp'];
 // Ziyaret kaydı ve Geçmiş şimdilik kapalı. Yeniden açmak için true yapın.
@@ -33,6 +37,9 @@ function pctEk(v){const t=String(v).replace(/[^\d,]/g,'');const [ip,dp]=t.split(
   if(isNaN(n)||n===0)return "'ı";const l=n%10;if(l)return "'"+['','i','si','ü','ü','i','sı','si','i','u'][l];
   if(n%1000===0)return "'i";if(n%100===0)return "'ü";return "'"+['','u','si','u','ı','si','ı','i','i','ı'][Math.floor(n/10)%10]}
 const pct1=x=>(x*100).toFixed(1).replace('.',',');
+// büyüme / tempo yüzdesi: +3,2% / −1,5% / 0,0% (yuvarlanınca sıfırsa işaretsiz) ve renk sınıfı
+const gPct=g=>{const t=(g*100).toFixed(1);return t==='0.0'||t==='-0.0'?'0,0%':(g>0?'+':'')+t.replace('.',',')+'%'};
+const gCls=g=>{const t=(g*100).toFixed(1);return t==='0.0'||t==='-0.0'?'':g<0?'down':'up'};
 /* oturum açan kişi: e-postadan ad soyad (temsilci listesiyle eşleşirse oradaki yazım) ve baş harfler */
 const fold=s=>String(s||'').toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/[^a-z]/g,'');
 // temsilci listesinde olmayan kullanıcıların adı (e-posta küçük harfle)
@@ -57,7 +64,7 @@ try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderT
 const umOpen=on=>{$('#umDrop').hidden=!on;$('#avBtn').setAttribute('aria-expanded',on)};
 
 let db=null,canWrite=true,loaded=false;
-let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,OI=null,AR={},MON=null,K={},RK={};
+let C=[],A=[],D={last:{},open:{}},RET=null,OI=null,AR={},MON=null,K={},RK={};
 /* iletişim bilgisi: temsilcinin girdiği (contacts) ile Excel'den geleni birleştirir; ikisi de doluysa yenisi geçerli */
 const pick=(a,ta,b,tb)=>a&&b?(ta>=tb?a:b):(a||b||'');
 const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.updatedAt||0;return {phone:pick(k.phone,tk,c.phone,tc),contact:pick(k.contact,tk,c.contact,tc)}};
@@ -84,12 +91,12 @@ const dueIn=d=>d?Math.round((new Date(d)-new Date(TODAY))/864e5):null;
 function oiOf(c){
   if(!OI||!OI.map)return null;const o=OI.map[code(c)];if(!o||!o.inv||!o.inv.length)return null;
   const L=o.inv.map(([no,d,t,amt,rest,due])=>({no,d,t,amt,rest,due,days:dueIn(due)}));
-  const R={L,tot:0,od:0,odn:0,odMax:0,nd:0,ndn:0,cr:0,crn:0,lim:o.lim,vade:o.vade};
-  for(const x of L){R.tot+=x.rest;
-    if(x.rest<0){R.cr+=x.rest;R.crn++}
-    else if(x.days!=null&&x.days<0){R.od+=x.rest;R.odn++;R.odMax=Math.max(R.odMax,-x.days)}
-    else{R.nd+=x.rest;R.ndn++}}
-  return R;
+  const O={L,tot:0,od:0,odn:0,odMax:0,nd:0,ndn:0,cr:0,crn:0,lim:o.lim,vade:o.vade};
+  for(const x of L){O.tot+=x.rest;
+    if(x.rest<0){O.cr+=x.rest;O.crn++}
+    else if(x.days!=null&&x.days<0){O.od+=x.rest;O.odn++;O.odMax=Math.max(O.odMax,-x.days)}
+    else{O.nd+=x.rest;O.ndn++}}
+  return O;
 }
 const oiState=x=>x.rest<0?['cr','Alacak (müşteri lehine)']:x.days==null?['','Vade yok']:x.days<0?['od',`${-x.days} gün geçti`]:x.days===0?['td','Bugün vadeli']:['nd',`${x.days} gün kaldı`];
 // ARAG (tahsilat / hukuki takip) süreci: 'arag' koleksiyonunda müşteri başına {active,at,by}. Vadesi geçen en eski fatura 30 günü aşınca başlatılabilir.
@@ -110,8 +117,8 @@ const RULES=[
   ['pasif','Pasif gün sınırı','gün',7,730,1,'Son satış faturası bu kadar günden eskiyse müşteri otomatik <b>Pasif</b> olur. Elle belirlenen durum (kart / Excel) bunu geçersiz kılar. Excel\'e aktarmada da bu değer kullanılır.'],
   ['temas','Temas günü','gün',1,365,1,'Son temastan (fatura ya da kayıt) bu kadar gün geçen aktif müşteri "temas yok" kutusunda sayılır ve listede noktayla işaretlenir.'],
   ['arag','ARAG süreç günü','gün',1,365,1,'Müşterinin en eski vadesi geçen faturası bu kadar günü aşınca kartta <b>ARAG süreci</b> butonu çıkar.'],
-  ['iade','İade uyarı eşiği','%',0.1,50,0.1,'2026 satışına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.'],
-  ['riskPace','Kayıp riski: ciro temposu','%',10,100,1,'2026 satışı, 2025 cirosunun aynı dönemine göre bu yüzdenin altındaysa müşteri kayıp riskinde sayılır.'],
+  ['iade','İade uyarı eşiği','%',0.1,50,0.1,'Aynı dönemdeki satış faturalarına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.'],
+  ['riskPace','Kayıp riski: ciro temposu','%',10,100,1,'Bu yılın satışı, geçen yılın cirosunun aynı dönemine göre bu yüzdenin altındaysa müşteri kayıp riskinde sayılır.'],
   ['riskSilent','Kayıp riski: faturasız gün','gün',7,365,1,'Bu kadar gündür fatura kesilmeyen müşteri kayıp riskinde sayılır.']];
 function ruleImpact(k,v){
   if(!(v>0))return '';
@@ -175,12 +182,11 @@ const monthKey=()=>(MON&&MON.month)||TODAY.slice(0,7);
 const tgtMap=()=>{const q=(QTS[monthKey()]||{}).reps||{},o={};for(const [r,v] of Object.entries(q)){const s=Object.values((v&&v.c)||{}).reduce((a,x)=>a+(+(x&&x.t)||0),0);if(s)o[r]=s}return o};
 const tgtOf=rep=>{const t=tgtMap();return rep?(t[rep]||0):Object.values(t).reduce((a,v)=>a+v,0)};
 // ayın ne kadarı geçti (hedef temposu için)
-const monthFrac=()=>{const mk=monthKey();if(mk!==TODAY.slice(0,7))return 1;const y=+mk.slice(0,4),m=+mk.slice(5,7);return +TODAY.slice(8,10)/new Date(y,m,0).getDate()};
+const monthFrac=()=>{const mk=monthKey(),t=MON&&MON.through&&MON.through.slice(0,7)===mk?MON.through:mk===TODAY.slice(0,7)?TODAY:mk<TODAY.slice(0,7)?'':TODAY;if(!t)return 1;const y=+mk.slice(0,4),m=+mk.slice(5,7);return +t.slice(8,10)/new Date(y,m,0).getDate()};
 const barHtml=(v,t)=>{if(!t)return '';const p=v/t;return `<span class="bar" title="Hedefin %${Math.round(p*100)}${pctEk(Math.round(p*100))}"><i class="${p<monthFrac()?'behind':''}" style="width:${Math.min(100,Math.max(0,p*100)).toFixed(1)}%"></i></span>`};
 const code=c=>c.code||String(c.id||'').replace(/^c/,'');
 const has=(c,k)=>Object.prototype.hasOwnProperty.call(c,k);
 const inv=c=>(c.lastInvoice||c.sales2026!=null||c.invoices2026!=null)?{last:c.lastInvoice||'',no:c.lastInvoiceNo||'',sales:c.sales2026,n:c.invoices2026}:null;
-const ciroOf=c=>(c.ciro2025==null&&c.sales2026==null)?null:[c.ciro2025,c.sales2026];
 const st={q:'',rep:'',seg:'',chain:'',status:'',quick:'',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
 try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.view)st.view=s.view;if(s.qv)st.qv=s.qv;if(s.rf)st.rf=s.rf}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,view:st.view,qv:st.qv,rf:st.rf}))}catch(e){}};
@@ -198,7 +204,8 @@ const SEGCOL=[['sPla',['platin','platinum']],['sGol',['gold','altın','altin']],
 const segCls=v=>{if(v==='A')return ' sA';if(v==='B')return ' sB';const n=String(v||'').trim().toLocaleLowerCase('tr');if(!n)return '';
   for(const [cl,keys] of SEGCOL)if(keys.some(k=>n===k||n.startsWith(k+' ')))return ' '+cl;return ''};
 const allSegs=()=>[...new Set(C.map(c=>c.segment).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'tr'));
-const allReps=()=>[...new Set([...REPS,...C.map(c=>c.rep).filter(Boolean)])];
+const allReps=()=>{const have=new Set([...C.map(c=>c.rep).filter(Boolean),...Object.values(QTS).flatMap(q=>Object.keys((q&&q.reps)||{}))]);
+  return [...REPS.filter(r=>have.has(r)),...[...have].filter(r=>!REPS.includes(r)).sort((a,b)=>a.localeCompare(b,'tr'))]};
 
 /* Elle durum: 'statusov' koleksiyonunda müşteri başına {status}. Öncelik: sitede elle > Excel 'Durum (elle)' > otomatik. */
 let SO={};
@@ -213,6 +220,7 @@ function statusHtml(c){
   return `<label class="tag stsel${c.statusOv?' ov':''}${c.status==='Pasif'?' pas':''}" title="Müşteri durumu"><span class="sr">Durum</span><select id="stSel" data-cid="${esc(c.id)}" aria-label="Müşteri durumu">`+
     `<option value=""${c.statusOv?'':' selected'}>${esc(a||'–')} · ${c._st0&&c._st0.manual?'Excel':'otomatik'}</option><option value="Aktif"${c.statusOv==='Aktif'?' selected':''}>Aktif · elle</option><option value="Pasif"${c.statusOv==='Pasif'?' selected':''}>Pasif · elle</option></select></label>`}
 function derive(){
+  {const dt=dataTo();YF=yearFrac(dt);CY=+dt.slice(0,4);PY=CY-1}
   applyStatus();
   const last={},open={};
   for(const c of C){const v=inv(c);if(v&&v.last)last[c.id]=v.last}
@@ -243,7 +251,7 @@ function renderTop(){
   $('#reps').innerHTML=['',...allReps()].map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}">${r?esc(r):'Tüm temsilciler'}</button>`).join('');
   const isAdm=window.CRM_IS_ADMIN!==false;
   $('#ximpBtn').hidden=!(canWrite&&isAdm);$('#oimpBtn').hidden=!(canWrite&&isAdm);$('#xexp').hidden=!isAdm;$('#umSep').hidden=!isAdm;
-  $('#sub').textContent=INVTO?`Fatura verisi ${fmt(INVTO)} tarihine kadar (Power BI) · son temas faturaları da kapsar`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde';
+  {const dt=(RET&&RET.through)||(MON&&MON.through);$('#sub').textContent=dt?`Satış verisi ${fmt(dt)} tarihine kadar${OI&&OI.asOf?` · açık faturalar ${fmt(OI.asOf)}`:''}`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde'}
   let b='';
   if(st.nodb)b=`<span>Kayıtlara ulaşılamıyor. ${esc(window.CRM_DIAG||'Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.')}</span>`;
   else if(st.err)b='<span>Kayıtlar okunamadı. Sayfayı daha sonra tekrar açın.</span>';
@@ -257,7 +265,7 @@ function renderStats(){
   const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0),rkPasL=mine.filter(c=>c.status==='Pasif'&&riskCalc(c)),rkPas=rkPasL.length,sumOf=k=>rkPasL.reduce((a,c)=>a+(typeof c[k]==='number'?c[k]:0),0);
   const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,`${R.temas}+ gündür temas yok (aktif)`],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
   $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
-  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Kayıp riski ölçütlerine uyan ama pasif olduğu için sayılmayan müşteri">Pasif müşteri: ${rkPas}</small><small class="stsub" id="rkPasC" title="Bu pasif müşterilerin toplam cirosu: 2025 yılı ve 2026 YTD (net satış)">2025: ${eur(sumOf('ciro2025'))} · 2026: ${eur(sumOf('sales2026'))}</small>`:''}</button>`).join('')+ordStat(mine);
+  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Kayıp riski ölçütlerine uyan ama pasif olduğu için sayılmayan müşteri">Pasif müşteri: ${rkPas}</small><small class="stsub" id="rkPasC" title="Bu pasif müşterilerin toplam cirosu: ${PY} yılı ve ${CY} YTD (net satış)">${PY}: ${eur(sumOf('ciro2025'))} · ${CY}: ${eur(sumOf('sales2026'))}</small>`:''}</button>`).join('')+ordStat(mine);
   renderOrd();
 }
 const MONTHS_LONG=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -295,7 +303,7 @@ function renderList(){
   if(!r.length){$('#list').innerHTML='<li class="empty">Bu filtrelere uyan müşteri yok.</li>';return}
   $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
     const sub=st.quick==='od'&&oi?`<small class="rk">${eur(oi.od)} vadesi geçmiş · en eski ${oi.odMax} gün</small>`:st.quick==='risk'&&rk?`<small class="rk">${esc(riskText(rk))}</small>`:`<small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small>`;
-    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${aragOf(c)?'<em class="rtag ar" title="ARAG süreci aktif">ARAG</em>':''}${oi&&oi.od>0&&st.quick!=='od'?`<em class="rtag rt" title="Vadesi geçmiş açık fatura: ${eur(oi.od)}">vade ${oi.odMax} gün</em>`:''}${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="${R.temas}+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
+    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${aragOf(c)?'<em class="rtag ar" title="ARAG süreci aktif">ARAG</em>':''}${oi&&oi.od>0&&st.quick!=='od'?`<em class="rtag rt" title="Vadesi geçmiş açık fatura: ${eur(oi.od)}">vade ${oi.odMax} gün</em>`:''}${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?`<i class="dot" title="${R.temas}+ gündür temas yok"></i>`:''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
 }
 function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
@@ -313,7 +321,7 @@ function renderDetail(){
   const acts=A.filter(a=>a.customerId===c.id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt||0)-(a.createdAt||0));
   const reps=allReps();if(c.rep&&!reps.includes(c.rep))reps.push(c.rep);
   const lastD=D.last[c.id],iv=inv(c),ct=ctOf(c),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
-  const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',ct.contact],['Telefon',ct.phone],['Temsilci',c.rep],['Rut günü',c.visitDay],['Ziyaret',[c.freq,c.weeks?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],['2026 net satış',iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
+  const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',ct.contact],['Telefon',ct.phone],['Temsilci',c.rep],['Rut günü',c.visitDay],['Ziyaret',[c.freq,c.weeks?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],[`${CY} net satış`,iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
   el.innerHTML=`<button class="back" id="back" type="button">← Listeye dön</button>
   <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${statusHtml(c)}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
 </div>
@@ -357,12 +365,14 @@ function renderBoard(){
   const cm=Object.fromEntries(C.map(c=>[c.id,c]));
   const repOf=a=>a.rep||(cm[a.customerId]||{}).rep||'';
   const T={n:0,ak:0,c25:0,s26:0,c25b:0,ord:0,t:0,a7:0,a30:0,late:0,rk:0,rkv:0,np:0};
+  // tempo yalnız geçen yıl cirosu olan müşterilerle (zincir özeti ve kartla aynı kural)
+  const both=c=>typeof c.ciro2025==='number'&&c.ciro2025>0&&typeof c.sales2026==='number';
   const rows=allReps().map(r=>{const cs=C.filter(c=>c.rep===r);
     const o={r,n:cs.length,ak:cs.filter(c=>c.status!=='Pasif').length,
       c25:cs.reduce((a,c)=>a+(typeof c.ciro2025==='number'?c.ciro2025:0),0),
       s26:cs.reduce((a,c)=>a+(typeof c.sales2026==='number'?c.sales2026:0),0),
-      c25b:cs.reduce((a,c)=>a+(typeof c.ciro2025==='number'&&typeof c.sales2026==='number'?c.ciro2025:0),0),
-      s26b:cs.reduce((a,c)=>a+(typeof c.ciro2025==='number'&&typeof c.sales2026==='number'?c.sales2026:0),0),
+      c25b:cs.reduce((a,c)=>a+(both(c)?c.ciro2025:0),0),
+      s26b:cs.reduce((a,c)=>a+(both(c)?c.sales2026:0),0),
       ord:(mon[r]||{}).amt||0,t:tgtOf(r),
       a7:A.filter(a=>repOf(a)===r&&a.date>=d7).length,a30:A.filter(a=>repOf(a)===r&&a.date>=d30).length,
       late:A.filter(a=>repOf(a)===r&&a.nextDate&&!a.done&&a.nextDate<TODAY&&cm[a.customerId]).length,
@@ -371,7 +381,7 @@ function renderBoard(){
     return o}).filter(o=>o.n||o.t);
   for(const o of rows)for(const k in T)T[k]+=o[k]||0;
   T.s26b=rows.reduce((a,o)=>a+o.s26b,0);
-  const pace=o=>o.c25b>0?(()=>{const g=o.s26b/(o.c25b*YF)-1;return `<span class="${g<0?'down':'up'}">${g>0?'+':''}${pct1(g)}%</span>`})():'–';
+  const pace=o=>o.c25b>0?(()=>{const g=o.s26b/(o.c25b*YF)-1;return `<span class="${gCls(g)}">${gPct(g)}</span>`})():'–';
   const ordC=o=>`${eur(o.ord)}${o.t?` <span class="sm">/ ${eur(o.t)} · %${Math.round(o.ord/o.t*100)}</span>`:''}`;
   const tr=(o,tot)=>`<tr><td>${tot?'Toplam':`<button class="lnk" data-brep="${esc(o.r)}">${esc(o.r)}</button>`}</td><td>${o.n} <span class="sm">(${o.ak} aktif)</span></td><td>${eur(o.c25)}</td><td>${eur(o.s26)}</td><td>${pace(o)}</td>${VISIT_LOG?`<td>${o.a7} / ${o.a30}</td>`:''}<td>${tot?`${o.rk} · ${eur(o.rkv)}`:`<button class="lnk" data-brisk="${esc(o.r)}">${o.rk} · ${eur(o.rkv)}</button>`}</td></tr>`;
   // iade oranı en yüksek ilk 25: varsayılan aktifler; genel ilk 25'teki pasifler çizginin altında
@@ -384,8 +394,8 @@ function renderBoard(){
   const rfBtn=(k,l)=>`<button type="button" data-rf="${k}" aria-pressed="${rf===k}">${l}</button>`;
   const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`;
   $('#board').innerHTML=`<h3>Temsilci Karnesi</h3>
-  <div class="ordp"><div class="oh"><b>Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}${pctEk(Math.round(YF*100))})</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
-  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 YTD</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp Riski</th></tr></thead>
+  <div class="ordp"><div class="oh"><b>Tempo: ${CY} YTD satış, ${PY} cirosunun aynı dönemine göre (${fmt(dataTo())} itibarıyla yılın %${Math.round(YF*100)}${pctEk(Math.round(YF*100))})</b><small>Tempo yalnız ${PY} cirosu olan müşterilerle hesaplanır; yeni müşteriler dahil değildir.${VISIT_LOG?' Kayıt = ziyaret/telefon notu (7 gün / 30 gün).':''}</small></div>
+  <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro ${PY}</th><th>${CY} YTD</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp Riski</th></tr></thead>
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
   <div class="rethead"><h3>En Yüksek İade Oranı <small class="sm">ilk ${RTOP} · satışın %${pct1(RET_WARN)}${pctEk(pct1(RET_WARN))} ve üzeri · ${nAkt} aktif, ${nPas} pasif müşteri bu eşiğin üzerinde</small></h3>
     <div class="seg2" role="group" aria-label="Durum filtresi">${rfBtn('both','Aktif + Pasif')}${rfBtn('aktif','Aktif')}${rfBtn('pasif','Pasif')}</div></div>
@@ -407,6 +417,8 @@ let QTS={};
 const eurIn=n=>n==null||n===''||!isFinite(n)?'':Math.round(n).toLocaleString('nl-NL');
 const nz=v=>typeof v==='number'&&isFinite(v)?v:0;
 const qNow=()=>TODAY.slice(0,7);
+// seçili hedef döneminin yılı: tablo başlıkları ve kıyas etiketi buna göre (2027 seçilince 2027 Hedef / 2026 Sell-Out)
+const qY=()=>+(st.qp||qNow()).slice(0,4),qYY=()=>`${String(qY()).slice(2)} vs ${String(qY()-1).slice(2)}`;
 const isMonthKey=k=>/^\d{4}-\d{2}$/.test(k);
 const p2=n=>String(n).padStart(2,'0');
 function qMonths(key){if(isMonthKey(key))return [key];const [y,q]=key.split('-');const ms=q==='Y'?[1,2,3,4,5,6,7,8,9,10,11,12]:[0,1,2].map(i=>(+q.slice(1)-1)*3+1+i);return ms.map(m=>`${y}-${p2(m)}`)}
@@ -449,7 +461,7 @@ function qCard(name,e,pace,team){
     ${qBar(pct,pace)}
     <p class="qline"><b>${eur(T.a)}</b> <span class="sm">/ ${eur(T.t)} hedef</span></p>
     ${T.t?`<p class="qleft">${left>0?`Hedefe kalan: <b>${eur(left)}</b>`:`<span class="q-good">Hedef aşıldı: +${eur(-left)}</span>`}</p>`:''}
-    <p class="sm">2025 aynı dönem: ${qMoney(T.p)} · 26 vs 25: <span class="${qGrowCls(g)}">${qGrowTxt(g)}</span></p>
+    <p class="sm">${qY()-1} aynı dönem: ${qMoney(T.p)} · ${qYY()}: <span class="${qGrowCls(g)}">${qGrowTxt(g)}</span></p>
     ${tahTxt?`<p class="sm">${tahTxt}</p>`:''}</div>
     <ul class="qcats" aria-label="Kategoriler">${QCATS.map(([k,l])=>{const s=qCat(e,k),p=qPct(s.a,s.t);return `<li data-qc="${k}" title="${esc(l)}: ${eur(s.a)} / ${eur(s.t)} hedef"><span>${l}</span>${qBar(p,pace)}<b class="${qCls(p,pace)}">${qPctTxt(p)}</b></li>`}).join('')}</ul>
   </article>`}
@@ -459,7 +471,7 @@ function qTable(name,e,pace,team){
   const row=(l,s,foot)=>{const p=qPct(s.a,s.t),g=qGrow(s.a,s.p);return `<tr${foot?' class="tot"':''}><td>${l}</td><td>${qMoney(s.p)}</td><td>${qMoney(s.t)}</td><td>${qMoney(s.a)}</td><td class="${qCls(p,pace)}">${qPctTxt(p)}</td><td class="${qGrowCls(g)}">${qGrowTxt(g)}</td></tr>`};
   const fin=QFIN.map(([k,l])=>{const s=(e.f||{})[k]||{},p=s.a==null?null:qPct(nz(s.a),nz(s.t));return `<tr><td>${l}</td><td>${qMoney(nz(s.t))}</td><td>${qMoney(nz(s.a))}</td><td class="${qCls(p,pace,k==='iade')}">${qPctTxt(p)}</td></tr>`}).join('');
   return `<section class="qblock${team?' team':''}" data-qblock="${esc(name)}"><h4>${esc(name)}</h4><div class="qtabs">
-    <div class="ordp"><table class="qt"><thead><tr><th>Kategori</th><th class="h25">2025 Sell-Out</th><th class="hT">2026 Hedef</th><th class="h26">2026 Sell-Out</th><th>Gerçekleşme</th><th>26 vs 25</th></tr></thead>
+    <div class="ordp"><table class="qt"><thead><tr><th>Kategori</th><th class="h25">${qY()-1} Sell-Out</th><th class="hT">${qY()} Hedef</th><th class="h26">${qY()} Sell-Out</th><th>Gerçekleşme</th><th>${qYY()}</th></tr></thead>
       <tbody>${QCATS.map(([k,l])=>row(l,qCat(e,k))).join('')}</tbody><tfoot>${row('Genel Toplam',T,1)}</tfoot></table></div>
     <div class="ordp"><table class="qt"><thead><tr><th>Kalem</th><th class="hT">Hedef</th><th class="h26">Gerçekleşen</th><th>Gerçekleşme</th></tr></thead><tbody>${fin}</tbody></table></div>
   </div></section>`}
@@ -468,7 +480,7 @@ function qEditHtml(key){
   const cell=(n,v)=>`<td><span class="eurin"><i aria-hidden="true">€</i><input name="${esc(n)}" inputmode="decimal" autocomplete="off" placeholder="0" value="${eurIn(v)}"></span></td>`;
   const block=r=>{const e=qEntry(key,r);
     return `<section class="qblock" data-qblock="${esc(r)}"><h4>${esc(r)}</h4><div class="qtabs">
-    <div class="ordp"><table class="qt qe"><thead><tr><th>Kategori</th><th class="h25">2025 Sell-Out</th><th class="hT">2026 Hedef</th><th class="h26">2026 Sell-Out</th><th>Gerçekleşme</th></tr></thead>
+    <div class="ordp"><table class="qt qe"><thead><tr><th>Kategori</th><th class="h25">${qY()-1} Sell-Out</th><th class="hT">${qY()} Hedef</th><th class="h26">${qY()} Sell-Out</th><th>Gerçekleşme</th></tr></thead>
       <tbody>${QCATS.map(([k,l])=>{const s=((e.c||{})[k])||{};return `<tr><td>${l}</td>${cell(`${r}|c|${k}|p`,s.p)}${cell(`${r}|c|${k}|t`,s.t)}${cell(`${r}|c|${k}|a`,s.a)}<td data-qr="${esc(r)}|${k}">–</td></tr>`}).join('')}</tbody>
       <tfoot><tr class="tot"><td>Genel Toplam</td><td data-qs="${esc(r)}|p">–</td><td data-qs="${esc(r)}|t">–</td><td data-qs="${esc(r)}|a">–</td><td data-qr="${esc(r)}|_">–</td></tr></tfoot></table></div>
     <div class="ordp"><table class="qt qe"><thead><tr><th>Kalem</th><th class="hT">Hedef</th><th class="h26">Gerçekleşen</th></tr></thead>
@@ -535,7 +547,7 @@ function renderTargets(){
       <div class="chips" role="group" aria-label="Çeyrek ve yıl">${QNAMES.map(n=>chip(`${y}-${n}`,n)).join('')}${chip(`${y}-Y`,`${y} Yıl`)}</div>
       ${st.qedit?'':`<div class="seg2" role="group" aria-label="Görünüm"><button type="button" data-qv="ozet" aria-pressed="${view==='ozet'}">Özet</button><button type="button" data-qv="tablo" aria-pressed="${view==='tablo'}">Tablo</button></div>`}
       ${adm&&isM&&!st.qedit?'<button type="button" class="ghost" id="qEdit">Düzenle</button>':''}</div></div>
-    ${st.qedit?'':`<p class="qleg"><span><i class="lg-ok"></i>Tempoda veya hedefte</span><span><i class="lg-bad"></i>Tempo altında</span><span><i class="lg-pm"></i>Olması gereken seviye (rakamların tarihine göre)</span><span>26 vs 25: 2025 aynı döneme göre büyüme${pace>0&&pace<1?' (dönem bitmeden düşük görünür)':''}</span></p>`}
+    ${st.qedit?'':`<p class="qleg"><span><i class="lg-ok"></i>Tempoda veya hedefte</span><span><i class="lg-bad"></i>Tempo altında</span><span><i class="lg-pm"></i>Olması gereken seviye (rakamların tarihine göre)</span><span>${qYY()}: ${qY()-1} aynı döneme göre büyüme${pace>0&&pace<1?' (dönem bitmeden düşük görünür)':''}</span></p>`}
     ${body}`;
   if(st.qedit){const f=$('#qform');if(f)qformTotals(f)}
 }
@@ -553,7 +565,7 @@ function chainHtml(c){
   const monAmt=x=>{const v=MON&&MON.map&&MON.map[code(x)];if(!v)return 0;const [sat=0,,iade=0,ff=0]=v;return sat+iade+ff};
   const both=S.filter(x=>typeof x.ciro2025==='number'&&x.ciro2025>0&&typeof x.sales2026==='number');
   const pb=both.reduce((a,x)=>a+x.ciro2025,0),sb=both.reduce((a,x)=>a+x.sales2026,0);
-  const gTxt=g=>g==null?'–':`<span class="${g<0?'down':'up'}">${g>0?'+':''}${pct1(g)}%</span>`;
+  const gTxt=g=>g==null?'–':`<span class="${gCls(g)}">${gPct(g)}</span>`;
   const tempo=x=>typeof x.ciro2025==='number'&&x.ciro2025>0&&typeof x.sales2026==='number'?x.sales2026/(x.ciro2025*YF)-1:null;
   let rs=0,ri=0;for(const x of S){const r=RET&&RET.map&&RET.map[code(x)];if(r){rs+=r[0]||0;ri+=Math.abs(r[1]||0)}}
   const rp=rs?ri/rs:null,rk=S.filter(x=>RK[x.id]),nA=S.filter(x=>x.status!=='Pasif').length;
@@ -565,17 +577,17 @@ function chainHtml(c){
     <div class="ch-h"><h3>${esc(chainName(ch))}</h3><button type="button" class="lnk" data-chainf="${esc(ch)}">Mağazaları listede göster</button></div>
     <dl class="chtiles">
       ${tile('Mağaza',`${S.length} <small>(${nA} aktif${S.length-nA?`, ${S.length-nA} pasif`:''})</small>`)}
-      ${tile('Ciro 2025',eur(S.reduce((a,x)=>a+n(x.ciro2025),0)))}
-      ${tile('2026 YTD',eur(S.reduce((a,x)=>a+n(x.sales2026),0)))}
+      ${tile(`Ciro ${PY}`,eur(S.reduce((a,x)=>a+n(x.ciro2025),0)))}
+      ${tile(`${CY} YTD`,eur(S.reduce((a,x)=>a+n(x.sales2026),0)))}
       ${tile('Tempo',gTxt(pb?sb/(pb*YF)-1:null))}
       ${tile(`Bu ay net ciro${MON&&MON.month?` (${MONTHS_LONG[+MON.month.slice(5,7)-1]})`:''}`,eur(S.reduce((a,x)=>a+monAmt(x),0)))}
       ${tile('İade oranı',rp==null?'–':`<span class="${rp>=RET_WARN?'warn':''}">%${pct1(rp)}</span>`)}
       ${tile('Kayıp riski',rk.length?`<span class="warn">${rk.length} mağaza</span>`:'yok')}
     </dl>
-    <div class="chtab"><table id="chainT"><thead><tr><th>Mağaza</th>${reps.length>1?'<th>Temsilci</th>':''}<th>2026 YTD</th><th>Tempo</th><th>Bu ay</th><th>Son fatura</th></tr></thead><tbody>
+    <div class="chtab"><table id="chainT"><thead><tr><th>Mağaza</th>${reps.length>1?'<th>Temsilci</th>':''}<th>${CY} YTD</th><th>Tempo</th><th>Bu ay</th><th>Son fatura</th></tr></thead><tbody>
       ${rows.map(x=>`<tr${x.id===c.id?' class="cur" aria-current="true"':''}><td class="chn">${x.id===c.id?`<b${x.status==='Pasif'?' class="pas"':''}>${esc(x.name)}</b>`:`<button type="button" class="lnk${x.status==='Pasif'?' pas':''}" data-id="${esc(x.id)}">${esc(x.name)}</button>`}${x.status==='Pasif'?' <em class="rtag" title="Pasif müşteri">pasif</em>':''}${RK[x.id]?' <em class="rtag" title="Kayıp riski">risk</em>':''}<small>${esc(x.city||'')}</small></td>${reps.length>1?`<td>${esc(x.rep||'')}</td>`:''}<td>${typeof x.sales2026==='number'?eur(x.sales2026):'–'}</td><td>${gTxt(tempo(x))}</td><td>${monAmt(x)?eur(monAmt(x)):'–'}</td><td>${last(x)}</td></tr>`).join('')}
     </tbody></table></div>
-    <p class="sm">Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre. Mağaza adına tıklayınca o mağazanın kartı açılır.</p>
+    <p class="sm">Tempo: ${CY} YTD satış, ${PY} cirosunun aynı dönemine göre. Mağaza adına tıklayınca o mağazanın kartı açılır.</p>
   </section>`}
 function renderTasks(){
   const cm=Object.fromEntries(C.map(c=>[c.id,c]));
@@ -614,11 +626,10 @@ function render(){
 }
 
 function cmpRow(c){
-  const r=ciroOf(c);
-  if(!r)return `<div class="cmp"><dt>Ciro 2025 (FY) → 2026 YTD</dt><dd>–</dd></div>`;
-  const [a,b]=r,has=x=>x!=null&&x!=='';let p='';
-  if(has(a)&&has(b)&&a>0){const g=(b-a)/a*100;p=`<span class="${g<0?'down':'up'}">${g>0?'+':''}${g.toFixed(1).replace('.',',')}%</span>`}
-  return `<div class="cmp"><dt>Ciro 2025 (FY) → 2026 YTD</dt><dd>${has(a)?eur(a):'–'} → ${has(b)?eur(b):'–'} ${p}</dd></div>`;
+  const a=c.ciro2025,b=c.sales2026,has=x=>typeof x==='number'&&isFinite(x),lbl=`Ciro ${PY} (yıl) → ${CY} YTD`;
+  if(!has(a)&&!has(b))return `<div class="cmp"><dt>${lbl}</dt><dd>–</dd></div>`;
+  const g=has(a)&&a>0&&has(b)?b/(a*YF)-1:null;
+  return `<div class="cmp"><dt>${lbl}</dt><dd>${has(a)?eur(a):'–'} → ${has(b)?eur(b):'–'}${g==null?'':` <span class="${gCls(g)}" id="cmpG" title="Tempo: ${CY} YTD satış, ${PY} cirosunun aynı dönemine (yılın %${Math.round(YF*100)}${pctEk(Math.round(YF*100))}) göre">${gPct(g)}</span> <small class="sm">aynı döneme göre</small>`}</dd></div>`;
 }
 
 const MONTHS_TR=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
@@ -629,11 +640,11 @@ function retRows(c){
   const r=RET.map[code(c)];
   if(!r)return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>Bu dönemde kayıt yok</dd></div>`;
   const [sales,iade,iadeN,ff,ffN]=r;
-  const base=typeof c.sales2026==='number'?c.sales2026:null;
+  const base=typeof sales==='number'?sales:null;
   const pct=v=>base>0&&v?`<span class="rp">%${(Math.abs(v)/base*100).toFixed(1).replace('.',',')}</span>`:'';
   const bad=!!(retOf(c)||{}).warn;
   const line=(l,v,n,p)=>`<div class="rl${bad&&l==='İade'?' bad':''}"><span>${l}</span><b>${v?eur(v):'€ 0'}</b><small>${n||0} fatura</small>${p?pct(v):'<span></span>'}</div>`;
-  return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar 2026 net satışa (${eur(base)}) göre.`:'2026 net satış boş olduğu için oran gösterilemiyor.'}</p></dd></div>`;
+  return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar aynı dönemdeki satış faturalarına (${eur(base)}) göre${base<RET_MIN?`; satış ${eur(RET_MIN)} altında olduğu için uyarı verilmez`:''}.`:'Bu dönemde satış faturası olmadığı için oran gösterilemiyor.'}</p></dd></div>`;
 }
 
 /* customer modal */
@@ -660,7 +671,7 @@ const COLS=[['Kod','code','t'],['Müşteri','name','t'],['Zincir','chain','t'],
  ['Temsilci','rep','t'],['Rut günü','visitDay','day'],['Ziyaret sıklığı','freq','t'],['Ziyaret haftaları','weeks','t'],['Ödeme vadesi','pay','t'],
  ['Yetkili','contact','t'],['Telefon','phone','t'],['Adres','address','t'],['Posta kodu','postcode','t'],['Şehir','city','t'],
  ['Son fatura tarihi','lastInvoice','d',1],['Son fatura no','lastInvoiceNo','t',1],['2026 net satış (€)','sales2026','n',1],['2026 fatura sayısı','invoices2026','n',1],
- ['Ciro 2025 (€)','ciro2025','n'],['Büyüme %','_growth','f',1]];
+ ['Ciro 2025 (€)','ciro2025','n'],['Tempo % (aynı dönem)','_growth','f',1]];
 const DATA_KEYS=COLS.filter(c=>!c[1].startsWith('_')).map(c=>c[1]);
 const PBI_KEYS=['lastInvoice','lastInvoiceNo'];
 const PBI_HEAD=['Datum','BelegNr','Belegart','Distributor','DebitorenNr','DebitorenBez','Segment','Ort','Land','EUR','KTN','TON','Verkaeufer'];
@@ -716,7 +727,7 @@ async function getPBI(){
 }
 const HELP=[['Bu dosya nasıl kullanılır'],
 ['1. Power BI "Daily Sales (Sell Out)" raporundan 2026 verisini Excel olarak dışa aktarın ve "PowerBI_Veri" sayfasında A1 hücresinden itibaren yapıştırın (başlık satırı dahil). N ve O sütunlarındaki formüllere dokunmayın.'],
-['2. "Müşteriler" sayfasında Son fatura tarihi, Son fatura no, 2026 net satış, 2026 fatura sayısı, Durum ve Büyüme % formüldür; kendiliğinden güncellenir. Bu sütunlara yazmayın.'],
+['2. "Müşteriler" sayfasında Son fatura tarihi, Son fatura no, 2026 net satış, 2026 fatura sayısı, Durum ve Tempo % formüldür; kendiliğinden güncellenir. Bu sütunlara yazmayın.'],
 ['3. Segment sütununa ne yazarsanız CRM\'de aynen o görünür (ör. A, B, C, Key Account). CRM segmenti ciroya göre hesaplamaz. Durumu elle sabitlemek isterseniz "Durum (elle)" sütununa yazın.'],
 ['4. Kurallar "Ayarlar" sayfasındadır: Pasif gün sınırı, referans tarih ve satış faturası türü.'],
 ['5. CRM\'de "Excel\'den içe aktar" ile yükleyin. CRM aynı kuralları kendisi de uygular; Excel\'de hesaplanmamış bir hücre olsa bile sonuç aynı olur.'],
@@ -734,21 +745,21 @@ async function exportXLSX(){
     const list=[...C].sort((a,b)=>String(a.rep||'').localeCompare(String(b.rep||''),'tr')||String(a.name||'').localeCompare(String(b.name||''),'tr'));
     const LR=list.length+1;const ws={};
     COLS.forEach((c,j)=>setCell(ws,XL(j)+1,{t:'s',v:c[0]}));
-    const A=colOf('code'),G=colOf('statusManual'),R=colOf('lastInvoice'),T=colOf('sales2026'),V=colOf('ciro2025');
+    const A=colOf('code'),G=colOf('statusManual'),LI=colOf('lastInvoice'),T=colOf('sales2026'),V=colOf('ciro2025');
     const P='PowerBI_Veri!',ty='Ayarlar!$B$4';
-    list.forEach((c,i)=>{const r=i+2,iv=inv(c),cr=ciroOf(c);
-      const val={...c,...ctOf(c),code:code(c),statusManual:c.statusManual||'',lastInvoice:iv?iv.last:'',lastInvoiceNo:iv?iv.no:'',sales2026:iv?iv.sales:0,invoices2026:iv?iv.n:0,ciro2025:cr?cr[0]:null};
-      val._growth=(typeof val.ciro2025==='number'&&val.ciro2025>0&&typeof val.sales2026==='number')?(val.sales2026-val.ciro2025)/val.ciro2025:'';
+    list.forEach((c,i)=>{const r=i+2,iv=inv(c);
+      const val={...c,...ctOf(c),code:code(c),statusManual:c.statusManual||'',lastInvoice:iv?iv.last:'',lastInvoiceNo:iv?iv.no:'',sales2026:iv?iv.sales:0,invoices2026:iv?iv.n:0,ciro2025:typeof c.ciro2025==='number'?c.ciro2025:null};
+      val._growth=(typeof val.ciro2025==='number'&&val.ciro2025>0&&typeof val.sales2026==='number')?val.sales2026/(val.ciro2025*YF)-1:'';
       COLS.forEach(([h,k,t,isF],j)=>{const a=XL(j)+r;let v=val[k];let cell;
         if(t==='d')cell=v?{t:'n',v:serial(v),z:'dd.mm.yyyy'}:{t:'s',v:''};
         else if(t==='n'||t==='f')cell=(v==null||v==='')?{t:'s',v:''}:{t:'n',v:+v,z:k==='invoices2026'?'0':k==='_growth'?'0.0%':'#,##0.00'};
         else cell={t:'s',v:v==null?'':String(v)};
-        if(k==='status')cell.f=`IF(${G}${r}<>"",${G}${r},IF(${R}${r}="","Pasif",IF(Ayarlar!$B$3-${R}${r}>Ayarlar!$B$2,"Pasif","Aktif")))`;
-        if(k==='_growth'){cell.f=`IF(AND(ISNUMBER(${V}${r}),${V}${r}>0),(${T}${r}-${V}${r})/${V}${r},"")`;cell.z='0.0%'}
+        if(k==='status')cell.f=`IF(${G}${r}<>"",${G}${r},IF(${LI}${r}="","Pasif",IF(Ayarlar!$B$3-${LI}${r}>Ayarlar!$B$2,"Pasif","Aktif")))`;
+        if(k==='_growth'){cell.f=`IF(AND(ISNUMBER(${V}${r}),${V}${r}>0),${T}${r}/(${V}${r}*Ayarlar!$B$5)-1,"")`;cell.z='0.0%'}
         const lit=k==='lastInvoice'?(val.lastInvoice?`DATE(${val.lastInvoice.slice(0,4)},${+val.lastInvoice.slice(5,7)},${+val.lastInvoice.slice(8,10)})`:'""'):k==='lastInvoiceNo'?`"${String(val.lastInvoiceNo||'').replace(/"/g,'""')}"`:String(+val[k]||0);
         const keep=f=>`IF(COUNTA(${P}$A:$A)<=1,${lit},${f})`;
         if(k==='lastInvoice'){cell.f=keep(`IF(COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})=0,"",_xlfn.MAXIFS(${P}$A:$A,${P}$N:$N,$${A}${r},${P}$C:$C,${ty}))`);cell.z='dd.mm.yyyy'}
-        if(k==='lastInvoiceNo')cell.f=keep(`IF(${R}${r}="","",IFERROR(INDEX(${P}$B:$B,MATCH($${A}${r}&"|"&${R}${r}&"|"&${ty},${P}$O:$O,0)),""))`);
+        if(k==='lastInvoiceNo')cell.f=keep(`IF(${LI}${r}="","",IFERROR(INDEX(${P}$B:$B,MATCH($${A}${r}&"|"&${LI}${r}&"|"&${ty},${P}$O:$O,0)),""))`);
         if(k==='sales2026'){cell.f=keep(`SUMIFS(${P}$J:$J,${P}$N:$N,$${A}${r})`);if(cell.t==='s')Object.assign(cell,{t:'n',v:0});cell.z='#,##0.00'}
         if(k==='invoices2026'){cell.f=keep(`COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})`);if(cell.t==='s')Object.assign(cell,{t:'n',v:0});cell.z='0'}
         setCell(ws,a,cell)})});
@@ -756,10 +767,10 @@ async function exportXLSX(){
     ws['!cols']=[10,36,14,9,14,10,15,11,13,12,11,16,15,32,11,18,13,15,15,12,14,10].map(w=>({wch:w}));
     ws['!autofilter']={ref:`A1:${XL(COLS.length-1)}${LR}`};
     // Ayarlar
-    const st={};const A2=[['Ayar','Değer','Açıklama'],['Pasif gün sınırı',S.pasif,'Son satış faturası bundan eskiyse Pasif'],['Referans tarih',null,'Varsayılan: bugünün tarihi (=BUGÜN()). Sabit bir tarih de yazabilirsiniz.'],['Satış faturası türü',S.type,'PowerBI_Veri sayfasındaki Belegart değeri']];
+    const st={};const A2=[['Ayar','Değer','Açıklama'],['Pasif gün sınırı',S.pasif,'Son satış faturası bundan eskiyse Pasif'],['Referans tarih',null,'Varsayılan: bugünün tarihi (=BUGÜN()). Sabit bir tarih de yazabilirsiniz.'],['Satış faturası türü',S.type,'PowerBI_Veri sayfasındaki Belegart değeri'],['Yılın geçen kısmı',YF,`Satış verisinin tarihi (${fmt(dataTo())}) itibarıyla. Tempo % = 2026 net satış / (Ciro 2025 × bu oran) − 1`]];
     A2.forEach((row,ri)=>row.forEach((v,ci)=>{const a=XL(ci)+(ri+1);if(v==null)return;st[a]=typeof v==='number'?{t:'n',v}:{t:'s',v}}));
     st.B3={t:'n',v:serial(TODAY),f:'TODAY()',z:'dd.mm.yyyy'};
-    st['!ref']='A1:C4';st['!cols']=[{wch:22},{wch:16},{wch:70}];
+    st.B5.z='0.0%';st['!ref']='A1:C5';st['!cols']=[{wch:22},{wch:16},{wch:70}];
     // PowerBI_Veri
     const pv={};PBI_HEAD.forEach((h,j)=>pv[XL(j)+1]={t:'s',v:h});pv.N1={t:'s',v:'Kod (formül)'};pv.O1={t:'s',v:'Anahtar (formül)'};
     const rows=pb?pb.rows:[];const LV=Math.max(rows.length+2001,15001);
@@ -812,7 +823,7 @@ async function readImport(f){
     const head=(rows[0]||[]).map(normH);
     const idx=COLS.filter(c=>!c[1].startsWith('_')).map(([h,k,t])=>[k,t,head.indexOf(normH(h))]).filter(x=>x[2]>=0);
     if(!idx.some(x=>x[0]==='code')||!idx.some(x=>x[0]==='name')){toast('Dosyada "Kod" ve "Müşteri" sütunları bulunamadı.',1);return}
-    const known=new Set(COLS.map(c=>normH(c[0])));const ignored=(rows[0]||[]).filter(h=>String(h).trim()&&!known.has(normH(h)));
+    const known=new Set([...COLS.map(c=>normH(c[0])),normH('Büyüme %')]);const ignored=(rows[0]||[]).filter(h=>String(h).trim()&&!known.has(normH(h)));
     const seen=new Set(),parsed=[];let bad=0,dup=0;const odd={status:0};
     for(const r of rows.slice(1)){
       const o={};for(const [k,t,i] of idx){o[k]=cellVal(r[i],t);if(k==='status'&&String(r[i]).trim()&&!o[k])odd[k]++}
@@ -960,7 +971,7 @@ document.addEventListener('submit',async e=>{
     for(const e of f.querySelectorAll('input[name*="|"]')){const v=String(e.value||'').trim();e.removeAttribute('aria-invalid');if(!v)continue;
       const n=num(v.replace(/−/g,'-')),[r,g,k,x]=e.name.split('|');
       if(n==null||(x==='t'&&n<0)){bad++;e.setAttribute('aria-invalid','true');continue}
-      const R=reps[r]||(reps[r]={c:{},f:{}});(R[g][k]=R[g][k]||{})[x]=Math.round(n)}
+      const E=reps[r]||(reps[r]={c:{},f:{}});(E[g][k]=E[g][k]||{})[x]=Math.round(n)}
     if(bad){toast(`${bad} kutu hatalı: € tutarı girin (hedef eksi olamaz).`,1);const b=f.querySelector('[aria-invalid=true]');if(b)b.focus();return}
     const asOf=String((f.elements.asOf||{}).value||'');const [ms,me]=qRange(key);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(asOf)||asOf<ms||asOf>me){toast('Rakamların tarihi seçilen ayın içinde olmalı.',1);f.elements.asOf.focus();return}
