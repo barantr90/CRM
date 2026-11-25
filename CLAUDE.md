@@ -4,7 +4,7 @@ Hollanda'daki market müşterileri için satış CRM'i. Arayüz metinleri, kod y
 
 ## Mimari
 
-Derleme adımı yok. Uygulama düz HTML ve vanilla JS'ten oluşur; `main` dalı canlı sitedir.
+Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
 
 - `index.html`: iskelet (sekmeler, görünüm bölümleri, sağ üst menü).
 - `app.js`: tüm mantık, tek blok içinde.
@@ -74,13 +74,13 @@ Derleme adımı yok. Uygulama düz HTML ve vanilla JS'ten oluşur; `main` dalı 
 node tests/e2e.js
 ```
 
-- Testler Playwright ile, bellek içi `tests/mockdb.js` ve `tests/fixture.js` verisiyle çalışır.
+- Playwright; bellek içi `tests/mockdb.js` + `tests/fixture.js`.
 - Excel testi için `XLSX_LIB=<yol>` verilir.
 - Yardımcılar: `open(browser, {admin, role, user, seed})`, `goAdm`, `goList`, `doc`.
 - Her yeni davranışa test eklenir.
 - Hata düzeltilirken önce eski kodda başarısız olan test yazılır.
 - Tüm testler geçmeden birleştirme yapılmaz.
-- Arayüz değişikliğinden sonra `tests/screens/` altındaki ekran görüntülerine bakılır.
+- Arayüz değişince `tests/screens/` görüntülerine bakılır.
 
 ## Çalışma şekli
 
