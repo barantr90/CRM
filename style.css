@@ -145,7 +145,7 @@ dd a{color:var(--accInk);font-weight:600}
 /* çeyrek hedef takibi */
 .qhead{display:flex;flex-wrap:wrap;gap:12px 20px;justify-content:space-between;align-items:flex-end;margin-bottom:10px}
 .qhead h3{margin:0}.qinfo{margin:4px 0 0}
-.qctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.qctl select{width:auto;min-height:40px}
+.qctl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.qctl select{width:auto;min-height:40px}.qctl select.qmsel{border-radius:99px;padding:0 14px}.qctl select.qmsel.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .seg2{display:inline-flex;border:1px solid var(--line);border-radius:99px;padding:3px;gap:2px;background:var(--bg)}
 .seg2 button{min-height:34px;padding:0 14px;border:0;border-radius:99px;background:none;font-weight:600;color:var(--mut)}
 .seg2 button[aria-pressed=true]{background:var(--ink);color:var(--bg)}
@@ -178,3 +178,4 @@ dd a{color:var(--accInk);font-weight:600}
 .qempty{border:1px dashed var(--line);border-radius:14px;padding:24px;color:var(--mut)}.qempty p{margin:0 0 6px}
 @media(max-width:1000px){.qtabs{grid-template-columns:minmax(0,1fr)}}
 @media(max-width:600px){.qbig{font-size:30px}.qcats li{grid-template-columns:88px minmax(0,1fr) 44px;font-size:13px}.qctl .chip{padding:0 10px}}
+.qasof{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin:0 0 12px;font-weight:600}.qasof input{width:auto;min-height:40px}.qasof .sm{font-weight:400;flex-basis:100%}

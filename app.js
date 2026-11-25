@@ -23,6 +23,10 @@ const OUTCOMES=[['Sipariş alındı',0,''],['Tekrar gel',7,'Tekrar ziyaret et'],
 const CHANNELS=['Ziyaret','Telefon','WhatsApp'];
 // Ziyaret kaydı ve Geçmiş şimdilik kapalı. Yeniden açmak için true yapın.
 const VISIT_LOG=false;
+/* Türkçe yüzde eki: %61'i, %67'si, %83'ü, %90'ı, %100'ü, %12,0'ı */
+function pctEk(v){const t=String(v).replace(/[^\d,]/g,'');const [ip,dp]=t.split(',');const n=parseInt(dp!=null&&dp!==''?dp:ip,10);
+  if(isNaN(n)||n===0)return "'ı";const l=n%10;if(l)return "'"+['','i','si','ü','ü','i','sı','si','i','u'][l];
+  if(n%1000===0)return "'i";if(n%100===0)return "'ü";return "'"+['','u','si','u','ı','si','ı','i','i','ı'][Math.floor(n/10)%10]}
 const pct1=x=>(x*100).toFixed(1).replace('.',',');
 /* oturum açan kişi: e-postadan ad soyad (temsilci listesiyle eşleşirse oradaki yazım) ve baş harfler */
 const fold=s=>String(s||'').toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ı/g,'i').replace(/[^a-z]/g,'');
@@ -71,7 +75,7 @@ const monthKey=()=>(MON&&MON.month)||TODAY.slice(0,7);
 const tgtOf=rep=>{const t=(TGS[monthKey()]||{}).reps||{};return rep?(+t[rep]||0):Object.values(t).reduce((a,v)=>a+(+v||0),0)};
 // ayın ne kadarı geçti (hedef temposu için)
 const monthFrac=()=>{const mk=monthKey();if(mk!==TODAY.slice(0,7))return 1;const y=+mk.slice(0,4),m=+mk.slice(5,7);return +TODAY.slice(8,10)/new Date(y,m,0).getDate()};
-const barHtml=(v,t)=>{if(!t)return '';const p=v/t;return `<span class="bar" title="Hedefin %${Math.round(p*100)}'i"><i class="${p<monthFrac()?'behind':''}" style="width:${Math.min(100,Math.max(0,p*100)).toFixed(1)}%"></i></span>`};
+const barHtml=(v,t)=>{if(!t)return '';const p=v/t;return `<span class="bar" title="Hedefin %${Math.round(p*100)}${pctEk(Math.round(p*100))}"><i class="${p<monthFrac()?'behind':''}" style="width:${Math.min(100,Math.max(0,p*100)).toFixed(1)}%"></i></span>`};
 const code=c=>c.code||String(c.id||'').replace(/^c/,'');
 const has=(c,k)=>Object.prototype.hasOwnProperty.call(c,k);
 const inv=c=>(c.lastInvoice||c.sales2026!=null||c.invoices2026!=null)?{last:c.lastInvoice||'',no:c.lastInvoiceNo||'',sales:c.sales2026,n:c.invoices2026}:null;
@@ -163,7 +167,7 @@ function renderOrd(){
   const upd=MON.updatedAt?` · güncelleme ${fmt(MON.updatedAt)}`:'';const thr=MON.through?` · ${fmt(MON.through)} dahil`:'';
   const neg=v=>v?eur(v):'–';
   const hasT=tgtOf('')>0,tc=(v,t)=>hasT?`<td>${t?eur(t):'–'}</td><td>${t?`%${Math.round(v/t*100)}`:'–'}</td>`:'';
-  el.innerHTML=`<div class="ordp"><div class="oh"><b>Bu ay net ciro – temsilci bazında (${MONTHS_LONG[+MON.month.slice(5,7)-1]} ${MON.month.slice(0,4)})</b><small>Net ciro = satış faturası − iade − fiyat farkı${thr}${upd}${hasT?` · ayın %${Math.round(monthFrac()*100)}'i geçti`:''}</small></div>
+  el.innerHTML=`<div class="ordp"><div class="oh"><b>Bu ay net ciro – temsilci bazında (${MONTHS_LONG[+MON.month.slice(5,7)-1]} ${MON.month.slice(0,4)})</b><small>Net ciro = satış faturası − iade − fiyat farkı${thr}${upd}${hasT?` · ayın %${Math.round(monthFrac()*100)}${pctEk(Math.round(monthFrac()*100))} geçti`:''}</small></div>
   <table><thead><tr><th>Temsilci</th><th>Net ciro</th><th>Satış</th><th>İade</th><th>Fiyat farkı</th><th>Fatura</th><th>Müşteri</th><th>Pay</th>${hasT?'<th>Hedef</th><th>Gerçekleşme</th>':''}</tr></thead><tbody>
   ${rows.map(([r,o])=>`<tr${st.rep===r?' class="on"':''}><td>${r===OUT_CRM||r===NO_REP?esc(r):`<button class="lnk" data-rep="${esc(st.rep===r?'':r)}">${esc(r)}</button>`}</td><td><b>${eur(o.amt)}</b></td><td>${eur(o.sat)}</td><td>${neg(o.iade)}</td><td>${neg(o.ff)}</td><td>${o.n}</td><td>${o.cust}</td><td>${tot?(o.amt/tot*100).toFixed(1).replace('.',','):'0'}%</td>${tc(o.amt,tgtOf(r===OUT_CRM||r===NO_REP?'\u0000':r))}</tr>`).join('')}
   </tbody><tfoot><tr><td>Toplam</td><td><b>${eur(tot)}</b></td><td>${eur(sum('sat'))}</td><td>${neg(sum('iade'))}</td><td>${neg(sum('ff'))}</td><td>${sum('n')}</td><td>${sum('cust')}</td><td>100%</td>${tc(tot,tgtOf(''))}</tr></tfoot></table></div>`;
@@ -193,7 +197,7 @@ function renderDetail(){
   el.innerHTML=`<button class="back" id="back" type="button">← Listeye dön</button>
   <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${c.status?`<span class="tag">${esc(c.status)}</span>`:''}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
 </div>
-  ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}'i iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
+  ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
   ${ctaHtml(c,ct)}
   <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
   ${c.notes?`<p class="notes">${esc(c.notes)}</p>`:''}
@@ -252,15 +256,16 @@ function renderBoard(){
   const top=C.map(c=>[c,retOf(c)]).filter(([,r])=>r&&r.warn).sort((a,b)=>b[1].p-a[1].p).slice(0,10);
   const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`,TG=(TGS[mk]||{}).reps||{};
   $('#board').innerHTML=`<h3>Temsilci Karnesi</h3>
-  <div class="ordp"><div class="oh"><b>Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}'i)</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
+  <div class="ordp"><div class="oh"><b>Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}${pctEk(Math.round(YF*100))})</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
   <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 YTD</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp Riski</th></tr></thead>
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
-  <h3>En Yüksek İade Oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}'i ve üzeri</small></h3>
+  <h3>En Yüksek İade Oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}${pctEk(pct1(RET_WARN))} ve üzeri</small></h3>
   ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
 `;
 }
-/* ===== Çeyrek hedef takibi (Excel'deki temsilci hedef tablosu) =====
-   Veri: docs koleksiyonu "qtargets", belge kimliği "2026-Q4" gibi.
+/* ===== Hedef takibi (Excel'deki temsilci hedef tablosu) =====
+   Veri aylık girilir: docs koleksiyonu "qtargets", belge kimliği "2026-11" gibi.
+   Çeyrek (2026-Q4) ve yıl (2026-Y) görünümleri o ayların toplamıdır.
    { period, reps: { "Özgür Firat": { c:{atis:{p,t,a},…}, f:{tahsilat:{t,a},…} } }, updatedAt, by }
    p = 2025 sell-out, t = 2026 hedef, a = 2026 sell-out (gerçekleşen).
    Yalnızca yönetici düzenler (veritabanı kuralı da öyle); herkes görür. */
@@ -272,18 +277,22 @@ const QTEAM='Akar Benelux Toplam';
 let QTS={};
 const eurIn=n=>n==null||n===''||!isFinite(n)?'':Math.round(n).toLocaleString('nl-NL');
 const nz=v=>typeof v==='number'&&isFinite(v)?v:0;
-const qNow=()=>`${TODAY.slice(0,4)}-Q${Math.floor((+TODAY.slice(5,7)-1)/3)+1}`;
-function qRange(key){const [y,q]=key.split('-');if(q==='Y')return [y+'-01-01',y+'-12-31'];const m=(+q.slice(1)-1)*3+1;return [`${y}-${String(m).padStart(2,'0')}-01`,iso(new Date(+y,m+2,0))]}
+const qNow=()=>TODAY.slice(0,7);
+const isMonthKey=k=>/^\d{4}-\d{2}$/.test(k);
+const p2=n=>String(n).padStart(2,'0');
+function qMonths(key){if(isMonthKey(key))return [key];const [y,q]=key.split('-');const ms=q==='Y'?[1,2,3,4,5,6,7,8,9,10,11,12]:[0,1,2].map(i=>(+q.slice(1)-1)*3+1+i);return ms.map(m=>`${y}-${p2(m)}`)}
+function qRange(key){if(isMonthKey(key)){const [y,m]=key.split('-').map(Number);return [key+'-01',iso(new Date(y,m,0))]}const [y,q]=key.split('-');if(q==='Y')return [y+'-01-01',y+'-12-31'];const m=(+q.slice(1)-1)*3+1;return [`${y}-${p2(m)}-01`,iso(new Date(+y,m+2,0))]}
 // dönemin geçen kısmı (0–1): gerçekleşmenin bugün olması gereken seviyesi
-function qPace(key){const [s,e]=qRange(key);if(TODAY<s)return 0;if(TODAY>e)return 1;const d=x=>Date.parse(x)/864e5;return (d(TODAY)-d(s)+1)/(d(e)-d(s)+1)}
-const qTitle=key=>{const [y,q]=key.split('-');return q==='Y'?`${y} Yılı (Q1–Q4 toplamı)`:`${q} ${y} · ${QMON[+q.slice(1)-1]}`};
+// rakamların tarihi: dönemdeki girilmiş ayların en yenisi (girilmemişse bugün)
+function qAsOf(key){const d=qMonths(key).map(m=>(QTS[m]||{}).asOf).filter(Boolean).sort();return d.length?d[d.length-1]:''}
+// dönemin geçen kısmı (0–1): rakamların tarihinde gerçekleşmenin olması gereken seviye
+function qPace(key){const [s,e]=qRange(key),ref=qAsOf(key)||TODAY;if(ref<s)return 0;if(ref>e)return 1;const d=x=>Date.parse(x)/864e5;return (d(ref)-d(s)+1)/(d(e)-d(s)+1)}
+const qTitle=key=>{if(isMonthKey(key))return `${MONTHS_LONG[+key.slice(5,7)-1]} ${key.slice(0,4)}`;const [y,q]=key.split('-');return q==='Y'?`${y} Yılı (ayların toplamı)`:`${q} ${y} · ${QMON[+q.slice(1)-1]} (ayların toplamı)`};
 function qAdd(out,e){
   for(const [k] of QCATS){const s=((e||{}).c||{})[k];if(!s)continue;const o=out.c[k]||(out.c[k]={p:0,t:0,a:0});o.p+=nz(s.p);o.t+=nz(s.t);o.a+=nz(s.a)}
   for(const [k] of QFIN){const s=((e||{}).f||{})[k];if(!s)continue;const o=out.f[k]||(out.f[k]={t:0});o.t+=nz(s.t);if(s.a!=null)o.a=nz(o.a)+nz(s.a)}
   return out}
-function qEntry(key,rep){const [y,q]=key.split('-');
-  if(q!=='Y')return qAdd({c:{},f:{}},((QTS[key]||{}).reps||{})[rep]);
-  const out={c:{},f:{}};for(const n of QNAMES)qAdd(out,((QTS[`${y}-${n}`]||{}).reps||{})[rep]);return out}
+function qEntry(key,rep){const out={c:{},f:{}};for(const m of qMonths(key))qAdd(out,((QTS[m]||{}).reps||{})[rep]);return out}
 const qTeam=key=>{const out={c:{},f:{}};for(const r of allReps())qAdd(out,qEntry(key,r));return out};
 const qCat=(e,k)=>{const s=(e.c||{})[k]||{};return {p:nz(s.p),t:nz(s.t),a:nz(s.a)}};
 const qTot=e=>QCATS.reduce((o,[k])=>{const s=qCat(e,k);o.p+=s.p;o.t+=s.t;o.a+=s.a;return o},{p:0,t:0,a:0});
@@ -310,7 +319,7 @@ function qCard(name,e,pace,team){
     ${qBar(pct,pace)}
     <p class="qline"><b>${eur(T.a)}</b> <span class="sm">/ ${eur(T.t)} hedef</span></p>
     ${T.t?`<p class="qleft">${left>0?`Hedefe kalan: <b>${eur(left)}</b>`:`<span class="q-good">Hedef aşıldı: +${eur(-left)}</span>`}</p>`:''}
-    <p class="sm">2025 aynı çeyrek: ${qMoney(T.p)} · 26 vs 25: <span class="${qGrowCls(g)}">${qGrowTxt(g)}</span></p>
+    <p class="sm">2025 aynı dönem: ${qMoney(T.p)} · 26 vs 25: <span class="${qGrowCls(g)}">${qGrowTxt(g)}</span></p>
     ${tahTxt?`<p class="sm">${tahTxt}</p>`:''}</div>
     <ul class="qcats" aria-label="Kategoriler">${QCATS.map(([k,l])=>{const s=qCat(e,k),p=qPct(s.a,s.t);return `<li data-qc="${k}" title="${esc(l)}: ${eur(s.a)} / ${eur(s.t)} hedef"><span>${l}</span>${qBar(p,pace)}<b class="${qCls(p,pace)}">${qPctTxt(p)}</b></li>`}).join('')}</ul>
   </article>`}
@@ -335,7 +344,9 @@ function qEditHtml(key){
     <div class="ordp"><table class="qt qe"><thead><tr><th>Kalem</th><th class="hT">Hedef</th><th class="h26">Gerçekleşen</th></tr></thead>
       <tbody>${QFIN.map(([k,l])=>{const s=((e.f||{})[k])||{};return `<tr><td>${l}</td>${cell(`${r}|f|${k}|t`,s.t)}${cell(`${r}|f|${k}|a`,s.a)}</tr>`}).join('')}</tbody></table></div>
     </div></section>`};
+  const [ms,me]=qRange(key),cur=(QTS[key]||{}).asOf||(TODAY<ms?ms:TODAY>me?me:TODAY);
   return `<form id="qform" autocomplete="off" data-key="${esc(key)}">
+    <label class="qasof">Rakamların tarihi <input type="date" name="asOf" value="${cur}" min="${ms}" max="${me}" required><span class="sm">Sell-out ve tahsilat rakamları hangi güne kadar? Tempo (kırmızı/yeşil) bu tarihe göre hesaplanır.</span></label>
     <p class="qhelp">Tutarları € olarak girin (örn. 154.917; eksi değer olabilir: -625). <b>Excel'den yapıştırma:</b> Excel'de bir temsilcinin kategori satırlarını (isterseniz Kategori sütunuyla birlikte) kopyalayın, buradaki ilk kutuya yapıştırın; değerler sağa ve aşağı doğru dolar.</p>
     ${allReps().map(block).join('')}
     <div class="qsave"><span class="sm">${qTitle(key)}</span><button type="button" class="ghost" id="qCancel">Vazgeç</button><button class="primary" type="submit">Kaydet</button></div></form>`}
@@ -343,7 +354,8 @@ function qformTotals(f){
   const v=e=>{const n=num(e.value);return n==null?0:n};const S={};
   for(const e of f.querySelectorAll('input[name*="|c|"]')){const [r,,k,x]=e.name.split('|');const o=S[r]||(S[r]={p:0,t:0,a:0,c:{}});const c=o.c[k]||(o.c[k]={p:0,t:0,a:0});c[x]=v(e);o[x]+=v(e)}
   for(const td of f.querySelectorAll('[data-qs]')){const [r,x]=td.dataset.qs.split('|');const n=(S[r]||{})[x]||0;td.textContent=n?eur(n):'–'}
-  const pace=qPace(f.dataset.key);
+  const k=f.dataset.key,[ms,me]=qRange(k),ao=(f.elements.asOf&&f.elements.asOf.value)||TODAY,d=x=>Date.parse(x)/864e5;
+  const pace=ao<ms?0:ao>me?1:(d(ao)-d(ms)+1)/(d(me)-d(ms)+1);
   for(const td of f.querySelectorAll('[data-qr]')){const [r,k]=td.dataset.qr.split('|');const o=S[r]||{p:0,t:0,a:0,c:{}};const s=k==='_'?o:(o.c[k]||{t:0,a:0});const p=qPct(s.a,s.t);td.textContent=qPctTxt(p);td.className=qCls(p,pace)}
 }
 function qPaste(e){
@@ -370,25 +382,30 @@ function qPaste(e){
 function renderTargets(){
   if(st.view!=='targets')return;
   if(!st.qp)st.qp=qNow();
-  const key=st.qp,[y,q]=key.split('-'),pace=qPace(key),adm=window.CRM_IS_ADMIN===true&&canWrite;
-  if(q==='Y'||!adm)st.qedit=false;
+  const key=st.qp,y=key.slice(0,4),isM=isMonthKey(key),pace=qPace(key),adm=window.CRM_IS_ADMIN===true&&canWrite;
+  if(!isM||!adm)st.qedit=false;
   const years=[...new Set([TODAY.slice(0,4),...Object.keys(QTS).map(k=>k.slice(0,4))])].sort();
   const chip=(k,l)=>`<button type="button" class="chip${key===k?' on':''}" data-qp="${k}" aria-pressed="${key===k}">${l}</button>`;
-  const info=pace===0?'Bu dönem henüz başlamadı.':pace===1?'Dönem tamamlandı.':`Bugün ${fmt(TODAY)}: dönemin <b>%${Math.round(pace*100)}</b>'i geçti. Gerçekleşme bu oranın altındaysa kırmızı görünür.`;
+  const filled=qMonths(key).filter(m=>Object.values((QTS[m]||{}).reps||{}).some(e=>qHas(qAdd({c:{},f:{}},e))));
+  const asOf=qAsOf(key);
+  let info=pace===0?'Bu dönem henüz başlamadı.':pace===1?'Dönem tamamlandı.':asOf?`Rakamlar <b>${fmt(asOf)}</b> itibarıyla: o tarihte dönemin <b>%${Math.round(pace*100)}${pctEk(Math.round(pace*100))}</b> geçmişti. Gerçekleşme bu oranın altındaysa kırmızı görünür.`:`Bugün ${fmt(TODAY)}: dönemin <b>%${Math.round(pace*100)}${pctEk(Math.round(pace*100))}</b> geçti. Gerçekleşme bu oranın altındaysa kırmızı görünür.`;
+  if(!isM)info+=` <br>Verisi girilen aylar: <b>${filled.length?filled.map(m=>MONTHS_LONG[+m.slice(5,7)-1]).join(', '):'yok'}</b>.`;
   const view=st.qv==='tablo'?'tablo':'ozet';
   const reps=allReps().filter(r=>!st.rep||r===st.rep);
   const team=qTeam(key),any=qHas(team);
   let body;
   if(st.qedit)body=qEditHtml(key);
-  else if(!any)body=`<div class="qempty"><p><b>${esc(qTitle(key))}</b> için hedef girilmemiş.</p>${adm&&q!=='Y'?'<p>“Düzenle” ile girebilir ya da Excel\'den kopyalayıp yapıştırabilirsiniz.</p>':''}</div>`;
+  else if(!any)body=`<div class="qempty"><p><b>${esc(qTitle(key))}</b> için hedef girilmemiş.</p>${adm?`<p>${isM?'“Düzenle” ile girebilir ya da Excel\'den kopyalayıp yapıştırabilirsiniz.':'Rakamlar aylık girilir: yukarıdan bir ay seçip “Düzenle”ye basın.'}</p>`:''}</div>`;
   else if(view==='tablo')body=(st.rep?'':qTable(QTEAM,team,pace,1))+reps.map(r=>qTable(r,qEntry(key,r),pace)).join('');
   else body=`<div class="qgrid">${st.rep?'':qCard(QTEAM,team,pace,1)}${reps.map(r=>qCard(r,qEntry(key,r),pace)).join('')}</div>`;
+  const months=Array.from({length:12},(_,i)=>`${y}-${p2(i+1)}`);
   $('#targets').innerHTML=`<div class="qhead"><div><h3>Hedef Takibi <small class="sm">${esc(qTitle(key))}${adm?'':' · yalnızca görüntüleme'}</small></h3><p class="sm qinfo">${info}</p></div>
     <div class="qctl">${years.length>1?`<select id="qYear" aria-label="Yıl">${years.map(v=>`<option${v===y?' selected':''}>${v}</option>`).join('')}</select>`:''}
-      <div class="chips" role="group" aria-label="Dönem">${QNAMES.map(n=>chip(`${y}-${n}`,n)).join('')}${chip(`${y}-Y`,`${y} Yıl`)}</div>
+      <select id="qMonth" class="qmsel${isM?' on':''}" aria-label="Ay">${isM?'':'<option value="" selected>Ay seçin</option>'}${months.map(m=>`<option value="${m}"${m===key?' selected':''}>${MONTHS_LONG[+m.slice(5,7)-1]}${QTS[m]?' ●':''}</option>`).join('')}</select>
+      <div class="chips" role="group" aria-label="Çeyrek ve yıl">${QNAMES.map(n=>chip(`${y}-${n}`,n)).join('')}${chip(`${y}-Y`,`${y} Yıl`)}</div>
       ${st.qedit?'':`<div class="seg2" role="group" aria-label="Görünüm"><button type="button" data-qv="ozet" aria-pressed="${view==='ozet'}">Özet</button><button type="button" data-qv="tablo" aria-pressed="${view==='tablo'}">Tablo</button></div>`}
-      ${adm&&q!=='Y'&&!st.qedit?'<button type="button" class="ghost" id="qEdit">Düzenle</button>':''}</div></div>
-    ${st.qedit?'':`<p class="qleg"><span><i class="lg-ok"></i>Tempoda veya hedefte</span><span><i class="lg-bad"></i>Tempo altında</span><span><i class="lg-pm"></i>Bugün olması gereken seviye</span><span>26 vs 25: 2025 aynı çeyreğe göre büyüme${pace>0&&pace<1?' (çeyrek bitmeden düşük görünür)':''}</span></p>`}
+      ${adm&&isM&&!st.qedit?'<button type="button" class="ghost" id="qEdit">Düzenle</button>':''}</div></div>
+    ${st.qedit?'':`<p class="qleg"><span><i class="lg-ok"></i>Tempoda veya hedefte</span><span><i class="lg-bad"></i>Tempo altında</span><span><i class="lg-pm"></i>Olması gereken seviye (rakamların tarihine göre)</span><span>26 vs 25: 2025 aynı döneme göre büyüme${pace>0&&pace<1?' (dönem bitmeden düşük görünür)':''}</span></p>`}
     ${body}`;
   if(st.qedit){const f=$('#qform');if(f)qformTotals(f)}
 }
@@ -672,8 +689,10 @@ document.addEventListener('click',async e=>{
 });
 document.addEventListener('change',async e=>{
   const t=e.target;
+  if(t.name==='asOf'&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('form'));return}
   if(t.closest('#qform')&&t.name&&t.name.includes('|')){const n=num(t.value);if(n!=null&&!(t.name.endsWith('|t')&&n<0)){t.value=eurIn(n);t.removeAttribute('aria-invalid')}else if(String(t.value).trim())t.setAttribute('aria-invalid','true');qformTotals(t.closest('form'));return}
-  if(t.id==='qYear'){st.qp=t.value+'-'+(st.qp||qNow()).split('-')[1];st.qedit=false;st.qdirty=false;render();return}
+  if(t.id==='qYear'||t.id==='qMonth'){if(st.qedit&&st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?')){render();return}
+    st.qp=t.id==='qMonth'?t.value:t.value+(st.qp||qNow()).slice(4);st.qedit=false;st.qdirty=false;render();return}
   if(t.dataset.done){const ok=await w(()=>db.collection('activities').doc(t.dataset.done).update({done:t.checked,doneAt:t.checked?TODAY:''}));if(ok&&t.checked)toast('Takip tamamlandı');if(!ok)t.checked=!t.checked;return}
   if(t.name==='ch'&&t.closest('#aform')){st.type=t.value;return}
   if(t.name==='out'&&t.closest('#aform')){syncOutcome(t.closest('form'),true);return}
@@ -726,7 +745,9 @@ document.addEventListener('submit',async e=>{
       if(n==null||(x==='t'&&n<0)){bad++;e.setAttribute('aria-invalid','true');continue}
       const R=reps[r]||(reps[r]={c:{},f:{}});(R[g][k]=R[g][k]||{})[x]=Math.round(n)}
     if(bad){toast(`${bad} kutu hatalı: € tutarı girin (hedef eksi olamaz).`,1);const b=f.querySelector('[aria-invalid=true]');if(b)b.focus();return}
-    if(await w(()=>db.doc('qtargets/'+key).set({period:key,reps,updatedAt:Date.now(),by:window.CRM_USER||''}))){st.qedit=false;st.qdirty=false;toast('Hedefler kaydedildi');render()}
+    const asOf=String((f.elements.asOf||{}).value||'');const [ms,me]=qRange(key);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(asOf)||asOf<ms||asOf>me){toast('Rakamların tarihi seçilen ayın içinde olmalı.',1);f.elements.asOf.focus();return}
+    if(await w(()=>db.doc('qtargets/'+key).set({period:key,asOf,reps,updatedAt:Date.now(),by:window.CRM_USER||''}))){st.qedit=false;st.qdirty=false;toast('Hedefler kaydedildi');render()}
     return}
 });
 
