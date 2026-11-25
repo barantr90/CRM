@@ -67,6 +67,9 @@ Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
 - Kullanıcıdan gelen her metin `esc()` ile basılır.
 - `render()` açık formları korur. Yeni bir form eklendiğinde koruma listesine de eklenir.
 - Her değişiklik 390 px telefon genişliğinde ve gece modunda da çalışmalı. Sayfa yatay taşmamalı.
+- Telefonda (≤ 600 px) yazılar, masaüstü ve telefon kurallarının verdiği boyuttan **2 px küçük** gösterilir.
+  - Bunu `style.css` sonundaki "TELEFON PUNTOSU" bloğu sağlar; blok elle düzenlenmez.
+  - Yeni bir `font-size` eklenince blok `node tests/punto.js` ile yeniden üretilir. Test, blok güncel değilse başarısız olur.
 
 ## Test
 
