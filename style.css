@@ -235,3 +235,17 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 /* liste ve kart birbirinden bağımsız kayar: kart kendi içinde kayar, sonuna gelince sayfayı (listeyi) sürüklemez */
 @media(min-width:901px){.detail{max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}}
 @media(max-width:900px){.detail{overscroll-behavior:contain}body:has(.detail.open){overflow:hidden}}
+
+/* Yönetici: kurallar ve ayarlar */
+.rform{margin:0;padding:4px 16px 0}
+.rrow{display:grid;grid-template-columns:minmax(0,1fr) 240px;gap:8px 24px;padding:14px 0;border-top:1px solid var(--line)}.rrow:first-child{border-top:0}
+.rrow label{display:flex;flex-direction:column;gap:3px}.rrow label b{font-size:15px}.rrow label small{color:var(--mut);font-size:13px;line-height:1.45}
+.rin{display:flex;flex-direction:column;gap:3px}
+.rbox{display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;background:var(--bg);overflow:hidden}.rbox:focus-within{border-color:var(--acc)}
+.rbox input{flex:1;min-width:0;border:0;background:none;padding:9px 12px;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums;outline:0}
+.rbox em{font-style:normal;color:var(--mut);padding:0 12px;font-size:14px}
+.rbox.bad{border-color:var(--bad);background:var(--badSoft)}
+.rdef{color:var(--mut);font-size:12px}.rdef b{color:var(--accInk)}.rimp{font-size:12.5px;font-weight:600;color:var(--ink)}
+.rform .qsave{margin:0 -16px;padding:12px 16px;border-radius:0 0 12px 12px;background:var(--card)}
+@media(max-width:700px){.rrow{grid-template-columns:minmax(0,1fr)}}
+.rrow label small b{font-size:inherit}

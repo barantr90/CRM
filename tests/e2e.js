@@ -161,7 +161,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
      const add=(code,o)=>{S.customers['c'+code]={...b,code,phone:'',contact:'',address:'',rep:'Özgür Firat',...o}};
      add('801',{name:'Sahan Gouda B.V.',chain:'Sahan',city:'Gouda',ciro2025:20000,sales2026:Math.round(20000*Y*0.5),status:'Aktif'});
      add('802',{name:'Sahan Supermarkt Schiedam B.V.',chain:'Sahan',city:'Schiedam',ciro2025:70000,sales2026:Math.round(70000*Y),status:'Aktif'});
-     add('803',{name:'Sahan DC B.V.',chain:'Sahan',city:'Capelle aan den IJssel',ciro2025:10000,sales2026:500,status:'Pasif'});
+     add('803',{name:'Sahan DC B.V.',chain:'Sahan',city:'Capelle aan den IJssel',ciro2025:10000,sales2026:500,status:'Pasif',lastInvoice:window.__FIX.day(-200)});
      add('804',{name:'Yildiz Food B.V.',chain:'Yildiz Food',city:'Rotterdam',ciro2025:50000,sales2026:Math.round(50000*Y),status:'Aktif'});
      S.sync.month.map['801']=[1000,1,-100,0];S.sync.month.map['802']=[5000,2,0,0];
      S.sync.returns.map['801']=[10000,-500,1,0,0,5];S.sync.returns.map['802']=[30000,-300,1,0,0,9]})();`;
@@ -264,7 +264,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    const names=await rows(page);ok(JSON.stringify(names)===JSON.stringify([...names].sort((a,b)=>a.localeCompare(b,'tr'))),'liste ada göre sıralı kalıyor');
    ok(await txt(page,'#tabV')==='Vadesi Geçen (1)','sekme: Vadesi Geçen (1)');
    const tabs=await page.$$eval('.tabs .tab:not([hidden])',b=>b.map(x=>x.textContent.replace(/ \(.*/,'')));
-   ok(JSON.stringify(tabs)==='["Müşteriler","Hedefler","Karne","Vadesi Geçen"]','sekme sırası: '+tabs.join(' · '));
+   ok(JSON.stringify(tabs)==='["Müşteriler","Hedefler","Karne","Vadesi Geçen","Yönetici"]','sekme sırası: '+tabs.join(' · '));
    await page.click('#tabV');
    const r=await page.$$eval('#odT tbody tr',tr=>tr.map(t=>[...t.cells].map(c=>c.textContent.replace(/ /g,' '))));
    ok(r.length===1&&r[0][1]==='Düşüş Market'&&r[0][3]==='€ 1.201'&&r[0][5]==='40 gün','tabloda yalnız vadesi geçen: '+JSON.stringify(r));
@@ -347,7 +347,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   {const ctx2=await browser.newContext({viewport:{width:1400,height:1000}});const p=await ctx2.newPage();
    p.on('pageerror',e=>errors.push(e.message));await p.route(offline,r=>r.abort());
    // 32 ek müşteri: iade oranı %9,9'dan %6,8'e iner; 6, 12, 18, 24, 30. sıradakiler pasif
-   const EXTRA=`(()=>{const S=window.__SEED;for(let i=1;i<=32;i++){const code=String(900+i);S.customers['c'+code]={...S.customers.c3,code,name:'İade '+String(i).padStart(2,'0'),status:i%6===0?'Pasif':'Aktif',rep:'Mehmet Halici'};S.sync.returns.map[code]=[10000,-(1000-i*10),1,0,0,5]}})();`;
+   const EXTRA=`(()=>{const S=window.__SEED;for(let i=1;i<=32;i++){const code=String(900+i);S.customers['c'+code]={...S.customers.c3,code,name:'İade '+String(i).padStart(2,'0'),status:i%6===0?'Pasif':'Aktif',...(i%6===0?{lastInvoice:window.__FIX.day(-200)}:{}),rep:'Mehmet Halici'};S.sync.returns.map[code]=[10000,-(1000-i*10),1,0,0,5]}})();`;
    await p.addInitScript(`${FIX};${EXTRA};window.CRM_IS_ADMIN=true;window.CRM_AUTH={email:'baran.sengul@akar-group.com'};${MOCK}`);
    await p.goto(BASE+'/index.html');await p.waitForSelector('#list .row');await p.click('#tabB');
    const names=()=>p.$$eval('#retT tbody tr:not(.sep)',rs=>rs.map(r=>r.cells[1].textContent));
@@ -489,6 +489,48 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(r[1]==='€ 1.200'&&r[2]==='€ 1.350'&&r[3]==='€ -100'&&r[4]==='€ -50','Lütfi net ciro € 1.200 = satış 1.350 − iade 100 − fiyat farkı 50 → '+r.slice(1,5).join(' | '))}
   ok(/Bu ay net ciro/.test(await txt(page,'#ordBtn')),'özet kutusu: Bu ay net ciro');
   await page.screenshot({path:path.join(SHOTS,'7-hedef.png')});
+  await ctx.close();
+
+  step('9. Yönetici: kurallar ve ayarlar');
+  ({ctx,page}=await open(browser));
+  {ok(await page.isVisible('#tabA'),'yönetici "Yönetici" sekmesini görüyor');
+   await page.click('#tabA');
+   const vals=await page.$$eval('#rform input',i=>i.map(x=>[x.name,x.value]));
+   ok(JSON.stringify(vals)==='[["pasif","120"],["temas","30"],["arag","30"],["iade","2.5"],["riskPace","70"],["riskSilent","45"]]','6 kural, varsayılan değerlerle: '+JSON.stringify(vals));
+   ok(/Henüz değiştirilmedi/.test(await txt(page,'#admin')),'henüz değiştirilmedi notu');
+   ok(/müşteri otomatik pasif olur/.test(await txt(page,'[data-rimp=pasif]')),'pasif gün etkisi: '+await txt(page,'[data-rimp=pasif]'));
+   const before=await txt(page,'[data-rimp=pasif]');
+   await page.fill('#r_pasif','60');
+   ok(await txt(page,'[data-rimp=pasif]')!==before&&/Kaydedilmemiş/.test(await txt(page,'#rmsg')),'değer yazınca etki anında güncelleniyor: '+await txt(page,'[data-rimp=pasif]'));
+   await page.fill('#r_temas','0');
+   ok(await page.$eval('#r_temas',e=>e.closest('.rbox').classList.contains('bad'))&&/arası bir değer/.test(await txt(page,'[data-rimp=temas]')),'geçersiz değer işaretleniyor');
+   await page.click('#rform button[type=submit]');await page.waitForTimeout(100);
+   ok(!(await doc(page,'settings/rules'))&&/Hatalı/.test(await txt(page,'#toast')),'geçersiz değerle kaydedilmiyor');
+   await page.fill('#r_temas','5');await page.fill('#r_arag','50');
+   await page.fill('#r_iade','3.5');ok(/eşiğin üzerinde/.test(await txt(page,'[data-rimp=iade]'))&&!(await page.$eval('#r_iade',e=>e.closest('.rbox').classList.contains('bad'))),'ondalık değer kabul ediliyor');await page.fill('#r_iade','2.5');
+   // başka bir veri değişikliği sayfayı yeniden çizse de yazılanlar kaybolmuyor
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('contacts').doc('c9').set({phone:'1'})));await page.waitForTimeout(150);
+   ok(await page.inputValue('#r_pasif')==='60'&&await page.inputValue('#r_temas')==='5','yeniden çizimde yazılanlar korunuyor');
+   await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
+   const d=await doc(page,'settings/rules');
+   ok(d&&d.pasif===60&&d.temas===5&&d.arag===50&&d.iade===2.5&&d.by==='baran.sengul@akar-group.com','ayarlar settings/rules kaydına yazıldı');
+   ok(/Ayarlar kaydedildi: Pasif gün sınırı, Temas günü, ARAG süreç günü$/.test(await txt(page,'#toast')),'bildirim yalnız değişenleri sayıyor (iade eşiği 2.5 değişmedi): '+await txt(page,'#toast'));
+   ok(/Son güncelleme: .* · Baran Sengül/.test(await txt(page,'#admin'))&&(await page.$$eval('.rdef b',b=>b.length))===3,'son güncelleme ve "değiştirildi" işaretleri');
+   await page.click('.tab[data-view=list]');
+   ok(await page.$eval('#list .row[data-id="c2"] b',e=>e.classList.contains('pas')),'pasif sınırı 60: 70 gündür faturasız Sessiz Market artık Pasif');
+   ok(/^5\+ gündür temas yok/.test(await txt(page,'[data-quick=cold] span'))&&await txt(page,'#tLeg')==='5','temas günü 5: kutu ve açıklama güncellendi');
+   await sel(page,'Düşüş Market');ok(!(await page.$('#aragOn')),'ARAG günü 50: 40 günlük gecikmede buton yok');
+   // temsilci de aynı kuralları görür
+   const {ctx:c2,page:p2}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'});
+   await p2.evaluate(()=>window.claude.use('db').then(db=>db.doc('settings/rules').set({pasif:60,temas:5})));await p2.waitForTimeout(150);
+   ok(await p2.isHidden('#tabA'),'temsilci Yönetici sekmesini görmüyor');
+   ok(/^5\+ gündür/.test(await txt(p2,'[data-quick=cold] span')),'kural temsilci ekranında da geçerli');
+   await c2.close();
+   await page.click('#tabA');await page.click('#rdef');
+   ok(await page.inputValue('#r_pasif')==='120'&&/Kaydet/.test(await txt(page,'#rmsg')),'Varsayılanlara dön değerleri geri yazıyor (kaydetmeden)');
+   await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
+   const d2=await doc(page,'settings/rules');ok(d2&&d2.pasif===120&&d2.temas===30&&d2.arag===30,'varsayılanlar kaydedildi');
+   await page.screenshot({path:path.join(SHOTS,'9-yonetici.png'),fullPage:true});}
   await ctx.close();
 
   step('0c. Raci Öner');
