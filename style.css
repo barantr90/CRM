@@ -269,3 +269,5 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .uadd{display:flex;flex-wrap:wrap;gap:10px;align-items:end;margin:14px 0 6px}.uadd label{display:grid;gap:4px;font-size:13px;color:var(--mut)}.uadd input,.uadd select{min-height:40px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink);padding:0 10px;font-size:15px}.uadd input{min-width:min(300px,80vw)}
 .umd .urole{color:var(--accInk)!important;font-weight:600;margin-top:2px}.umd button.on{background:var(--card);font-weight:600}
 @media(max-width:600px){#pT th,#pT td{padding-left:4px;padding-right:4px;font-size:13px}#uT td:nth-child(3),#uT th:nth-child(3){display:none}}
+
+.home{margin:4px 0 6px;min-height:40px}

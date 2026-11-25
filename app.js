@@ -71,7 +71,7 @@ const PERMS=[
   ['v_board','Karne sekmesini görür','','Görüntüleme'],
   ['v_overdue','Açık faturaları ve Vadesi Geçen sekmesini görür','Müşteri kartındaki açık faturalar ve vadesi geçen kutusu dahil.','Görüntüleme'],
   ['v_credit','Kredi Limiti sekmesini görür','Tanımlı limit, açık bakiye ve önerilen limit.','Görüntüleme'],
-  ['v_all','Tüm temsilcilerin müşterilerini görür','Kapalıysa kullanıcı yalnız kendi adına kayıtlı müşterileri görür (e-postası temsilci adıyla eşleşmeli).','Görüntüleme'],
+  ['v_all','Tüm temsilcilerin müşterilerini görür','Kapalıysa kullanıcı yalnız kendi adına kayıtlı müşterileri görür (e-postası temsilci adıyla eşleşmeli). Hedefler sekmesi bundan etkilenmez: tüm ekip görünür.','Görüntüleme'],
   ['e_notes','Telefon ve yetkili kişi bilgisini düzenler','','Düzenleme'],
   ['e_status','Müşteri durumunu (Aktif / Pasif) elle değiştirir','','Düzenleme'],
   ['e_targets','Hedefleri girer ve değiştirir','','Düzenleme'],
@@ -80,7 +80,7 @@ const PERMS=[
   ['x_import',"Excel'den müşteri içe aktarır",'Müşteri bilgilerinin üzerine yazar; Excel\'de olmayan müşterileri silebilir.','Veri aktarımı'],
   ['x_openinv','Açık faturaları içe aktarır','','Veri aktarımı'],
   ['e_rules','Yönetici ayarlarını (kurallar) görür ve değiştirir','Pasif gün sınırı, temas günü, ARAG günü, kredi limiti ayarları vb.','Yönetim']];
-const PDEF={satis:{v_targets:true,v_overdue:true,v_all:true,e_notes:true},muhasebe:{v_overdue:true,v_credit:true,v_all:true,e_notes:true,e_arag:true,x_export:true,x_openinv:true}};
+const PDEF={satis:{v_targets:true,v_overdue:true,e_notes:true},muhasebe:{v_overdue:true,v_credit:true,v_all:true,e_notes:true,e_arag:true,x_export:true,x_openinv:true}};
 let PM={},PMETA={},UL=null;
 const roleKnown=()=>!!window.CRM_ROLE||typeof window.CRM_IS_ADMIN==='boolean';
 const myRole=()=>{const r=window.CRM_ROLE;if(r&&ROLES.some(x=>x[0]===r))return r;return window.CRM_IS_ADMIN===true?'admin':'satis'};
@@ -94,7 +94,7 @@ const repLock=()=>can('v_all')?null:(ownRep()||'—');
 const viewOk=v=>v==='board'?can('v_board'):v==='admin'?can('e_rules'):v==='perms'?isAdmin():v==='targets'?can('v_targets'):v==='overdue'?can('v_overdue'):v==='credit'?can('v_credit'):true;
 
 let db=null,canWrite=true,loaded=false;
-let C=[],A=[],D={last:{},open:{}},RET=null,OI=null,AR={},MON=null,K={},RK={};
+let CALL=[],C=[],A=[],D={last:{},open:{}},RET=null,OI=null,AR={},MON=null,K={},RK={};
 /* iletişim bilgisi: temsilcinin girdiği (contacts) ile Excel'den geleni birleştirir; ikisi de doluysa yenisi geçerli */
 const pick=(a,ta,b,tb)=>a&&b?(ta>=tb?a:b):(a||b||'');
 const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.updatedAt||0;return {phone:pick(k.phone,tk,c.phone,tc),contact:pick(k.contact,tk,c.contact,tc)}};
@@ -170,7 +170,7 @@ function renderAdmin(){
   if(st.view!=='admin')return;
   const ed=can('e_rules')&&canWrite,m=RMETA||{};
   const upd=m.updatedAt?`Son güncelleme: ${fmt(iso(new Date(m.updatedAt)))}${m.by?' · '+esc(personOf(m.by).name||m.by):''}`:'Henüz değiştirilmedi: tüm değerler varsayılan.';
-  $('#admin').innerHTML=`<div class="rethead"><h3>Kurallar ve Ayarlar <small class="sm">tüm kullanıcılar için geçerli</small></h3><span class="sm">${upd}</span></div>
+  $('#admin').innerHTML=`<button type="button" class="ghost home" data-view="list" id="homeA">← Ana sayfaya dön</button><div class="rethead"><h3>Kurallar ve Ayarlar <small class="sm">tüm kullanıcılar için geçerli</small></h3><span class="sm">${upd}</span></div>
   <form class="ordp rform" id="rform" autocomplete="off" novalidate>
   ${RULES.map(([k,l,u,mn,mx,stp,d,g],i)=>`${g!==(RULES[i-1]||[])[7]?`<h4 class="rgrp">${g}</h4>`:''}<div class="rrow"><label for="r_${k}"><b>${l}</b><small>${d}</small></label>
    <div class="rin"><span class="rbox"><input id="r_${k}" name="${k}" type="number" inputmode="decimal" min="${mn}" max="${mx}" step="${stp}" value="${R[k]}" ${ed?'':'disabled'}><em>${u}</em></span>
@@ -198,7 +198,7 @@ function renderPerms(){
    `<div class="ordp"><table id="uT"><thead><tr><th>Kullanıcı</th><th>Rol</th><th>Gördüğü müşteriler</th><th></th></tr></thead><tbody>${UL.slice().sort((a,b)=>ROLES.findIndex(x=>x[0]===(a.role||'satis'))-ROLES.findIndex(x=>x[0]===(b.role||'satis'))||personOf(a.email).name.localeCompare(personOf(b.email).name,'tr')).map(urow).join('')}</tbody></table>
    ${ed?`<form class="uadd" id="uform" autocomplete="off"><label>Yeni kullanıcı e-postası<input name="email" type="email" required placeholder="ad.soyad@akar-bv.nl"></label><label>Rol<select name="role">${ROLES.map(([k,l])=>`<option value="${k}"${k==='satis'?' selected':''}>${l}</option>`).join('')}</select></label><button class="primary" type="submit">Ekle</button></form>
    <p class="sm">Eklenen kişi giriş ekranında e-postasını yazıp “e-postama giriş bağlantısı gönder” ile ilk girişini yapar; sonra kendine şifre belirleyebilir. Kaldırılan kişi CRM'e giremez.</p>`:''}</div>`;
-  $('#perms').innerHTML=`<div class="rethead"><h3>Kullanıcı İzinleri <small class="sm">rol başına</small></h3><span class="sm">${upd}</span></div>
+  $('#perms').innerHTML=`<button type="button" class="ghost home" data-view="list" id="homeP">← Ana sayfaya dön</button><div class="rethead"><h3>Kullanıcı İzinleri <small class="sm">rol başına</small></h3><span class="sm">${upd}</span></div>
   <form class="ordp" id="pform" autocomplete="off"><table id="pT"><thead><tr><th>İzin</th>${ROLES.map(([r,l])=>`<th>${l}${cnt(r)!=null?` <small>(${cnt(r)})</small>`:''}</th>`).join('')}</tr></thead>
   <tbody>${PERMS.map(([k,l,d,g],i)=>`${g!==(PERMS[i-1]||[])[3]?`<tr class="pg"><th colspan="${ROLES.length+1}">${g}</th></tr>`:''}<tr data-perm="${k}"><td><b>${l}</b>${d?`<small class="cru">${d}</small>`:''}</td>${ROLES.map(([r])=>`<td>${cb(r,k)}</td>`).join('')}</tr>`).join('')}
   <tr><td><b>Kullanıcı izinleri ve kullanıcılar</b><small class="cru">Bu sayfa; yalnız Yönetici.</small></td>${ROLES.map(([r])=>`<td><input type="checkbox" disabled${r==='admin'?' checked':''} aria-label="${roleName(r)}"></td>`).join('')}</tr></tbody></table>
@@ -306,7 +306,7 @@ const SEGCOL=[['sPla',['platin','platinum']],['sGol',['gold','altın','altin']],
 const segCls=v=>{if(v==='A')return ' sA';if(v==='B')return ' sB';const n=String(v||'').trim().toLocaleLowerCase('tr');if(!n)return '';
   for(const [cl,keys] of SEGCOL)if(keys.some(k=>n===k||n.startsWith(k+' ')))return ' '+cl;return ''};
 const allSegs=()=>[...new Set(C.map(c=>c.segment).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'tr'));
-const allReps=()=>{const have=new Set([...C.map(c=>c.rep).filter(Boolean),...Object.values(QTS).flatMap(q=>Object.keys((q&&q.reps)||{}))]);
+const allReps=()=>{const have=new Set([...CALL.map(c=>c.rep).filter(Boolean),...Object.values(QTS).flatMap(q=>Object.keys((q&&q.reps)||{}))]);
   return [...REPS.filter(r=>have.has(r)),...[...have].filter(r=>!REPS.includes(r)).sort((a,b)=>a.localeCompare(b,'tr'))]};
 
 /* Elle durum: 'statusov' koleksiyonunda müşteri başına {status}. Öncelik: sitede elle > Excel 'Durum (elle)' > otomatik. */
@@ -376,7 +376,7 @@ function renderStats(){
 const MONTHS_LONG=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
 const OUT_CRM="CRM'de olmayan",NO_REP='Temsilci yok';
 function monRows(){
-  if(!MON||!MON.map)return null;const byCode=new Map(C.map(c=>[code(c),c]));const reps={};
+  if(!MON||!MON.map)return null;const byCode=new Map(CALL.map(c=>[code(c),c]));const reps={};
   for(const [k,v] of Object.entries(MON.map)){const [sat=0,n=0,iade=0,ff=0]=v||[];const c=byCode.get(k);const r=c?(c.rep||NO_REP):OUT_CRM;const o=reps[r]||(reps[r]={sat:0,iade:0,ff:0,amt:0,n:0,cust:0});o.sat+=sat;o.iade+=iade;o.ff+=ff;o.amt+=sat+iade+ff;o.n+=n;if(n)o.cust++}
   return reps;
 }
@@ -390,6 +390,7 @@ function renderOrd(){
   const el=$('#ordp');if(!st.ord){el.innerHTML='';return}
   const reps=monRows();if(!reps){el.innerHTML='<div class="ordp"><p>Bu ayın verisi henüz yüklenmedi.</p></div>';return}
   for(const r of Object.keys(tgtMap()))if(!reps[r])reps[r]={sat:0,iade:0,ff:0,amt:0,n:0,cust:0};
+  if(repLock()!==null)for(const r of Object.keys(reps))if(r!==st.rep)delete reps[r];
   const rows=Object.entries(reps).sort((a,b)=>b[1].amt-a[1].amt);
   const sum=k=>rows.reduce((a,[,o])=>a+o[k],0);const tot=sum('amt');
   const upd=MON.updatedAt?` · güncelleme ${fmt(MON.updatedAt)}`:'';const thr=MON.through?` · ${fmt(MON.through)} dahil`:'';
@@ -472,7 +473,7 @@ function renderBoard(){
   const T={n:0,ak:0,c25:0,s26:0,c25b:0,ord:0,t:0,a7:0,a30:0,late:0,rk:0,rkv:0,np:0};
   // tempo yalnız geçen yıl cirosu olan müşterilerle (zincir özeti ve kartla aynı kural)
   const both=c=>typeof c.ciro2025==='number'&&c.ciro2025>0&&typeof c.sales2026==='number';
-  const rows=allReps().map(r=>{const cs=C.filter(c=>c.rep===r);
+  const rows=allReps().filter(r=>repLock()===null||r===st.rep).map(r=>{const cs=C.filter(c=>c.rep===r);
     const o={r,n:cs.length,ak:cs.filter(c=>c.status!=='Pasif').length,
       c25:cs.reduce((a,c)=>a+(typeof c.ciro2025==='number'?c.ciro2025:0),0),
       s26:cs.reduce((a,c)=>a+(typeof c.sales2026==='number'?c.sales2026:0),0),
@@ -627,6 +628,7 @@ function qPaste(e){
   const f=inp.closest('form');st.qdirty=true;qformTotals(f);toast(`${n} hücre yapıştırıldı`);
 }
 function renderTargets(){
+  const tRep=repLock()!==null?'':st.rep; // Hedefler: satış temsilcisi de tüm ekibi görür
   $('#tabH').hidden=!can('v_targets');
   if(st.view!=='targets')return;
   if(!st.qp)st.qp=qNow();
@@ -639,13 +641,13 @@ function renderTargets(){
   let info=pace===0?'Bu dönem henüz başlamadı.':pace===1?'Dönem tamamlandı.':asOf?`Rakamlar <b>${fmt(asOf)}</b> itibarıyla: o tarihte dönemin <b>%${Math.round(pace*100)}${pctEk(Math.round(pace*100))}</b> geçmişti. Gerçekleşme bu oranın altındaysa kırmızı görünür.`:`Bugün ${fmt(TODAY)}: dönemin <b>%${Math.round(pace*100)}${pctEk(Math.round(pace*100))}</b> geçti. Gerçekleşme bu oranın altındaysa kırmızı görünür.`;
   if(!isM)info+=` <br>Verisi girilen aylar: <b>${filled.length?filled.map(m=>MONTHS_LONG[+m.slice(5,7)-1]).join(', '):'yok'}</b>.`;
   const view=st.qv==='tablo'?'tablo':'ozet';
-  const reps=allReps().filter(r=>!st.rep||r===st.rep);
+  const reps=allReps().filter(r=>!tRep||r===tRep);
   const team=qTeam(key),any=qHas(team);
   let body;
   if(st.qedit)body=qEditHtml(key);
   else if(!any)body=`<div class="qempty"><p><b>${esc(qTitle(key))}</b> için hedef girilmemiş.</p>${adm?`<p>${isM?'“Düzenle” ile girebilir ya da Excel\'den kopyalayıp yapıştırabilirsiniz.':'Rakamlar aylık girilir: yukarıdan bir ay seçip “Düzenle”ye basın.'}</p>`:''}</div>`;
-  else if(view==='tablo')body=(st.rep?'':qTable(QTEAM,team,pace,1))+reps.map(r=>qTable(r,qEntry(key,r),pace)).join('');
-  else body=`<div class="qgrid">${st.rep?'':qCard(QTEAM,team,pace,1)}${reps.map(r=>qCard(r,qEntry(key,r),pace)).join('')}</div>`;
+  else if(view==='tablo')body=(tRep?'':qTable(QTEAM,team,pace,1))+reps.map(r=>qTable(r,qEntry(key,r),pace)).join('');
+  else body=`<div class="qgrid">${tRep?'':qCard(QTEAM,team,pace,1)}${reps.map(r=>qCard(r,qEntry(key,r),pace)).join('')}</div>`;
   const months=Array.from({length:12},(_,i)=>`${y}-${p2(i+1)}`);
   $('#targets').innerHTML=`<div class="qhead"><div><h3>Hedef Takibi <small class="sm">${esc(qTitle(key))}${adm?'':' · yalnızca görüntüleme'}</small></h3><p class="sm qinfo">${info}</p></div>
     <div class="qctl">${years.length>1?`<select id="qYear" aria-label="Yıl">${years.map(v=>`<option${v===y?' selected':''}>${v}</option>`).join('')}</select>`:''}
@@ -705,17 +707,20 @@ function renderTasks(){
   $('#tasks').innerHTML=t.length?g.filter(x=>x[1].length).map(([h,l])=>`<h3>${h} <small>${l.length}</small></h3><ul class="tk">${l.map(a=>`<li class="${h==='Gecikmiş'?'late':''}"><input type="checkbox" data-done="${esc(a.id)}" aria-label="Tamamlandı" ${canWrite?'':'disabled'}><span class="td">${fmt(a.nextDate)}</span><button class="lnk" type="button" data-open="${esc(a.customerId)}">${esc(cm[a.customerId].name)}</button><span class="ta">${esc(a.nextAction||'Takip')}</span><small>${esc(a.rep||cm[a.customerId].rep||'')}</small></li>`).join('')}</ul>`).join(''):'<p class="empty">Açık takip yok. Bir müşteriye kayıt girerken “Sıradaki adım” ve tarih yazarsanız burada listelenir.</p>';
 }
 function render(){
+  // satış temsilcisi (tüm müşteriler izni yok): yalnız kendi müşterileri C'de; tüm liste CALL
+  {const lk=roleKnown()?repLock():null;C=lk!==null?CALL.filter(c=>c.rep===lk):CALL}
   derive();
   {const segs=allSegs();if(st.seg&&st.seg!=='__bos'&&!segs.includes(st.seg))st.seg='';const html='<option value="">Sgmt. Tümü</option>'+segs.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__bos">Segment: boş</option>';if($('#fseg').innerHTML!==html)$('#fseg').innerHTML=html}
   {const chs=[...new Set(C.map(chainOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));if(st.chain&&st.chain!=='__any'&&!chs.includes(st.chain))st.chain='';
    const html='<option value="">Zincir Tümü</option><option value="__any">Yalnız zincirler</option>'+chs.map(v=>`<option value="${esc(v)}">${esc(v)} (${chainStores(v).length})</option>`).join('');if($('#fchain').innerHTML!==html)$('#fchain').innerHTML=html;$('#fchain').value=st.chain||''}
   $('#fseg').value=st.seg;$('#fstat').value=st.status;
-  {const lk=repLock();if(lk!==null&&roleKnown())st.rep=lk}
+  {const lk=roleKnown()?repLock():null;if(lk!==null)st.rep=lk;if(st.sel&&!C.some(c=>c.id===st.sel))st.sel=null}
   if(roleKnown()&&!viewOk(st.view))st.view='list';
   if(st.view==='tasks'&&!VISIT_LOG)st.view='list';
   if((st.view==='overdue'||st.view==='credit')&&!(OI&&OI.map)&&loaded)st.view='list';
   $('#tabT').hidden=!VISIT_LOG;$('#tLeg').textContent=R.temas;$('#dueLeg').hidden=!VISIT_LOG;
   document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
+  {const set=st.view==='admin'||st.view==='perms';$('#stats').hidden=set;$('#ordp').hidden=set;$('#reps').hidden=set}
   $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';$('#creditView').hidden=st.view!=='credit';$('#adminView').hidden=st.view!=='admin';$('#permsView').hidden=st.view!=='perms';
   // açık formlardaki yazılanları yeniden çizimde koru
   const keep={};let foc=null;
@@ -1114,7 +1119,7 @@ render();
   if(!db){clearTimeout(timer);st.nodb=true;loaded=true;canWrite=false;render();return}
   try{const u=await cl.use('user');const cw=u?await u.can('data.write'):null;if(cw===false)canWrite=false}catch(err){}
   db.collection('customers').onSnapshot(s=>{
-    C=s.docs.map(d=>({...d.data(),id:d.id}));
+    CALL=s.docs.map(d=>({...d.data(),id:d.id}));C=CALL;
     if(!s.metadata.fromCache){loaded=true;st.slow=false;clearTimeout(timer)}
     if(st.sel&&!C.some(c=>c.id===st.sel))st.sel=null;
     render()},err=>{clearTimeout(timer);loaded=true;st.err=true;render()});
