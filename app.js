@@ -254,10 +254,10 @@ function renderTop(){
 }
 function renderStats(){
   const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
-  const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0),rkPas=mine.filter(c=>c.status==='Pasif'&&riskCalc(c)).length;
+  const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0),rkPasL=mine.filter(c=>c.status==='Pasif'&&riskCalc(c)),rkPas=rkPasL.length,sumOf=k=>rkPasL.reduce((a,c)=>a+(typeof c[k]==='number'?c[k]:0),0);
   const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,`${R.temas}+ gündür temas yok (aktif)`],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
   $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
-  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Kayıp riski ölçütlerine uyan ama pasif olduğu için sayılmayan müşteri">Pasif müşteri: ${rkPas}</small>`:''}</button>`).join('')+ordStat(mine);
+  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Kayıp riski ölçütlerine uyan ama pasif olduğu için sayılmayan müşteri">Pasif müşteri: ${rkPas}</small><small class="stsub" id="rkPasC" title="Bu pasif müşterilerin toplam cirosu: 2025 yılı ve 2026 YTD (net satış)">2025: ${eur(sumOf('ciro2025'))} · 2026: ${eur(sumOf('sales2026'))}</small>`:''}</button>`).join('')+ordStat(mine);
   renderOrd();
 }
 const MONTHS_LONG=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
