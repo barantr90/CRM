@@ -52,7 +52,7 @@ try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderT
 const umOpen=on=>{$('#umDrop').hidden=!on;$('#avBtn').setAttribute('aria-expanded',on)};
 
 let db=null,canWrite=true,loaded=false;
-let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,OI=null,AR={},MON=null,K={},TGS={},RK={};
+let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,OI=null,AR={},MON=null,K={},RK={};
 /* iletişim bilgisi: temsilcinin girdiği (contacts) ile Excel'den geleni birleştirir; ikisi de doluysa yenisi geçerli */
 const pick=(a,ta,b,tb)=>a&&b?(ta>=tb?a:b):(a||b||'');
 const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.updatedAt||0;return {phone:pick(k.phone,tk,c.phone,tc),contact:pick(k.contact,tk,c.contact,tc)}};
@@ -936,7 +936,6 @@ render();
   db.collection('statusov').onSnapshot(s=>{SO=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('contacts').onSnapshot(s=>{K=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('qtargets').onSnapshot(s=>{QTS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
-  db.collection('targets').onSnapshot(s=>{TGS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('arag').onSnapshot(s=>{AR=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.doc('sync/openinv').onSnapshot(d=>{OI=d.exists?d.data():null;render()},()=>{});
   db.doc('sync/returns').onSnapshot(d=>{RET=d.exists?d.data():null;render()},()=>{});
