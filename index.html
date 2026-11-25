@@ -14,7 +14,7 @@
   <div><h1>Akar Benelux NL CRM</h1><p id="sub">Marketler, ziyaret notları ve sıradaki adımlar tek yerde</p></div>
   <div class="acts" id="topActs">
     <div class="umenu" id="umenu"><button class="thm" id="thmBtn" type="button" aria-pressed="false" aria-label="Gece modu"></button><button class="av" id="avBtn" hidden type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="umDrop"></button>
-      <div class="umd" id="umDrop" role="menu" hidden><div class="who"><b id="umName"></b><small id="umMail"></small></div><button type="button" role="menuitem" id="xexp">Excel'e aktar</button><label role="menuitem" tabindex="0" id="ximpBtn">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx" tabindex="-1"></label><label role="menuitem" tabindex="0" id="oimpBtn">Açık faturaları içe aktar<input type="file" id="oimp" accept=".xlsx" tabindex="-1"></label><hr id="umSep"><button type="button" role="menuitem" data-um="pw">Şifre belirle</button><button type="button" role="menuitem" class="lo" data-um="out">Çıkış</button></div></div>
+      <div class="umd" id="umDrop" role="menu" hidden><div class="who"><b id="umName"></b><small id="umMail"></small><small id="umRole" class="urole"></small></div><button type="button" role="menuitem" id="xexp">Excel'e aktar</button><label role="menuitem" tabindex="0" id="ximpBtn">Excel'den içe aktar<input type="file" id="ximp" accept=".xlsx" tabindex="-1"></label><label role="menuitem" tabindex="0" id="oimpBtn">Açık faturaları içe aktar<input type="file" id="oimp" accept=".xlsx" tabindex="-1"></label><hr id="umSep"><button type="button" role="menuitem" id="umRules" data-view="admin" hidden>Yönetici ayarları</button><button type="button" role="menuitem" id="umPerms" data-view="perms" hidden>Kullanıcı izinleri</button><hr id="umSep2"><button type="button" role="menuitem" data-um="pw">Şifre belirle</button><button type="button" role="menuitem" class="lo" data-um="out">Çıkış</button></div></div>
   </div>
 </header>
 <div class="wrap">
@@ -28,7 +28,7 @@
     <button class="tab" data-view="targets" role="tab" id="tabH">Hedefler</button>
     <button class="tab" data-view="board" role="tab" id="tabB" hidden>Karne</button>
     <button class="tab" data-view="overdue" role="tab" id="tabV" hidden>Vadesi Geçen</button>
-    <button class="tab" data-view="admin" role="tab" id="tabA" hidden>Yönetici</button>
+    <button class="tab" data-view="credit" role="tab" id="tabK" hidden>Kredi Limiti</button>
   </nav>
   <main class="grid" id="listView">
     <section>
@@ -47,7 +47,9 @@
   <section class="board" id="targetsView" hidden><div id="targets"></div></section>
   <section class="board" id="boardView" hidden><div id="board"></div></section>
   <section class="board" id="overdueView" hidden><div id="overdue"></div></section>
+  <section class="board" id="creditView" hidden><div id="credit"></div></section>
   <section class="board" id="adminView" hidden><div id="admin"></div></section>
+  <section class="board" id="permsView" hidden><div id="perms"></div></section>
 </div>
 
 <div class="modal" id="modal" hidden>

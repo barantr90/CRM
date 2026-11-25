@@ -75,15 +75,21 @@
   }
   async function session(){
     const {data}=await sb.auth.getSession();const s=data.session||await loginUI();
-    const {data:ok,error:ae}=await sb.from('allowed_users').select('email').maybeSingle();
+    const em=String(s.user.email||'').toLowerCase();
+    const {data:ok,error:ae}=await sb.from('allowed_users').select('email,role').ilike('email',em.replace(/[%_\\]/g,'\\$&')).maybeSingle();
     if(ae)throw new Error(/relation|does not exist|schema cache/i.test(ae.message)?'Veritabanı tabloları bulunamadı. 1-supabase-kurulum.sql dosyasını SQL Editor\'de çalıştırdınız mı? ('+ae.message+')':ae.message);
     if(!ok){document.body.innerHTML=`<div style="font-family:system-ui;padding:40px;max-width:520px;margin:auto"><h2>Erişim yetkiniz yok</h2><p>${s.user.email} adresi CRM kullanıcı listesinde değil. Yöneticinizden eklenmesini isteyin.</p><button id="lo">Farklı e-posta ile giriş</button></div>`;document.getElementById('lo').onclick=async()=>{await sb.auth.signOut();location.reload()};await new Promise(()=>{})}
+    window.CRM_ROLE=em===ADMIN_EMAIL?'admin':(ok.role||'satis');
     return s}
   function logoutBtn(s){window.CRM_AUTH={email:s.user.email||'',
     async setPassword(){const p=prompt('Yeni şifre (en az 8 karakter):');if(!p)return;if(p.length<8){alert('Şifre en az 8 karakter olmalı.');return}const {error}=await sb.auth.updateUser({password:p});alert(error?'Şifre kaydedilemedi: '+error.message:'Şifreniz kaydedildi. Bundan sonra e-posta ve şifreyle giriş yapabilirsiniz.')},
     async signOut(){await sb.auth.signOut();location.reload()}}}
   window.claude={async use(k){
-    if(k==='db'){try{const s=await session();window.CRM_USER=s.user.email||'';window.CRM_IS_ADMIN=String(s.user.email||'').toLowerCase()===ADMIN_EMAIL;logoutBtn(s);
+    if(k==='db'){try{const s=await session();window.CRM_USER=s.user.email||'';window.CRM_IS_ADMIN=window.CRM_ROLE==='admin';logoutBtn(s);
+      // kullanıcı listesi (yalnız Yönetici yazabilir: RLS)
+      window.CRM_USERS={async list(){const {data,error}=await sb.from('allowed_users').select('email,role').order('email');if(error)fail(error);return data||[]},
+        async save(email,role){const {error}=await sb.from('allowed_users').upsert({email,role},{onConflict:'email'});if(error)fail(error)},
+        async remove(email){const {error}=await sb.from('allowed_users').delete().eq('email',email);if(error)fail(error)}};
       const {error:te}=await sb.from(T).select('id').limit(1);if(te)throw new Error(te.message);
       return db}catch(e){diag('Supabase hatası: '+(e.message||e));return null}}
     if(k==='user')return {can:async()=>true};

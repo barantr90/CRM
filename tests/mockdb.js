@@ -32,6 +32,12 @@
   }
   const db={collection,doc(p){const [c,i]=p.split('/');return docRef(c,i)}};
   window.__store=store;
+  // kullanıcı listesi (Supabase'de allowed_users tablosu)
+  const users=(window.__USERS||[{email:'baran.sengul@akar-group.com',role:'admin'},{email:'lutfi.kaplan@akar-bv.nl',role:'satis'},{email:'Raci.Oener@akar-gmbh.de',role:'satis'}]).map(u=>({...u}));
+  window.__users=users;
+  window.CRM_USERS={async list(){return users.map(u=>({...u}))},
+    async save(email,role){const u=users.find(x=>x.email===email);if(u)u.role=role;else users.push({email,role})},
+    async remove(email){const i=users.findIndex(x=>x.email===email);if(i>=0)users.splice(i,1)}};
   window.claude={async use(k){
     if(k==='db')return db;
     if(k==='user')return {can:async()=>true};
