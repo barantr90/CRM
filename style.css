@@ -200,3 +200,23 @@ dd a{color:var(--accInk);font-weight:600}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .tag.stsel{padding:0;display:inline-flex}.tag.stsel select{color:inherit;field-sizing:content;min-height:0;height:26px;width:auto;padding:0 26px 0 10px;border:0;border-radius:99px;background-color:transparent;font-size:13px;cursor:pointer}
 .tag.stsel.ov select{font-weight:600}
+
+/* açık faturalar */
+.oi{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px 16px;margin:16px 0 4px}
+.oi h3{font-size:22px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}.oi h3 small{font:500 12.5px "Instrument Sans",system-ui,sans-serif;color:var(--mut)}
+.oi-none{margin:6px 0 0;color:var(--mut)}
+.oi-sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0}
+.oi-sum div{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;display:flex;flex-direction:column}
+.oi-sum span{font-size:12px;color:var(--mut)}.oi-sum b{font-size:18px;font-variant-numeric:tabular-nums}.oi-sum small{font-size:11.5px;color:var(--mut)}
+.oi-sum .bad{background:var(--badSoft);border-color:transparent}.oi-sum .bad b,.oi-sum .bad small,.oi-sum .bad span{color:var(--bad)}
+.oi-l{list-style:none;margin:0;padding:0}
+.oi-l li{border-top:1px solid var(--line);padding:8px 0 8px 10px;border-left:3px solid transparent}
+.oi-l li.od{border-left-color:var(--bad)}.oi-l li.td{border-left-color:var(--acc)}.oi-l li.cr{opacity:.85}
+.oi-a,.oi-b{display:flex;align-items:baseline;gap:4px 10px;flex-wrap:wrap}
+.oi-a b{font-size:14px}.oi-t{font-size:12px;color:var(--mut)}.oi-r{margin-left:auto;font-variant-numeric:tabular-nums}
+.oi-b{font-size:12.5px;color:var(--mut)}.oi-s{font-style:normal;font-weight:700;margin-left:auto;white-space:nowrap}
+li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:var(--ok)}li.cr .oi-r{color:var(--ok)}
+.oi-more{margin-top:8px}.oi-note{margin:8px 0 0;font-size:12px;color:var(--mut)}
+#odAlert{background:var(--badSoft);color:var(--bad)}
+@media(max-width:600px){.oi{padding:12px}.oi h3{font-size:19px}.oi-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.oi-sum b{font-size:16px}.oi-a b{font-size:13.5px}.oi-b{font-size:12px}}
+@media(max-width:600px){.stats>:last-child:nth-child(odd){grid-column:1/-1}}
