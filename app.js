@@ -64,8 +64,9 @@ const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.updatedAt||0;return {p
 const waNum=p=>{let s=String(p||'').replace(/[^\d+]/g,'');if(s.startsWith('+'))s=s.slice(1);else if(s.startsWith('00'))s=s.slice(2);else if(s.startsWith('0'))s='31'+s.slice(1);else if(/^6\d{8}$/.test(s))s='31'+s;return s.replace(/\D/g,'')};
 const telHref=p=>'tel:'+String(p||'').replace(/[^+\d]/g,'');
 const mapsHref=c=>'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent([c.address||c.name,c.postcode,c.city,'Nederland'].filter(Boolean).join(', '));
-function riskOf(c){
-  if(c.statusManual==='Pasif')return null;
+// kayıp riski yalnız aktif müşteriler için; pasifler ayrıca sayılır (riskCalc)
+function riskOf(c){return c.status==='Pasif'?null:riskCalc(c)}
+function riskCalc(c){
   const c25=typeof c.ciro2025==='number'?c.ciro2025:0;
   const s26=typeof c.sales2026==='number'?c.sales2026:null;
   const iv=inv(c),d=iv&&iv.last?ago(iv.last):null;const why=[];let val=0;
@@ -253,10 +254,10 @@ function renderTop(){
 }
 function renderStats(){
   const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
-  const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0);
+  const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0),rkPas=mine.filter(c=>c.status==='Pasif'&&riskCalc(c)).length;
   const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,`${R.temas}+ gündür temas yok (aktif)`],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
   $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
-  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span></button>`).join('')+ordStat(mine);
+  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Kayıp riski ölçütlerine uyan ama pasif olduğu için sayılmayan müşteri">Pasif müşteri: ${rkPas}</small>`:''}</button>`).join('')+ordStat(mine);
   renderOrd();
 }
 const MONTHS_LONG=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];

@@ -106,16 +106,19 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   step('1. Kayıp riski listesi');
   const tile=await txt(page,'[data-quick=risk]');
-  ok(tile.startsWith('3'),`risk kutusu 3 müşteri gösteriyor ("${tile}")`);
+  ok(await txt(page,'[data-quick=risk] b')==='2',`risk kutusu yalnız aktif 2 müşteri gösteriyor ("${tile}")`);
+  ok(await txt(page,'#rkPas')==='Pasif müşteri: 2','kutunun altında küçük punto: Pasif müşteri: 2 (Kayıp Market, Kapanan Market)');
+  ok(await page.$eval('#rkPas',e=>parseFloat(getComputedStyle(e).fontSize)<parseFloat(getComputedStyle(e.previousElementSibling).fontSize)),'pasif satırı daha küçük punto');
   await page.click('[data-quick=risk]');
   const r1=await rows(page);
-  ok(JSON.stringify(r1)===JSON.stringify(['Düşüş Market','Kayıp Market','Sessiz Market']),'en büyük kayıp üstte sıralı: '+r1.join(', '));
+  ok(JSON.stringify(r1)===JSON.stringify(['Düşüş Market','Sessiz Market']),'en büyük kayıp üstte sıralı, pasif yok: '+r1.join(', '));
+  ok(!r1.includes('Kayıp Market'),'otomatik pasif (400 gündür faturasız) müşteri kayıp riskinde değil');
   ok(!r1.includes('Kapanan Market'),'elle "Pasif" yapılan (kapanan) müşteri listede yok');
   ok(!r1.includes('Küçük Kiosk'),'küçük ciro eşiğin altında, listede yok');
   ok(!r1.includes('Sağlıklı Market'),'temposu normal müşteri listede yok');
   const why=await page.$$eval('#list .rk',e=>e.map(x=>x.textContent));
   ok(why[0].includes('Ciro temposu %'+Math.round(20000/(60000*F.YF)*100)),'Düşüş Market nedeni: '+why[0]);
-  ok(/70 gündür fatura yok/.test(why[2]),'Sessiz Market nedeni: '+why[2]);
+  ok(/70 gündür fatura yok/.test(why[1]),'Sessiz Market nedeni: '+why[1]);
   await page.click('.chip[data-rep="Lütfi Kaplan"]');
   ok(JSON.stringify(await rows(page))===JSON.stringify(['Düşüş Market','Sessiz Market']),'temsilci seçilince yalnızca onun riskli müşterileri');
   await sel(page,'Düşüş Market');
@@ -330,7 +333,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   const br=await page.$$eval('#boardT tbody tr',rs=>Object.fromEntries(rs.map(r=>{const t=[...r.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim());return [t[0],t]})));
   ok(br['Lütfi Kaplan'][5].startsWith('2 ·'),'Lütfi: 2 riskli müşteri');
-  ok(br['Gökhan Genç'][5].startsWith('1 ·'),'Gökhan: 1 riskli (kapanan hariç)');
+  ok(br['Gökhan Genç'][5].startsWith('0 ·'),'Gökhan: 0 riskli (iki müşterisi de pasif)');
   ok(!(await page.$$eval('#boardT th',t=>t.map(x=>x.textContent))).some(t=>t.startsWith('Kayıt')),'karnede ziyaret kaydı sütunu yok');
   ok(br['Mehmet Halici'][2]==='€ 50.500','Mehmet ciro 2025 toplamı € 50.500 → '+JSON.stringify(br['Mehmet Halici'][2]));
   {const h=await page.$$eval('#boardT th',t=>t.map(x=>x.textContent));

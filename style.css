@@ -249,3 +249,4 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .rform .qsave{margin:0 -16px;padding:12px 16px;border-radius:0 0 12px 12px;background:var(--card)}
 @media(max-width:700px){.rrow{grid-template-columns:minmax(0,1fr)}}
 .rrow label small b{font-size:inherit}
+.stsub{font-size:12px;color:var(--mut);margin-top:2px}.stat.on .stsub{color:rgb(255 255 255/.85)}@media(max-width:600px){.stsub{font-size:11px}}
