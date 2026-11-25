@@ -153,6 +153,55 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.fill('#q','');await page.dispatchEvent('#q','input');
   await page.screenshot({path:path.join(SHOTS,'3-iletisim.png')});
 
+  step('3b. Zincir müşteriler');
+  {const ctx2=await browser.newContext({viewport:{width:1400,height:1000}});const p=await ctx2.newPage();
+   p.on('pageerror',e=>errors.push(e.message));await p.route(offline,r=>r.abort());
+   const EXTRA=`(()=>{const S=window.__SEED,Y=window.__FIX.YF,b=S.customers.c3;
+     const add=(code,o)=>{S.customers['c'+code]={...b,code,phone:'',contact:'',address:'',rep:'Özgür Firat',...o}};
+     add('801',{name:'Sahan Gouda B.V.',chain:'Sahan',city:'Gouda',ciro2025:20000,sales2026:Math.round(20000*Y*0.5),status:'Aktif'});
+     add('802',{name:'Sahan Supermarkt Schiedam B.V.',chain:'Sahan',city:'Schiedam',ciro2025:70000,sales2026:Math.round(70000*Y),status:'Aktif'});
+     add('803',{name:'Sahan DC B.V.',chain:'Sahan',city:'Capelle aan den IJssel',ciro2025:10000,sales2026:500,status:'Pasif'});
+     add('804',{name:'Yildiz Food B.V.',chain:'Yildiz Food',city:'Rotterdam',ciro2025:50000,sales2026:Math.round(50000*Y),status:'Aktif'});
+     S.sync.month.map['801']=[1000,1,-100,0];S.sync.month.map['802']=[5000,2,0,0];
+     S.sync.returns.map['801']=[10000,-500,1,0,0,5];S.sync.returns.map['802']=[30000,-300,1,0,0,9]})();`;
+   await p.addInitScript(`${FIX};${EXTRA};window.CRM_IS_ADMIN=true;window.CRM_AUTH={email:'baran.sengul@akar-group.com'};${MOCK}`);
+   await p.goto(BASE+'/index.html');await p.waitForSelector('#list .row');
+   ok(await p.$eval('#fseg',e=>e.nextElementSibling&&e.nextElementSibling.id)==='fchain','zincir kutusu segment kutusunun hemen yanında');
+   ok(JSON.stringify(await p.$$eval('#fchain option',o=>o.map(x=>x.textContent)))==='["Zincir Tümü","Yalnız zincirler","Sahan (3)","Yildiz Food (1)"]','zincir seçenekleri mağaza sayısıyla');
+   ok(await p.$eval('#fseg option',e=>e.textContent)==='Sgmt. Tümü','segment kutusunda kısa etiket (Sgmt. Tümü) korunuyor');
+   await p.selectOption('#fchain','Sahan');
+   ok(JSON.stringify((await rows(p)).sort())==='["Sahan DC B.V.","Sahan Gouda B.V.","Sahan Supermarkt Schiedam B.V."]','Sahan seçilince yalnız 3 Sahan mağazası');
+   await p.selectOption('#fchain','__any');
+   ok((await rows(p)).length===4,'"Yalnız zincirler": 4 zincir mağazası');
+   await p.selectOption('#fchain','');
+   await sel(p,'Sahan Gouda B.V.');
+   ok(await txt(p,'#chainBox h3')==='Sahan Supermarkt – Zincir','zincir adı türetildi: Sahan Supermarkt – Zincir');
+   const tiles=await p.$$eval('#chainBox .chtiles div',d=>Object.fromEntries(d.map(x=>[x.querySelector('dt').textContent.replace(/ \(.*/,''),x.querySelector('dd').textContent.replace(/ /g,' ')])));
+   ok(tiles['Mağaza']==='3 (2 aktif, 1 pasif)','mağaza sayısı: '+tiles['Mağaza']);
+   ok(tiles['Ciro 2025']==='€ 100.000','zincir ciro 2025 toplamı € 100.000');
+   ok(tiles['Bu ay net ciro']==='€ 5.900','zincir bu ay net ciro € 5.900 (900 + 5.000)');
+   ok(tiles['İade oranı']==='%2,0','zincir iade oranı %2,0 (800 / 40.000)');
+   const tr=await p.$$eval('#chainT tbody tr',r=>r.map(x=>[x.cells[0].querySelector('b,.lnk').textContent,x.classList.contains('cur')]));
+   ok(JSON.stringify(tr.map(x=>x[0]))==='["Sahan Supermarkt Schiedam B.V.","Sahan Gouda B.V.","Sahan DC B.V."]','tüm mağazalar 2026 YTD\'ye göre sıralı');
+   ok(tr.find(x=>x[0]==='Sahan Gouda B.V.')[1]&&tr.filter(x=>x[1]).length===1,'seçili mağaza tabloda vurgulu');
+   ok(await p.$eval('#chainBox .chtab',e=>e.scrollWidth<=e.clientWidth+1),'masaüstünde mağaza tablosu kutuya sığıyor (kaydırma yok)');
+   await (await p.$('#chainBox')).screenshot({path:path.join(SHOTS,'3b-zincir.png')});
+   await p.click('#chainT .lnk[data-id="c802"]');
+   ok(await txt(p,'#detail h2')==='Sahan Supermarkt Schiedam B.V.'&&!!(await p.$('#chainT tr.cur')),'tablodan başka mağazaya geçiliyor, zincir özeti orada da var');
+   await p.click('[data-chainf]');
+   ok(await p.inputValue('#fchain')==='Sahan'&&(await rows(p)).length===3,'"Mağazaları listede göster" listeyi zincire süzüyor');
+   await p.selectOption('#fchain','');
+   await sel(p,'Yildiz Food B.V.');ok(!(await p.$('#chainBox')),'tek mağazalı zincirde özet yok');
+   await sel(p,'Sağlıklı Market');ok(!(await p.$('#chainBox')),'zincir olmayan müşteride özet yok');
+   await ctx2.close();
+   // telefon
+   const ctx3=await browser.newContext({viewport:{width:390,height:844}});const m=await ctx3.newPage();await m.route(offline,r=>r.abort());
+   await m.addInitScript(`${FIX};${EXTRA};window.CRM_IS_ADMIN=true;${MOCK}`);await m.goto(BASE+'/index.html');await m.waitForSelector('#list .row');
+   await m.click('#list .row:has-text("Sahan Gouda B.V.")');await m.waitForSelector('#chainBox');
+   ok(await m.evaluate(()=>document.documentElement.scrollWidth)<=390&&await m.$eval('#chainBox',e=>e.getBoundingClientRect().right<=390),'telefonda zincir özeti ekrana sığıyor (tablo kendi içinde kayar)');
+   await m.screenshot({path:path.join(SHOTS,'3b-zincir-mobil.png'),fullPage:true});
+   await ctx3.close();}
+
   step('5. İade uyarısı');
   const tags=await page.$$eval('#list .row',rs=>rs.map(r=>[r.querySelector('b').textContent,(r.querySelector('.rtag[title^="İade"]')||{}).textContent||'']));
   ok(tags.find(t=>t[0]==='İadeci Market')[1]==='iade %12,0','İadeci Market listede "iade %12,0" etiketi taşıyor');

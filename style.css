@@ -45,7 +45,7 @@ button.stat:hover{border-color:var(--ink)}
 .tab{min-height:44px;padding:0 14px;border:0;background:none;font-weight:600;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-1px}
 .tab.on{color:var(--ink);border-color:var(--acc)}
 .grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:24px;align-items:start;padding-bottom:48px}
-.filters{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}
+.filters{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}
 input,select,textarea{width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px}
 textarea{resize:vertical}
 .meta{display:flex;justify-content:space-between;color:var(--mut);font-size:14px;padding:4px 2px 8px}
@@ -184,3 +184,15 @@ dd a{color:var(--accInk);font-weight:600}
 #retT td.rk,#retT th.rk{width:36px;color:var(--mut)!important;font-weight:400;text-align:right}#retT td:nth-child(2),#retT th:nth-child(2),#retT td:nth-child(3),#retT th:nth-child(3){text-align:left}
 #retT tr.sep td{border-top:1px solid var(--mut);border-bottom:0;padding-top:14px;font-size:13px;font-weight:600;color:var(--mut);text-align:left}
 #retT tr.pasr td{color:var(--mut)}#retT tr.pasr .lnk{color:var(--mut);text-decoration-color:var(--line)}
+/* zincir özeti */
+.chainbox{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px 16px;margin:16px 0 4px}
+.ch-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 12px}.ch-h h3{font-size:22px;margin:0}.ch-h .lnk{font-size:14px}
+.chtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px 16px;margin:12px 0}
+.chtiles div{border-top:1px solid var(--line);padding-top:6px}.chtiles dd{font-weight:700}.chtiles small{font-weight:400;color:var(--mut)}
+.chtab{overflow-x:auto}.chtab table{width:100%;border-collapse:collapse;font-size:14px}
+.chtab th,.chtab td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+.chtab th:first-child,.chtab td:first-child{text-align:left}.chtab td.chn{white-space:normal;min-width:180px}.chtab td.chn small{display:block;font-size:12px}
+.chainbox .sm{font-size:13px;color:var(--mut)}.chtab small{color:var(--mut)}
+.chtab tr.cur td{background:var(--soft)}.chainbox>.sm{margin:8px 0 0}
+@media(max-width:600px){.ch-h h3{font-size:19px}.chtab table{font-size:13px}}
+.chainbox .up,.chainbox .down{margin-left:0}
