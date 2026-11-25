@@ -202,6 +202,37 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await m.screenshot({path:path.join(SHOTS,'3b-zincir-mobil.png'),fullPage:true});
    await ctx3.close();}
 
+  step('3c. Aktif / pasif elle düzenleme');
+  {await page.fill('#q','');await page.dispatchEvent('#q','input');
+   await sel(page,'Sağlıklı Market');
+   ok(!!(await page.$('#stSel')),'yönetici kartta durum seçimini görüyor');
+   ok(await page.$eval('#stSel option',o=>o.textContent)==='Aktif · otomatik','varsayılan: otomatik (Aktif)');
+   await page.selectOption('#stSel','Pasif');await page.waitForTimeout(150);
+   const ov=await doc(page,'statusov/c3');
+   ok(ov&&ov.status==='Pasif'&&ov.by==='baran.sengul@akar-group.com','elle durum ayrı kayda yazıldı (statusov/c3)');
+   ok(await page.$eval('#detail h2',e=>e.classList.contains('pas'))&&await page.$eval('#list .row[data-id="c3"] b',e=>e.classList.contains('pas')),'kartta ve listede pasif (kırmızı) görünüyor');
+   ok(/Pasif olarak işaretlendi/.test(await txt(page,'#toast')),'bildirim: '+await txt(page,'#toast'));
+   await page.selectOption('#fstat','Pasif');
+   ok((await rows(page)).includes('Sağlıklı Market'),'Durum: Pasif filtresinde çıkıyor');
+   await page.selectOption('#fstat','');
+   // sabah eşitlemesi müşteri kaydını yeniden yazsa bile elle durum korunur
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').get().then(d=>db.collection('customers').doc('c3').set({...d.data(),status:'Aktif',statusManual:''}))));
+   await page.waitForTimeout(150);
+   ok(await page.inputValue('#stSel')==='Pasif'&&await page.$eval('#detail h2',e=>e.classList.contains('pas')),'müşteri kaydı yeniden yazılınca (Power BI / Excel) elle durum korunuyor');
+   await page.selectOption('#stSel','');await page.waitForTimeout(150);
+   ok(!(await doc(page,'statusov/c3'))&&!(await page.$eval('#detail h2',e=>e.classList.contains('pas'))),'"otomatik" seçilince elle kayıt silindi, durum yeniden Aktif');
+   // Excel'de elle Pasif yapılmış müşteri
+   await page.selectOption('#fstat','Pasif');await sel(page,'Kapanan Market');
+   ok(await page.$eval('#stSel option',o=>o.textContent)==='Pasif · Excel','Excel\'de "Durum (elle)" dolu müşteri: Pasif · Excel');
+   await page.selectOption('#fstat','');
+   // kayıp riski: elle pasif yapılan müşteri riskten çıkar
+   const before=await txt(page,'[data-quick=risk] b');
+   await sel(page,'Düşüş Market');await page.selectOption('#stSel','Pasif');await page.waitForTimeout(150);
+   ok(+(await txt(page,'[data-quick=risk] b'))===+before-1,'elle pasif yapılan müşteri kayıp riski listesinden çıkıyor ('+before+' → '+await txt(page,'[data-quick=risk] b')+')');
+   await page.screenshot({path:path.join(SHOTS,'3c-durum.png'),clip:{x:560,y:300,width:840,height:260}});
+   await page.selectOption('#stSel','');await page.waitForTimeout(150);
+   ok(await txt(page,'[data-quick=risk] b')===before,'otomatiğe dönünce tekrar riskte');}
+
   step('5. İade uyarısı');
   const tags=await page.$$eval('#list .row',rs=>rs.map(r=>[r.querySelector('b').textContent,(r.querySelector('.rtag[title^="İade"]')||{}).textContent||'']));
   ok(tags.find(t=>t[0]==='İadeci Market')[1]==='iade %12,0','İadeci Market listede "iade %12,0" etiketi taşıyor');
@@ -399,6 +430,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
   await sel(page,'Sessiz Market');
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
+  ok(!(await page.$('#stSel')),'temsilci durumu değiştiremiyor (seçim yok)');
+  await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('statusov').doc('c2').set({status:'Pasif'})));await page.waitForTimeout(150);
+  ok(/Pasif · elle/.test(await txt(page,'#detail .tags')),'temsilci elle belirlenen durumu görüyor: Pasif · elle');
   ok(await page.isVisible('#tabH'),'temsilci Hedefler sekmesini görüyor');
   await page.click('#tabH');
   ok(!(await page.$('#qEdit'))&&!(await page.$('#targets input')),'temsilci yalnızca görüntülüyor: Düzenle ve giriş kutusu yok');
