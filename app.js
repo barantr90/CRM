@@ -52,7 +52,7 @@ try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderT
 const umOpen=on=>{$('#umDrop').hidden=!on;$('#avBtn').setAttribute('aria-expanded',on)};
 
 let db=null,canWrite=true,loaded=false;
-let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,MON=null,K={},TGS={},RK={};
+let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,OI=null,MON=null,K={},TGS={},RK={};
 /* iletişim bilgisi: temsilcinin girdiği (contacts) ile Excel'den geleni birleştirir; ikisi de doluysa yenisi geçerli */
 const pick=(a,ta,b,tb)=>a&&b?(ta>=tb?a:b):(a||b||'');
 const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.updatedAt||0;return {phone:pick(k.phone,tk,c.phone,tc),contact:pick(k.contact,tk,c.contact,tc)}};
@@ -71,6 +71,35 @@ function riskOf(c){
 }
 const riskText=r=>r?r.why.map(x=>x.k==='drop'?`Ciro temposu %${Math.round(x.pace*100)} · ${eur(x.loss)} geride`:`${x.days} gündür fatura yok (aylık ~${eur(x.monthly)})`).join(' · '):'';
 function retOf(c){if(!RET||!RET.map)return null;const r=RET.map[code(c)];if(!r||!(r[0]>=RET_MIN))return null;const p=Math.abs(r[1]||0)/r[0];return {p,iade:r[1]||0,sales:r[0],warn:p>=RET_WARN}}
+// Açık faturalar (sync/openinv): map[kod]={lim,vade,inv:[[no,faturaTarihi,tür F/I/P,tutar,kalan,vadeTarihi]]}
+const OI_T={F:'Fatura',I:'İade',P:'Fiyat farkı'};
+const eurc=n=>(n<0?'−':'')+'€ '+Math.abs(n||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
+const dueIn=d=>d?Math.round((new Date(d)-new Date(TODAY))/864e5):null;
+function oiOf(c){
+  if(!OI||!OI.map)return null;const o=OI.map[code(c)];if(!o||!o.inv||!o.inv.length)return null;
+  const L=o.inv.map(([no,d,t,amt,rest,due])=>({no,d,t,amt,rest,due,days:dueIn(due)}));
+  const R={L,tot:0,od:0,odn:0,odMax:0,nd:0,ndn:0,cr:0,crn:0,lim:o.lim,vade:o.vade};
+  for(const x of L){R.tot+=x.rest;
+    if(x.rest<0){R.cr+=x.rest;R.crn++}
+    else if(x.days!=null&&x.days<0){R.od+=x.rest;R.odn++;R.odMax=Math.max(R.odMax,-x.days)}
+    else{R.nd+=x.rest;R.ndn++}}
+  return R;
+}
+const oiState=x=>x.rest<0?['cr','Alacak (müşteri lehine)']:x.days==null?['','Vade yok']:x.days<0?['od',`${-x.days} gün geçti`]:x.days===0?['td','Bugün vadeli']:['nd',`${x.days} gün kaldı`];
+function oiHtml(c){
+  if(!OI||!OI.map)return '';
+  const o=oiOf(c),asOf=OI.asOf?`${fmt(OI.asOf)} itibarıyla`:'';
+  if(!o)return `<section class="oi" id="oi"><h3>Açık Faturalar</h3><p class="oi-none">${asOf} açık fatura yok.</p></section>`;
+  const rank=x=>x.rest<0?2:x.days!=null&&x.days<0?0:1;
+  const L=[...o.L].sort((a,b)=>rank(a)-rank(b)||String(a.due||'').localeCompare(String(b.due||''))),all=st.oiAll===c.id,MAX=8;
+  const sh=all?L:L.slice(0,MAX);
+  const lim=typeof o.lim==='number'&&o.lim>0?o.lim:null;
+  return `<section class="oi" id="oi"><h3>Açık Faturalar <small>${asOf}</small></h3>
+  <div class="oi-sum"><div class="${o.od>0?'bad':''}"><span>Vadesi geçen</span><b>${eur(o.od)}</b><small>${o.odn?`${o.odn} fatura · en eski ${o.odMax} gün`:'yok'}</small></div><div><span>Vadesi gelmemiş</span><b>${eur(o.nd)}</b><small>${o.ndn} fatura</small></div><div><span>Toplam açık (net)</span><b>${eur(o.tot)}</b><small>${o.crn?`${eur(Math.abs(o.cr))} iade / fiyat farkı düşüldü`:'&nbsp;'}</small></div>${lim?`<div class="${o.tot>lim?'bad':''}"><span>Kredi limiti</span><b>${eur(lim)}</b><small>${o.tot>lim?`${eur(o.tot-lim)} aşıldı`:`kalan ${eur(lim-o.tot)}`}</small></div>`:''}</div>
+  <ul class="oi-l">${sh.map(x=>{const [k,t]=oiState(x);return `<li class="${k}"><div class="oi-a"><b>${esc(x.no)}</b><span class="oi-t">${esc(OI_T[x.t]||'')}</span><b class="oi-r">${eurc(x.rest)}</b></div><div class="oi-b"><span>Fatura ${fmt(x.d)||'–'}${Math.abs(x.amt-x.rest)>=0.01?` · tutar ${eurc(x.amt)}`:''}</span><span>Vade ${fmt(x.due)||'–'}</span><em class="oi-s">${t}</em></div></li>`}).join('')}</ul>
+  ${L.length>MAX?`<button type="button" class="ghost oi-more" data-oiall="${esc(c.id)}">${all?'Daha az göster':`Tümünü göster (${L.length})`}</button>`:''}
+  ${o.vade!=null?`<p class="oi-note">Ödeme vadesi: ${o.vade} gün. Gün sayıları bugüne göre hesaplanır.</p>`:''}</section>`;
+}
 const monthKey=()=>(MON&&MON.month)||TODAY.slice(0,7);
 const tgtOf=rep=>{const t=(TGS[monthKey()]||{}).reps||{};return rep?(+t[rep]||0):Object.values(t).reduce((a,v)=>a+(+v||0),0)};
 // ayın ne kadarı geçti (hedef temposu için)
@@ -130,6 +159,7 @@ function visible(){
   if(st.quick==='route')r=r.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME);
   if(st.quick==='due')r=r.filter(isDue);
   if(st.quick==='cold')r=r.filter(isCold);
+  if(st.quick==='od'){const m=new Map();r=r.filter(c=>{const o=oiOf(c);if(o&&o.od>0){m.set(c.id,o.od);return true}return false});r.sort((a,b)=>m.get(b.id)-m.get(a.id));return r}
   if(st.quick==='risk'){r=r.filter(c=>RK[c.id]);r.sort((a,b)=>RK[b.id].val-RK[a.id].val);return r}
   r.sort(st.sort==='last'?(a,b)=>(D.last[a.id]||'').localeCompare(D.last[b.id]||''):(a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'));
   return r;
@@ -139,7 +169,7 @@ function renderTop(){
   renderUser();
   $('#reps').innerHTML=['',...allReps()].map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}">${r?esc(r):'Tüm temsilciler'}</button>`).join('');
   const isAdm=window.CRM_IS_ADMIN!==false;
-  $('#ximpBtn').hidden=!(canWrite&&isAdm);$('#xexp').hidden=!isAdm;$('#umSep').hidden=!isAdm;
+  $('#ximpBtn').hidden=!(canWrite&&isAdm);$('#oimpBtn').hidden=!(canWrite&&isAdm);$('#xexp').hidden=!isAdm;$('#umSep').hidden=!isAdm;
   $('#sub').textContent=INVTO?`Fatura verisi ${fmt(INVTO)} tarihine kadar (Power BI) · son temas faturaları da kapsar`:'Marketler, ziyaret notları ve sıradaki adımlar tek yerde';
   let b='';
   if(st.nodb)b=`<span>Kayıtlara ulaşılamıyor. ${esc(window.CRM_DIAG||'Supabase ayarlarını (CRM_CONFIG) ve internet bağlantısını kontrol edin.')}</span>`;
@@ -152,7 +182,7 @@ function renderTop(){
 function renderStats(){
   const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
   const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0);
-  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,'30+ gündür temas yok (aktif)']];
+  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,'30+ gündür temas yok (aktif)'],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
   $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
   $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span></button>`).join('')+ordStat(mine);
   renderOrd();
@@ -187,12 +217,12 @@ function renderOrd(){
 function renderList(){
   const r=visible();
   $('#count').textContent=`${r.length} müşteri`;
-  $('#qf').textContent=st.quick?{route:'Filtre: bugünkü rut',due:'Filtre: takibi gelenler',cold:'Filtre: 30+ gün temas yok',risk:'Filtre: kayıp riski (en büyük kayıp üstte)'}[st.quick]:'';
+  $('#qf').textContent=st.quick?{route:'Filtre: bugünkü rut',due:'Filtre: takibi gelenler',cold:'Filtre: 30+ gün temas yok',risk:'Filtre: kayıp riski (en büyük kayıp üstte)',od:'Filtre: vadesi geçmiş açık faturası olanlar (en büyük tutar üstte)'}[st.quick]:'';
   if(!C.length){$('#list').innerHTML=`<li class="empty">${loaded?'Henüz müşteri yok. <b>İçe aktar</b> ile Excel listenizi yükleyin.':'Yükleniyor…'}</li>`;return}
   if(!r.length){$('#list').innerHTML='<li class="empty">Bu filtrelere uyan müşteri yok.</li>';return}
-  $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]),rk=RK[c.id],rt=retOf(c);
-    const sub=st.quick==='risk'&&rk?`<small class="rk">${esc(riskText(rk))}</small>`:`<small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small>`;
-    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
+  $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
+    const sub=st.quick==='od'&&oi?`<small class="rk">${eur(oi.od)} vadesi geçmiş · en eski ${oi.odMax} gün</small>`:st.quick==='risk'&&rk?`<small class="rk">${esc(riskText(rk))}</small>`:`<small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small>`;
+    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${oi&&oi.od>0&&st.quick!=='od'?`<em class="rtag rt" title="Vadesi geçmiş açık fatura: ${eur(oi.od)}">vade ${oi.odMax} gün</em>`:''}${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
 }
 function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
@@ -204,15 +234,16 @@ function renderDetail(){
   if(!c){st.formFor=null;el.innerHTML=`<div class="ph"><h2>Bir müşteri seçin</h2><p>Listeden bir market seçtiğinizde bilgileri, geçmiş ziyaretleri ve sıradaki takip burada görünür.</p><ul><li>Üstteki kutulara tıklayarak bugünkü rutu, takibi gelmiş ya da uzun süredir ziyaret edilmeyen müşterileri süzebilirsiniz.</li>${VISIT_LOG?'<li>Her ziyaretten sonra kısa bir not girin; not o günün tarihiyle kaydedilir.</li>':''}</ul></div>`;return}
   const acts=A.filter(a=>a.customerId===c.id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt||0)-(a.createdAt||0));
   const reps=allReps();if(c.rep&&!reps.includes(c.rep))reps.push(c.rep);
-  const lastD=D.last[c.id],iv=inv(c),ct=ctOf(c),rk=RK[c.id],rt=retOf(c);
+  const lastD=D.last[c.id],iv=inv(c),ct=ctOf(c),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
   const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',ct.contact],['Telefon',ct.phone],['Temsilci',c.rep],['Rut günü',c.visitDay],['Ziyaret',[c.freq,c.weeks?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],['2026 net satış',iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
   el.innerHTML=`<button class="back" id="back" type="button">← Listeye dön</button>
   <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${statusHtml(c)}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
 </div>
-  ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
+  ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${oi&&oi.od>0?`<p class="alert" id="odAlert">Vadesi geçmiş açık fatura: ${eur(oi.od)} · ${oi.odn} fatura, en eski ${oi.odMax} gün</p>`:''}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
   ${ctaHtml(c,ct)}
   ${chainHtml(c)}
   <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
+  ${oiHtml(c)}
   ${VISIT_LOG&&canWrite?visitForm(c):''}
   ${VISIT_LOG?`<h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`:''}`;
 }
@@ -668,6 +699,32 @@ async function exportXLSX(){
   }catch(err){if(err&&err.code==='declined')return;toast('Excel dosyası oluşturulamadı.',1)}
 }
 let plan=null;
+// Açık fatura dosyası (ERP "Export" sayfası) → sync/openinv
+async function readOpenInv(f){
+  try{
+    const X=await loadXLSX();const wb=X.read(await f.arrayBuffer(),{type:'array'});
+    const ws=wb.Sheets['Export']||wb.Sheets[wb.SheetNames[0]];
+    const rows=X.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+    const H=(rows[0]||[]).map(normH),ix=n=>H.indexOf(normH(n));
+    const I={k:ix('Müsteri Kodu'),no:ix('Fatura No'),d:ix('Datum'),t:ix('Fatura Türü'),a:ix('Fatura Tutarı'),r:ix('Rest Offen'),due:ix('Faelligkeit'),tage:ix('Tage Fälligkeit'),lim:ix('Kredit Limit'),v:ix('Vade')};
+    if([I.k,I.no,I.r,I.due].some(i=>i<0)){toast('Açık fatura dosyası tanınmadı: "Müsteri Kodu", "Fatura No", "Rest Offen" ve "Faelligkeit" sütunları gerekli.',1);return}
+    const map={};let n=0,asOf='';const r2=x=>Math.round(x*100)/100;
+    for(const r of rows.slice(1)){
+      const k=normKod(r[I.k]);const rest=num(r[I.r]);if(!k||rest==null||Math.abs(rest)<0.005)continue;
+      const due=cellVal(r[I.due],'d'),d=I.d>=0?cellVal(r[I.d],'d'):'';
+      const tt=String(I.t>=0?r[I.t]:'').toLowerCase(),t=/iade/.test(tt)?'I':/fiyat/.test(tt)?'P':'F';
+      if(I.tage>=0&&due&&typeof r[I.tage]==='number'){const a=fromSerial(serial(due)+r[I.tage]*-1);if(a>asOf)asOf=a}
+      const m=map[k]||(map[k]={inv:[]});
+      if(I.lim>=0&&num(r[I.lim])!=null)m.lim=num(r[I.lim]);if(I.v>=0&&num(r[I.v])!=null)m.vade=num(r[I.v]);
+      m.inv.push([String(r[I.no]).trim(),d,t,r2(num(r[I.a])??rest),r2(rest),due]);n++}
+    if(!n){toast('Dosyada açık fatura bulunamadı.',1);return}
+    const known=new Set(C.map(code)),ks=Object.keys(map),miss=ks.filter(k=>!known.has(k));
+    asOf=asOf||TODAY;
+    if(!confirm(`${n} açık kalem, ${ks.length} müşteri (veri tarihi ${fmt(asOf)}).${miss.length?`\n${miss.length} müşteri kodu CRM'de yok; onların kalemleri kartlarda görünmez.`:''}\n\nMevcut açık fatura verisinin yerine yazılsın mı?`))return;
+    await db.doc('sync/openinv').set({asOf,n,map,at:Date.now(),by:(window.CRM_AUTH||{}).email||''});
+    toast(`Açık faturalar güncellendi: ${n} kalem, ${ks.length-miss.length} müşteri.`);
+  }catch(err){toast('Açık fatura dosyası okunamadı.',1)}
+}
 async function readImport(f){
   try{
     const X=await loadXLSX();const wb=X.read(await f.arrayBuffer(),{type:'array'});
@@ -733,6 +790,7 @@ document.addEventListener('click',async e=>{
   if(t.id==='qEdit'){st.qedit=true;st.qdirty=false;render();const i=$('#qform input');if(i)i.focus();return}
   if(t.id==='qCancel'){if(st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?'))return;st.qedit=false;st.qdirty=false;render();return}
   if(t.dataset.rep!==undefined){st.rep=t.dataset.rep;saveUi();render();return}
+  if(t.dataset.oiall!==undefined){st.oiAll=st.oiAll===t.dataset.oiall?null:t.dataset.oiall;render();return}
   if(t.dataset.quick!==undefined){st.ord=false;st.quick=st.quick===t.dataset.quick?'':t.dataset.quick;st.view='list';render();return}
   if(t.dataset.view){st.view=t.dataset.view;saveUi();render();return}
   if(t.id==='ctEdit'){st.ctEdit=st.sel;render();const f=$('#ctform');if(f)f.elements.phone.focus();return}
@@ -766,13 +824,14 @@ document.addEventListener('change',async e=>{
     if(ok)toast(v?`${c.name}: ${v} olarak işaretlendi`:`${c.name}: durum yeniden otomatik (${statusAuto(c)||'–'})`);else render();return}
   if(t.id==='fstat'){st.status=t.value;render()}
   if(t.id==='fsort'){st.sort=t.value;saveUi();render()}
+  if(t.id==='oimp'){umOpen(false);if(t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readOpenInv(f)}return}
   if(t.id==='ximp')umOpen(false);
   if(t.id==='ximp'&&t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readImport(f);return}
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('paste',qPaste);
 document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('#qform'))}if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
-document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if((e.key==='Enter'||e.key===' ')&&e.target.id==='oimpBtn'){e.preventDefault();$('#oimp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
   e.preventDefault();const f=e.target;
   if(f.id==='cform'){
@@ -835,6 +894,7 @@ render();
   db.collection('contacts').onSnapshot(s=>{K=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('qtargets').onSnapshot(s=>{QTS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('targets').onSnapshot(s=>{TGS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
+  db.doc('sync/openinv').onSnapshot(d=>{OI=d.exists?d.data():null;render()},()=>{});
   db.doc('sync/returns').onSnapshot(d=>{RET=d.exists?d.data():null;render()},()=>{});
   db.collection('activities').orderBy('date','desc').limit(1000).onSnapshot(s=>{A=s.docs.map(d=>({...d.data(),id:d.id}));render()},err=>{st.err=true;render()});
 })();

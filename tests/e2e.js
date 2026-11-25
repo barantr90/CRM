@@ -47,7 +47,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   F.day=n=>F.days[n];
 
   step('0. Sayfa açılıyor');
-  ok((await page.$$('#stats .stat')).length===4,'4 özet kutusu var');
+  ok((await page.$$('#stats .stat')).length===5,'5 özet kutusu var (Vadesi geçen dahil)');
   ok(!(await page.$('[data-quick=due]')),'"Takip zamanı gelmiş" kutusu yok');
   ok(await page.isHidden('#tabT'),'Takipler sekmesi gizli');
   ok(await page.isHidden('#dueLeg'),'listedeki "takip" açıklaması gizli');
@@ -71,7 +71,8 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.$eval('#xexp',e=>!!e.closest('#umDrop'))&&await page.$eval('#ximpBtn',e=>!!e.closest('#umDrop')),'Excel butonları BS menüsünün içinde');
   await page.click('#avBtn');
   ok(await page.isVisible('#xexp')&&await page.isVisible('#ximpBtn')&&await page.isVisible('#umSep'),'yönetici menüde Excel\'e aktar ve Excel\'den içe aktar görüyor');
-  {const items=await page.$$eval('#umDrop [role=menuitem]',e=>e.map(x=>x.textContent.trim()));ok(JSON.stringify(items)===JSON.stringify(["Excel'e aktar","Excel'den içe aktar",'Şifre belirle','Çıkış']),'menü sırası: '+items.join(' · '))}
+  ok(await page.isVisible('#oimpBtn'),'yönetici menüde Açık faturaları içe aktar görüyor');
+  {const items=await page.$$eval('#umDrop [role=menuitem]',e=>e.map(x=>x.textContent.trim()));ok(JSON.stringify(items)===JSON.stringify(["Excel'e aktar","Excel'den içe aktar",'Açık faturaları içe aktar','Şifre belirle','Çıkış']),'menü sırası: '+items.join(' · '))}
   await page.screenshot({path:path.join(SHOTS,'0-menu-excel.png'),clip:{x:900,y:0,width:500,height:330}});
   {const [fc]=await Promise.all([page.waitForEvent('filechooser',{timeout:3000}).catch(()=>null),page.click('#ximpBtn')]);ok(!!fc,'Excel\'den içe aktar dosya seçme penceresini açıyor')}
   await page.keyboard.press('Escape');await page.click('#avBtn');await page.click('#xexp');
@@ -232,6 +233,31 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.screenshot({path:path.join(SHOTS,'3c-durum.png'),clip:{x:560,y:300,width:840,height:260}});
    await page.selectOption('#stSel','');await page.waitForTimeout(150);
    ok(await txt(page,'[data-quick=risk] b')===before,'otomatiğe dönünce tekrar riskte');}
+
+  step('3d. Açık faturalar');
+  {await page.fill('#q','');await page.dispatchEvent('#q','input');
+   const od=await page.$('[data-quick=od]');ok(!!od,'"Vadesi geçen" kutusu var');
+   ok(+(await txt(page,'[data-quick=od] b'))===1&&/€ 1\.201/.test(await txt(page,'[data-quick=od] span')),'kutu: 1 müşteri · '+await txt(page,'[data-quick=od] span'));
+   ok(/vade 40 gün/.test(await txt(page,'#list .row[data-id="c1"] .lc')),'listede etiket: vade 40 gün');
+   await page.click('[data-quick=od]');ok(JSON.stringify(await rows(page))===JSON.stringify(['Düşüş Market']),'filtre yalnız vadesi geçeni gösteriyor');
+   ok(/1\.201 vadesi geçmiş · en eski 40 gün/.test(await txt(page,'#list .row small')),'filtrede alt satır tutar ve gün');
+   await page.click('[data-quick=od]');
+   await sel(page,'Düşüş Market');
+   ok(/Vadesi geçmiş açık fatura: € 1\.201 · 1 fatura, en eski 40 gün/.test(await txt(page,'#odAlert')),'kart üstünde uyarı');
+   const items=await page.$$eval('#oi .oi-l li',ls=>ls.map(l=>[l.className,l.querySelector('.oi-a b').textContent,l.querySelector('.oi-s').textContent,l.querySelector('.oi-r').textContent.replace(/ /g,' ')]));
+   ok(JSON.stringify(items.map(i=>i[1]))==='["RE26-1","RE26-2","CR26-1"]','sıra: vadesi geçen, gelmeyen, alacak');
+   ok(items[0][0]==='od'&&items[0][2]==='40 gün geçti'&&items[0][3]==='€ 1.200,50','vadesi geçen: 40 gün geçti, kalan € 1.200,50');
+   ok(items[1][0]==='nd'&&items[1][2]==='5 gün kaldı','vadesi gelmeyen: 5 gün kaldı');
+   ok(items[2][0]==='cr'&&/Alacak/.test(items[2][2])&&items[2][3]==='−€ 80,25','iade: alacak, −€ 80,25');
+   ok(/tutar € 1\.500,00/.test(await txt(page,'#oi .oi-l li.od .oi-b')),'kısmi ödenen faturada asıl tutar görünüyor');
+   const sum=await page.$$eval('#oi .oi-sum div',ds=>ds.map(d=>d.textContent.replace(/ /g,' ')));
+   ok(/Vadesi geçen€ 1\.2011 fatura · en eski 40 gün/.test(sum[0])&&/Toplam açık \(net\)€ 2\.020/.test(sum[2])&&/Kredi limiti€ 2\.000€ 20 aşıldı/.test(sum[3]),'özet: '+sum.join(' | '));
+   ok(await page.$eval('#oi .oi-sum .bad b',e=>getComputedStyle(e).color)==='rgb(198, 40, 40)','vadesi geçen tutar kırmızı');
+   await page.screenshot({path:path.join(SHOTS,'3d-acik-fatura.png'),clip:{x:560,y:200,width:840,height:700}});
+   await sel(page,'Sağlıklı Market');
+   ok(!(await page.$('#odAlert'))&&await txt(page,'#oi li .oi-s')==='Bugün vadeli','bugün vadeli: uyarı yok, "Bugün vadeli"');
+   await sel(page,'Sessiz Market');
+   ok(/açık fatura yok/.test(await txt(page,'#oi')),'açık faturası olmayan müşteride "açık fatura yok"');}
 
   step('5. İade uyarısı');
   const tags=await page.$$eval('#list .row',rs=>rs.map(r=>[r.querySelector('b').textContent,(r.querySelector('.rtag[title^="İade"]')||{}).textContent||'']));
@@ -428,6 +454,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isHidden('#xexp')&&await page.isHidden('#ximpBtn')&&await page.isHidden('#umSep'),'temsilcinin menüsünde Excel butonları yok');
   await page.keyboard.press('Escape');
   ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
+  ok(await page.isHidden('#oimpBtn'),'temsilci açık fatura içe aktarmayı görmüyor');
   await sel(page,'Sessiz Market');
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
   ok(!(await page.$('#stSel')),'temsilci durumu değiştiremiyor (seçim yok)');
