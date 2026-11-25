@@ -89,7 +89,9 @@ const permOf=(role,k)=>role==='admin'||!!{...(PDEF[role]||{}),...(PM[role]||{})}
 const can=k=>permOf(myRole(),k);
 const isAdmin=()=>myRole()==='admin';
 // "tüm temsilciler" izni yoksa: yalnız kullanıcının kendi temsilci adı (eşleşmezse hiçbir müşteri)
-const ownRep=()=>{const n=personOf(window.CRM_USER||(window.CRM_AUTH||{}).email||'').name;return allReps().includes(n)?n:null};
+// kullanıcının temsilci adı: kullanıcı listesindeki 'Temsilci' alanı (CRM_REP); yoksa e-postadan çıkarılan ad
+const ownRep=()=>{const n=window.CRM_REP!==undefined?window.CRM_REP:personOf(window.CRM_USER||(window.CRM_AUTH||{}).email||'').name;return n&&allReps().includes(n)?n:null};
+const repGuess=e=>{const n=personOf(e).name;return REPS.includes(n)?n:''};
 const repLock=()=>can('v_all')?null:(ownRep()||'—');
 const viewOk=v=>v==='board'?can('v_board'):v==='admin'?can('e_rules'):v==='perms'?isAdmin():v==='targets'?can('v_targets'):v==='overdue'?can('v_overdue'):v==='credit'?can('v_credit'):true;
 
@@ -192,10 +194,11 @@ function renderPerms(){
   const me=String(window.CRM_USER||(window.CRM_AUTH||{}).email||'').toLowerCase();
   const urow=u=>{const e=String(u.email||''),lk=e.toLowerCase()===me||e.toLowerCase()===MAIN_ADMIN,r=u.role||'satis',p=personOf(e).name;
     return `<tr data-urow="${esc(e)}"><td><b>${esc(p)}</b><small class="cru">${esc(e)}</small></td><td><select data-urole="${esc(e)}" aria-label="${esc(p)} rolü"${ed&&!lk?'':' disabled'}>${ROLES.map(([k,l])=>`<option value="${k}"${k===r?' selected':''}>${l}</option>`).join('')}</select></td>
-    <td>${r!=='admin'&&!permOf(r,'v_all')?(allReps().includes(p)?`<span class="sm">yalnız ${esc(p)}</span>`:'<span class="sm bad">temsilci adı eşleşmiyor: müşteri göremez</span>'):'<span class="sm">tüm müşteriler</span>'}</td>
+    <td><select data-urep="${esc(e)}" aria-label="${esc(p)} temsilci adı"${ed?'':' disabled'}><option value="">–</option>${[...new Set([...allReps(),...(u.rep?[u.rep]:[])])].map(x=>`<option${x===u.rep?' selected':''}>${esc(x)}</option>`).join('')}</select>
+    <small class="cru${r!=='admin'&&!permOf(r,'v_all')&&!u.rep?' bad':''}">${r==='admin'||permOf(r,'v_all')?'tüm müşterileri görür':u.rep?`yalnız ${esc(u.rep)} müşterileri`:'temsilci seçilmedi: müşteri göremez'}</small></td>
     <td>${ed&&!lk?`<button type="button" class="ghost" data-udel="${esc(e)}">Kaldır</button>`:lk?'<span class="sm">siz / ana yönetici</span>':''}</td></tr>`};
   const users=!window.CRM_USERS?'<p class="empty">Kullanıcı listesi bu ortamda yönetilemiyor.</p>':UL===null?'<p class="empty">Kullanıcılar yükleniyor…</p>':
-   `<div class="ordp"><table id="uT"><thead><tr><th>Kullanıcı</th><th>Rol</th><th>Gördüğü müşteriler</th><th></th></tr></thead><tbody>${UL.slice().sort((a,b)=>ROLES.findIndex(x=>x[0]===(a.role||'satis'))-ROLES.findIndex(x=>x[0]===(b.role||'satis'))||personOf(a.email).name.localeCompare(personOf(b.email).name,'tr')).map(urow).join('')}</tbody></table>
+   `<div class="ordp"><table id="uT"><thead><tr><th>Kullanıcı</th><th>Rol</th><th>Temsilci (gördüğü müşteriler)</th><th></th></tr></thead><tbody>${UL.slice().sort((a,b)=>ROLES.findIndex(x=>x[0]===(a.role||'satis'))-ROLES.findIndex(x=>x[0]===(b.role||'satis'))||personOf(a.email).name.localeCompare(personOf(b.email).name,'tr')).map(urow).join('')}</tbody></table>
    ${ed?`<form class="uadd" id="uform" autocomplete="off"><label>Yeni kullanıcı e-postası<input name="email" type="email" required placeholder="ad.soyad@akar-bv.nl"></label><label>Rol<select name="role">${ROLES.map(([k,l])=>`<option value="${k}"${k==='satis'?' selected':''}>${l}</option>`).join('')}</select></label><button class="primary" type="submit">Ekle</button></form>
    <p class="sm">Eklenen kişi giriş ekranında e-postasını yazıp “e-postama giriş bağlantısı gönder” ile ilk girişini yapar; sonra kendine şifre belirleyebilir. Kaldırılan kişi CRM'e giremez.</p>`:''}</div>`;
   $('#perms').innerHTML=`<button type="button" class="ghost home" data-view="list" id="homeP">← Ana sayfaya dön</button><div class="rethead"><h3>Kullanıcı İzinleri <small class="sm">rol başına</small></h3><span class="sm">${upd}</span></div>
@@ -720,7 +723,7 @@ function render(){
   if((st.view==='overdue'||st.view==='credit')&&!(OI&&OI.map)&&loaded)st.view='list';
   $('#tabT').hidden=!VISIT_LOG;$('#tLeg').textContent=R.temas;$('#dueLeg').hidden=!VISIT_LOG;
   document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
-  {const set=st.view==='admin'||st.view==='perms';$('#stats').hidden=set;$('#ordp').hidden=set;$('#reps').hidden=set}
+  {const set=st.view==='admin'||st.view==='perms';$('#stats').hidden=set;$('#ordp').hidden=set;$('#reps').hidden=set;$('nav.tabs').hidden=set}
   $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';$('#creditView').hidden=st.view!=='credit';$('#adminView').hidden=st.view!=='admin';$('#permsView').hidden=st.view!=='perms';
   // açık formlardaki yazılanları yeniden çizimde koru
   const keep={};let foc=null;
@@ -1040,7 +1043,10 @@ document.addEventListener('change',async e=>{
   if(t.id==='fstat'){st.status=t.value;render()}
   if(t.closest&&t.closest('#pform')){st.pdirty=true;$('#pmsg').textContent='Kaydedilmemiş değişiklik var';return}
   if(t.dataset.urole!==undefined){if(!isAdmin()||!window.CRM_USERS){render();return}const em=t.dataset.urole,r=t.value;
-    try{await window.CRM_USERS.save(em,r);toast(`${personOf(em).name}: ${roleName(r)}`);UL=null;render()}catch(err){toast('Rol kaydedilemedi: '+(err.message||err),1);render()}return}
+    const u=(UL||[]).find(x=>x.email===em)||{};
+    try{await window.CRM_USERS.save(em,r,u.rep||null);toast(`${personOf(em).name}: ${roleName(r)}`);UL=null;render()}catch(err){toast('Rol kaydedilemedi: '+(err.message||err),1);render()}return}
+  if(t.dataset.urep!==undefined){if(!isAdmin()||!window.CRM_USERS){render();return}const em=t.dataset.urep,u=(UL||[]).find(x=>x.email===em)||{};
+    try{await window.CRM_USERS.save(em,u.role||'satis',t.value||null);toast(`${personOf(em).name}: ${t.value?'temsilci '+t.value:'temsilci kaldırıldı'}`);UL=null;render()}catch(err){toast('Temsilci kaydedilemedi: '+(err.message||err),1);render()}return}
   if(t.id==='oimp'){umOpen(false);if(t.files[0]&&can('x_openinv')){const f=t.files[0];t.value='';readOpenInv(f)}return}
   if(t.id==='ximp')umOpen(false);
   if(t.id==='ximp'&&t.files[0]&&can('x_import')){const f=t.files[0];t.value='';readImport(f);return}
@@ -1059,7 +1065,7 @@ document.addEventListener('submit',async e=>{
   if(e.target.id==='uform'){e.preventDefault();if(!isAdmin()||!window.CRM_USERS)return;const f=e.target,em=String(f.elements.email.value||'').trim().toLowerCase(),r=f.elements.role.value;
     if(!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i.test(em)){toast('Geçerli bir e-posta yazın.',1);f.elements.email.focus();return}
     const ex=(UL||[]).find(u=>String(u.email).toLowerCase()===em);
-    try{await window.CRM_USERS.save(ex?ex.email:em,r);f.reset();toast(ex?`${personOf(em).name} zaten kayıtlı: rolü ${roleName(r)} yapıldı`:`${personOf(em).name} eklendi (${roleName(r)})`);UL=null;render()}catch(err){toast('Eklenemedi: '+(err.message||err),1)}return}
+    try{await window.CRM_USERS.save(ex?ex.email:em,r,ex?(ex.rep||null):(repGuess(em)||null));f.reset();toast(ex?`${personOf(em).name} zaten kayıtlı: rolü ${roleName(r)} yapıldı`:`${personOf(em).name} eklendi (${roleName(r)})`);UL=null;render()}catch(err){toast('Eklenemedi: '+(err.message||err),1)}return}
   if(e.target.id==='rform'){e.preventDefault();if(!can('e_rules'))return;const f=e.target;
     if(!rformCheck(f)){toast('Hatalı değerleri düzeltin.',1);return}
     const d={};for(const k in RDEF)d[k]=rnum(f.elements[k].value);

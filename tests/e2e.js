@@ -36,6 +36,7 @@ const txt=(p,s)=>p.$eval(s,e=>e.textContent.replace(/\u00a0/g,' ').trim()).catch
 const rows=p=>p.$$eval('#list .row b',bs=>bs.map(b=>b.textContent));
 const writes=p=>p.evaluate(()=>window.__writes);
 const doc=(p,k)=>p.evaluate(k=>{const d=window.__store.get(k);return d===undefined?null:d},k);
+const goList=async p=>{for(const q of ['#homeA','#homeP','.tab[data-view=list]'])if(await p.isVisible(q)){await p.click(q);return}throw new Error('ana sayfa butonu yok')};
 const goAdm=async p=>{await p.click('#avBtn');await p.click('#umRules')};
 const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await p.waitForSelector('#detail h2')};
 
@@ -290,7 +291,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.screenshot({path:path.join(SHOTS,'3e-arag-kart.png'),clip:{x:560,y:180,width:840,height:330}});
    await page.click('#tabV');await page.click('[data-ovf=arag]');
    ok((await page.$$('#odT tbody tr')).length===1&&/ARAG/.test(await txt(page,'#odT tbody tr td:last-child')),'ARAG süzgecinde görünüyor');
-   await page.click('[data-ovf=all]');await page.click('.tab[data-view=list]');
+   await page.click('[data-ovf=all]');await goList(page);
    await sel(page,'Sağlıklı Market');ok(!(await page.$('#aragBox')),'30 günü aşmayan müşteride ARAG butonu yok');
    await sel(page,'Düşüş Market');page.once('dialog',d=>d.accept());await page.click('#aragOff');await page.waitForTimeout(150);
    ok(!(await doc(page,'arag/c1'))&&!!(await page.$('#aragOn')),'süreç kapatılınca kayıt silindi, buton geri geldi');}
@@ -527,7 +528,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(d&&d.pasif===60&&d.temas===5&&d.arag===50&&d.iade===2.5&&d.by==='baran.sengul@akar-group.com','ayarlar settings/rules kaydına yazıldı');
    ok(/Ayarlar kaydedildi: Pasif gün sınırı, Temas günü, ARAG süreç günü$/.test(await txt(page,'#toast')),'bildirim yalnız değişenleri sayıyor (iade eşiği 2.5 değişmedi): '+await txt(page,'#toast'));
    ok(/Son güncelleme: .* · Baran Sengül/.test(await txt(page,'#admin'))&&(await page.$$eval('.rdef b',b=>b.length))===3,'son güncelleme ve "değiştirildi" işaretleri');
-   await page.click('.tab[data-view=list]');
+   await goList(page);
    ok(await page.$eval('#list .row[data-id="c2"] b',e=>e.classList.contains('pas')),'pasif sınırı 60: 70 gündür faturasız Sessiz Market artık Pasif');
    ok(/^5\+ gündür temas yok/.test(await txt(page,'[data-quick=cold] span'))&&await txt(page,'#tLeg')==='5','temas günü 5: kutu ve açıklama güncellendi');
    await sel(page,'Düşüş Market');ok(!(await page.$('#aragOn')),'ARAG günü 50: 40 günlük gecikmede buton yok');
@@ -543,7 +544,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    const d2=await doc(page,'settings/rules');ok(d2&&d2.pasif===120&&d2.temas===30&&d2.arag===30,'varsayılanlar kaydedildi');
    // sabit eşikler de ayardan
    const riskN=async()=>+(await page.evaluate(()=>document.querySelector('[data-quick=risk] b').textContent));
-   await page.click('.tab[data-view=list]');const r0=await riskN();
+   await goList(page);const r0=await riskN();
    ok(!!(await page.$('#list .row[data-id="c6"] .rtag.rt')),'İadeci Market iade uyarısı var (satış € 20.000 ≥ € 1.000)');
    await goAdm(page);
    await page.fill('#r_dropMin','100000');await page.fill('#r_silentMax','60');
@@ -552,10 +553,10 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.fill('#r_riskSilent','45');
    await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
    const d3=await doc(page,'settings/rules');ok(d3&&!('retMin' in d3)&&d3.dropMin===100000&&d3.silentMax===60,'yeni eşikler kaydedildi');
-   await page.click('.tab[data-view=list]');
+   await goList(page);
    const r1=await riskN();ok(r1===r0-2,`en az ciro € 100.000 ve en fazla 60 gün: Düşüş (€ 60.000) ve Sessiz (70 gün) riskten çıktı (${r0} → ${r1})`);
    await goAdm(page);await page.click('#rdef');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
-   await page.click('.tab[data-view=list]');ok(await riskN()===r0,'varsayılanlara dönünce eski hâline geldi');
+   await goList(page);ok(await riskN()===r0,'varsayılanlara dönünce eski hâline geldi');
    await goAdm(page);
    // kalıcılık: kaydedilen ayar sayfa yenilenince formda kayıtlı hâliyle görünür
    await goAdm(page);await page.fill('#r_arag','21');await page.fill('#r_riskPace','20');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
@@ -566,7 +567,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
     ok(await p3.inputValue('#r_arag')==='21'&&await p3.inputValue('#r_riskPace')==='20','sayfa açılınca kayıtlı ayarlar formda görünüyor (ARAG 21, tempo %20) — eskiden varsayılanlar görünüyordu');
     ok(/değiştirildi/.test(await txt(p3,'#rform .rrow:has(#r_arag) .rdef')),'kayıtlı değerde "değiştirildi" işareti');
     await c3.close();}
-   await page.fill('#r_temas','12');page.once('dialog',d=>d.dismiss());await page.click('.tab[data-view=list]');
+   await page.fill('#r_temas','12');page.once('dialog',d=>d.dismiss());await goList(page);
    ok(await page.isVisible('#rform')&&await page.inputValue('#r_temas')==='12','kaydedilmemiş değişiklik varken sekmeden çıkarken soruyor (vazgeçince kalıyor)');
    await page.click('#rdef');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
    await page.screenshot({path:path.join(SHOTS,'9-yonetici.png'),fullPage:true});}
@@ -593,7 +594,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    for(const r of br){const cs=raw.cs.filter(c=>c.rep===r[0]&&typeof c.ciro2025==='number'&&typeof c.sales2026==='number');const c25=cs.reduce((a,c)=>a+c.ciro2025,0),s26=cs.reduce((a,c)=>a+c.sales2026,0);
      if(c25>0)ok(r[4]===pctS(tempo(s26,c25)),`Karne tempo ${r[0]}: ${r[4]} = ${pctS(tempo(s26,c25))}`)}
    ok(new RegExp(`${dt.split('-').reverse().join('\\.')} itibarıyla yılın %${Math.round(YFx*100)}`).test(await txt(page,'#board .oh b')),'tempo, satış verisinin tarihine göre: '+await txt(page,'#board .oh b'));
-   await page.click('.tab[data-view=list]');await sel(page,'Düşüş Market');
+   await goList(page);await sel(page,'Düşüş Market');
    const c1=raw.cs.find(c=>c.id==='c1');
    ok(await txt(page,'#cmpG')===pctS(tempo(c1.sales2026,c1.ciro2025)),'kartta büyüme = tempo (aynı döneme göre): '+await txt(page,'#cmpG'));
    ok(/aynı döneme göre/.test(await txt(page,'#detail .cmp'))&&/Ciro \d{4} \(yıl\) → \d{4} YTD/.test(await txt(page,'#detail .cmp dt')),'kart etiketi: '+await txt(page,'#detail .cmp dt'));
@@ -608,7 +609,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    const rt=await page.$$eval('#retT tbody tr',rs=>rs.map(r=>[...r.cells].map(c=>c.textContent.trim())));
    const r6row=rt.find(r=>r[1]==='İadeci Market');ok(r6row&&r6row[5]===`%${p6s}`,'Karne iade listesi aynı oran');
    // 4) sabit yazılmış metinler / veriler
-   await page.click('.tab[data-view=list]');
+   await goList(page);
    ok(await page.$eval('#list .dot',e=>e.getAttribute('title'))==='30+ gündür temas yok','listedeki nokta ipucu çalışıyor (eskiden "${R.temas}" yazıyordu)');
    ok((await txt(page,'#sub')).startsWith('Satış verisi '+raw.mon.through.split('-').reverse().join('.')),'başlık altında verinin tarihi: '+await txt(page,'#sub'));
    // verinin tarihi değişince tempo da değişir (bugüne değil veriye bağlı)
@@ -700,6 +701,10 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(/Muhasebe \(1\)/.test(await txt(page,'#pT thead')),'rol sayısı güncellendi');
    await page.selectOption('[data-urole="Raci.Oener@akar-gmbh.de"]','muhasebe');await page.waitForTimeout(150);
    ok((await page.evaluate(()=>window.__users)).find(u=>u.email==='Raci.Oener@akar-gmbh.de').role==='muhasebe','rol değiştirildi: Raci Öner → Muhasebe');
+   ok((await page.evaluate(()=>window.__users)).find(u=>u.email==='muhasebe.test@akar-bv.nl').rep===null,'temsilci olmayan yeni kullanıcıya temsilci atanmadı');
+   await page.selectOption('[data-urep="Raci.Oener@akar-gmbh.de"]','Mehmet Halici');await page.waitForTimeout(150);
+   {const u=(await page.evaluate(()=>window.__users)).find(u=>u.email==='Raci.Oener@akar-gmbh.de');ok(u.rep==='Mehmet Halici'&&u.role==='muhasebe','temsilci alanı kaydedildi (rol korunarak): Raci Öner → Mehmet Halici')}
+   await page.selectOption('[data-urep="Raci.Oener@akar-gmbh.de"]','');await page.waitForTimeout(150);
    page.once('dialog',d=>d.accept());await page.click('[data-udel="muhasebe.test@akar-bv.nl"]');await page.waitForTimeout(150);
    ok(!(await page.evaluate(()=>window.__users)).some(u=>u.email==='muhasebe.test@akar-bv.nl'),'kullanıcı kaldırıldı');
    // izin değiştir ve kaydet
@@ -711,7 +716,10 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    const d=await doc(page,'settings/perms');
    ok(d&&d.satis.v_all===false&&d.satis.v_credit===true&&d.satis.e_notes===true&&d.muhasebe.v_credit===true&&d.by==='baran.sengul@akar-group.com','izinler settings/perms kaydına yazıldı');
    ok(/İzinler kaydedildi: Satış temsilcisi$/.test(await txt(page,'#toast')),'bildirim: '+await txt(page,'#toast'));
-   ok(/yalnız Lütfi Kaplan/.test(await txt(page,'#uT tr[data-urow="lutfi.kaplan@akar-bv.nl"]')),'"tüm müşteriler" kapalıyken temsilci yalnız kendi adını görecek');
+   await page.selectOption('[data-urole="Raci.Oener@akar-gmbh.de"]','satis');await page.waitForTimeout(150);
+   ok(/temsilci seçilmedi: müşteri göremez/.test(await txt(page,'#uT tr[data-urow="Raci.Oener@akar-gmbh.de"]')),'temsilci adı seçilmeyen satış kullanıcısı için uyarı');
+   await page.selectOption('[data-urole="Raci.Oener@akar-gmbh.de"]','muhasebe');await page.waitForTimeout(150);
+   ok(/yalnız Lütfi Kaplan müşterileri/.test(await txt(page,'#uT tr[data-urow="lutfi.kaplan@akar-bv.nl"]'))&&/tüm müşterileri görür/.test(await txt(page,'#uT tr[data-urow="Raci.Oener@akar-gmbh.de"]')),'"tüm müşteriler" kapalı: temsilci yalnız kendi müşterilerini, muhasebe tümünü görür');
    await page.screenshot({path:path.join(SHOTS,'13-izinler.png'),fullPage:true});
    // temsilci: yalnız kendi müşterileri, Kredi Limiti var, menüde yönetim yok
    const {ctx:c2,page:p2}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl',seed:{settings:{perms:d}}});
@@ -736,7 +744,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(await p4.isHidden('#tabH')&&await p4.isHidden('#tabV')&&!(await p4.$('[data-quick=od]')),'Hedefler ve açık fatura izni kapalı: sekmeler ve kutu yok');
    await sel(p4,'Düşüş Market');ok(!(await p4.$('#oi'))&&!(await p4.$('#ctEdit')),'kartta açık faturalar ve iletişim düzenleme yok');
    await c4.close();
-   await page.click('[name="satis|v_credit"]');page.once('dialog',x=>x.accept());await page.click('.tab[data-view=list]');
+   await page.click('[name="satis|v_credit"]');page.once('dialog',x=>x.accept());await goList(page);
    ok(await page.isVisible('#listView'),'kaydedilmemiş izinle sayfadan çıkarken soruyor');}
   await ctx.close();
 
@@ -747,7 +755,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.fill('#q','Sağlıklı');await page.dispatchEvent('#q','input');ok((await rows(page)).length===0,'aramada başka temsilcinin müşterisi çıkmıyor');await page.fill('#q','');await page.dispatchEvent('#q','input');
    await page.click('#tabH');
    ok(await txt(page,'[data-qcard="Özgür Firat"] .qbig')==='%84'&&await txt(page,'[data-qcard="Lütfi Kaplan"] .qbig')==='%56'&&!!(await page.$('#targets .qgrid .qcard')),'Hedefler sekmesi kısıtlamanın dışında: tüm ekip görünüyor');
-   await page.click('.tab[data-view=list]');await page.click('#ordBtn');
+   await goList(page);await page.click('#ordBtn');
    ok(JSON.stringify(await page.$$eval('#ordp tbody tr td:first-child',t=>t.map(x=>x.textContent.trim())))==='["Lütfi Kaplan"]','aylık net ciro dağılımında yalnız kendisi');
    await page.click('#ordBtn');}
   await ctx.close();
@@ -759,12 +767,20 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   {ok(await page.isVisible('#stats')&&await page.isVisible('#reps'),'ana sayfada üst kutular görünüyor');
    await goAdm(page);
    ok(await page.isHidden('#stats')&&await page.isHidden('#reps')&&await page.isVisible('#homeA'),'Yönetici ayarlarında üst kutular ve temsilci seçimi gizli; "Ana sayfaya dön" var');
-   await page.click('#homeA');ok(await page.isVisible('#listView')&&await page.isVisible('#stats'),'"Ana sayfaya dön" müşteri listesine döndürüyor');
+   ok(await page.isHidden('nav.tabs'),'ayar sayfasında Müşteriler / Hedefler / Karne sekmeleri de gizli');
+   await page.click('#homeA');ok(await page.isVisible('nav.tabs'),'ana sayfada sekmeler geri geliyor');ok(await page.isVisible('#listView')&&await page.isVisible('#stats'),'"Ana sayfaya dön" müşteri listesine döndürüyor');
    await page.click('#avBtn');await page.click('#umPerms');
    ok(await page.isHidden('#stats')&&await page.isVisible('#homeP'),'Kullanıcı izinlerinde de üst kutular gizli');
    await page.screenshot({path:path.join(SHOTS,'14-izinler-ust.png'),clip:{x:0,y:0,width:1400,height:420}});
    await page.click('#homeP');ok(await page.isVisible('#stats'),'izinlerden ana sayfaya dönüş');}
   await ctx.close();
+
+  step('15. Temsilci adı kullanıcı listesinden (CRM_REP)');
+  {const ctx2=await browser.newContext({viewport:{width:1400,height:1000}});const p2=await ctx2.newPage();p2.on('pageerror',e=>errors.push(e.message));await p2.route(offline,r=>r.abort());
+   await p2.addInitScript(`${FIX};window.CRM_IS_ADMIN=false;window.CRM_ROLE='satis';window.CRM_REP='Mehmet Halici';window.CRM_USER='m.h@akar-bv.nl';window.CRM_AUTH={email:'m.h@akar-bv.nl'};${MOCK}`);
+   await p2.goto(BASE+'/index.html');await p2.waitForSelector('#list .row');
+   ok(JSON.stringify(await rows(p2))==='["Küçük Kiosk","Sağlıklı Market"]','e-posta adı eşleşmese de kullanıcı listesindeki temsilci (Mehmet Halici) geçerli');
+   await ctx2.close();}
 
   step('0c. Raci Öner');
   ({ctx,page}=await open(browser,{admin:false,role:'muhasebe',user:'Raci.Oener@akar-gmbh.de'}));

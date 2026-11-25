@@ -33,10 +33,10 @@
   const db={collection,doc(p){const [c,i]=p.split('/');return docRef(c,i)}};
   window.__store=store;
   // kullanıcı listesi (Supabase'de allowed_users tablosu)
-  const users=(window.__USERS||[{email:'baran.sengul@akar-group.com',role:'admin'},{email:'lutfi.kaplan@akar-bv.nl',role:'satis'},{email:'Raci.Oener@akar-gmbh.de',role:'satis'}]).map(u=>({...u}));
+  const users=(window.__USERS||[{email:'baran.sengul@akar-group.com',role:'admin',rep:'Baran Sengül'},{email:'lutfi.kaplan@akar-bv.nl',role:'satis',rep:'Lütfi Kaplan'},{email:'Raci.Oener@akar-gmbh.de',role:'satis',rep:null}]).map(u=>({...u}));
   window.__users=users;
   window.CRM_USERS={async list(){return users.map(u=>({...u}))},
-    async save(email,role){const u=users.find(x=>x.email===email);if(u)u.role=role;else users.push({email,role})},
+    async save(email,role,rep){const u=users.find(x=>x.email===email);if(u){u.role=role;u.rep=rep||null}else users.push({email,role,rep:rep||null})},
     async remove(email){const i=users.findIndex(x=>x.email===email);if(i>=0)users.splice(i,1)}};
   window.claude={async use(k){
     if(k==='db')return db;
