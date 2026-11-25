@@ -108,6 +108,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   const tile=await txt(page,'[data-quick=risk]');
   ok(await txt(page,'[data-quick=risk] b')==='2',`risk kutusu yalnız aktif 2 müşteri gösteriyor ("${tile}")`);
   ok(await txt(page,'#rkPas')==='Pasif müşteri: 2','kutunun altında küçük punto: Pasif müşteri: 2 (Kayıp Market, Kapanan Market)');
+  ok(await txt(page,'#rkPasC')==='2025: € 50.000 · 2026: € 0','altında pasiflerin cirosu: 2025 € 50.000 (10.000+40.000), 2026 € 0 → '+await txt(page,'#rkPasC'));
   ok(await page.$eval('#rkPas',e=>parseFloat(getComputedStyle(e).fontSize)<parseFloat(getComputedStyle(e.previousElementSibling).fontSize)),'pasif satırı daha küçük punto');
   await page.click('[data-quick=risk]');
   const r1=await rows(page);
