@@ -81,8 +81,8 @@ const has=(c,k)=>Object.prototype.hasOwnProperty.call(c,k);
 const inv=c=>(c.lastInvoice||c.sales2026!=null||c.invoices2026!=null)?{last:c.lastInvoice||'',no:c.lastInvoiceNo||'',sales:c.sales2026,n:c.invoices2026}:null;
 const ciroOf=c=>(c.ciro2025==null&&c.ciro2026==null)?null:[c.ciro2025,c.ciro2026];
 const st={q:'',rep:'',seg:'',status:'',quick:'',sort:'name',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
-try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.sort)st.sort=s.sort;if(s.view)st.view=s.view;if(s.qv)st.qv=s.qv}catch(e){}
-const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,sort:st.sort,view:st.view,qv:st.qv}))}catch(e){}};
+try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.sort)st.sort=s.sort;if(s.view)st.view=s.view;if(s.qv)st.qv=s.qv;if(s.rf)st.rf=s.rf}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,sort:st.sort,view:st.view,qv:st.qv,rf:st.rf}))}catch(e){}};
 
 let tt;
 const toast=(m,bad)=>{const t=$('#toast');t.textContent=m;t.className='toast show'+(bad?' bad':'');clearTimeout(tt);tt=setTimeout(()=>{t.className='toast'},3400)};
@@ -253,14 +253,22 @@ function renderBoard(){
   const pace=o=>o.c25b>0?(()=>{const g=o.s26b/(o.c25b*YF)-1;return `<span class="${g<0?'down':'up'}">${g>0?'+':''}${pct1(g)}%</span>`})():'–';
   const ordC=o=>`${eur(o.ord)}${o.t?` <span class="sm">/ ${eur(o.t)} · %${Math.round(o.ord/o.t*100)}</span>`:''}`;
   const tr=(o,tot)=>`<tr><td>${tot?'Toplam':`<button class="lnk" data-brep="${esc(o.r)}">${esc(o.r)}</button>`}</td><td>${o.n} <span class="sm">(${o.ak} aktif)</span></td><td>${eur(o.c25)}</td><td>${eur(o.s26)}</td><td>${pace(o)}</td>${VISIT_LOG?`<td>${o.a7} / ${o.a30}</td>`:''}<td>${tot?`${o.rk} · ${eur(o.rkv)}`:`<button class="lnk" data-brisk="${esc(o.r)}">${o.rk} · ${eur(o.rkv)}</button>`}</td></tr>`;
-  const top=C.map(c=>[c,retOf(c)]).filter(([,r])=>r&&r.warn).sort((a,b)=>b[1].p-a[1].p).slice(0,10);
+  // iade oranı en yüksek ilk 25: varsayılan aktifler; genel ilk 25'teki pasifler çizginin altında
+  const RTOP=25,isPas=c=>c.status==='Pasif',rf=['aktif','pasif'].includes(st.rf)?st.rf:'both';
+  const retAll=C.map(c=>[c,retOf(c)]).filter(([,r])=>r&&r.warn).sort((a,b)=>b[1].p-a[1].p);
+  const top=rf==='pasif'?retAll.filter(([c])=>isPas(c)).slice(0,RTOP):retAll.filter(([c])=>!isPas(c)).slice(0,RTOP);
+  const topPas=rf==='both'?retAll.slice(0,RTOP).filter(([c])=>isPas(c)):[];
+  const nAkt=retAll.filter(([c])=>!isPas(c)).length,nPas=retAll.length-nAkt;
+  const retRow=([c,r],i)=>`<tr${isPas(c)?' class="pasr"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`;
+  const rfBtn=(k,l)=>`<button type="button" data-rf="${k}" aria-pressed="${rf===k}">${l}</button>`;
   const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`,TG=(TGS[mk]||{}).reps||{};
   $('#board').innerHTML=`<h3>Temsilci Karnesi</h3>
   <div class="ordp"><div class="oh"><b>Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}${pctEk(Math.round(YF*100))})</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
   <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 YTD</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp Riski</th></tr></thead>
   <tbody>${rows.map(o=>tr(o)).join('')}</tbody><tfoot>${tr(T,1)}</tfoot></table></div>
-  <h3>En Yüksek İade Oranı <small class="sm">ilk 10 · satışın %${pct1(RET_WARN)}${pctEk(pct1(RET_WARN))} ve üzeri</small></h3>
-  ${top.length?`<div class="ordp"><table id="retT"><thead><tr><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(([c,r])=>`<tr><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`).join('')}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
+  <div class="rethead"><h3>En Yüksek İade Oranı <small class="sm">ilk ${RTOP} · satışın %${pct1(RET_WARN)}${pctEk(pct1(RET_WARN))} ve üzeri · ${nAkt} aktif, ${nPas} pasif müşteri bu eşiğin üzerinde</small></h3>
+    <div class="seg2" role="group" aria-label="Durum filtresi">${rfBtn('both','Aktif + Pasif')}${rfBtn('aktif','Aktif')}${rfBtn('pasif','Pasif')}</div></div>
+  ${top.length||topPas.length?`<div class="ordp"><table id="retT"><thead><tr><th class="rk">#</th><th>Müşteri</th><th>Temsilci</th><th>Satış</th><th>İade</th><th>Oran</th></tr></thead><tbody>${top.map(retRow).join('')}${topPas.length?`<tr class="sep"><td colspan="6">Pasif · genel ilk ${RTOP}'te yer alan ${topPas.length} müşteri</td></tr>${topPas.map(retRow).join('')}`:''}</tbody></table></div>`:'<p class="empty">İade oranı yüksek müşteri yok.</p>'}
 `;
 }
 /* ===== Hedef takibi (Excel'deki temsilci hedef tablosu) =====
@@ -668,6 +676,7 @@ document.addEventListener('click',async e=>{
   if(t.id==='ordBtn'){st.ord=!st.ord;if(st.ord)st.quick='';render();return}
   if(t.dataset.qp!==undefined){if(st.qedit&&st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?'))return;st.qp=t.dataset.qp;st.qedit=false;st.qdirty=false;render();return}
   if(t.dataset.qv){st.qv=t.dataset.qv;saveUi();render();return}
+  if(t.dataset.rf){st.rf=t.dataset.rf;saveUi();render();return}
   if(t.id==='qEdit'){st.qedit=true;st.qdirty=false;render();const i=$('#qform input');if(i)i.focus();return}
   if(t.id==='qCancel'){if(st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?'))return;st.qedit=false;st.qdirty=false;render();return}
   if(t.dataset.rep!==undefined){st.rep=t.dataset.rep;saveUi();render();return}
