@@ -273,3 +273,107 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .home{margin:4px 0 6px;min-height:40px}
 #odOrph td,#odOrph th{font-variant-numeric:tabular-nums}#odOrph td:first-child{font-weight:600}#odOrph .odd{color:var(--mut)}#odOrph tr.o30 .odd{color:var(--bad);font-weight:700}
 @media(max-width:600px){#odOrph th:nth-child(4),#odOrph td:nth-child(4){display:none}#odOrph{font-size:13px}#odOrph th,#odOrph td{padding-left:4px;padding-right:4px}#odOrph th{white-space:normal}#odOrph td:last-child small{display:block}}
+
+/* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
+@media(max-width:600px){
+.umd .who small{font-size:11px}
+.umd button, .umd label{font-size:13px}
+.banner{font-size:13px}
+input, select, textarea{font-size:14px}
+.tk-tag{font-size:9px}
+.aform h3, .detail > h3{font-size:20px}
+.aform label, .sheet label{font-size:12px}
+.typ span{font-size:13px}
+.qd{font-size:12px}
+.qd button{font-size:12px}
+.tm{font-size:12px}
+.ty{font-size:10px}
+.nx{font-size:12px}
+.x{font-size:11px}
+.tasks h3{font-size:22px}
+.tasks h3 small{font-size:13px}
+.td{font-size:12px}
+.sheet p{font-size:13px}
+.mb span{font-size:12px}
+.prev{font-size:12px}
+.fixed{font-size:14px}
+.sample{font-size:11px}
+body{font-size:12px}
+header h1{font-size:22px}
+.av{font-size:11px}
+header p{font-size:10.5px}
+.primary, .ghost{font-size:12px}
+.chip{font-size:11px}
+.stat b{font-size:22px}
+.stat span{font-size:10.5px}
+.tab{font-size:12px}
+.meta{font-size:10.5px}
+.rm b{font-size:13px}
+.rm small{font-size:10px}
+.seg{font-size:10.5px}
+.lc{font-size:10px}
+.dh h2{font-size:22px}
+.ph h2{font-size:22px}
+.tag{font-size:10px}
+dt{font-size:10px}
+dd{font-size:12px}
+.sheet h2{font-size:22px}
+.toast{font-size:12px}
+.rn{font-size:11px}
+.alert{font-size:12px}
+.rtag{font-size:9px}
+.cta a, .cta button{font-size:13px}
+.ctf label{font-size:12px}
+.typ legend{font-size:12px}
+.board h3{font-size:22px}
+.board .sm{font-size:11px}
+.ordp table{font-size:13px}
+.qleg{font-size:11px}
+.qbigw small{font-size:9px}
+.qleft{font-size:12px}
+.qcard h4, .qblock h4{font-size:20px}
+.qline b{font-size:16px}
+.qhelp{font-size:12px}
+.qbig{font-size:28px}
+.qcats li{font-size:11px}
+#retT tr.sep td{font-size:11px}
+.ch-h .lnk{font-size:12px}
+.chtab td.chn small{font-size:10px}
+.chainbox .sm{font-size:11px}
+.ch-h h3{font-size:17px}
+.chtab table{font-size:11px}
+.tag.stsel select{font-size:11px}
+.oi h3 small{font-size:10.5px}
+.oi-sum span{font-size:10px}
+.oi-sum small{font-size:9.5px}
+.oi-t{font-size:10px}
+.oi-note{font-size:10px}
+.oi h3{font-size:17px}
+.oi-sum b{font-size:14px}
+.oi-a b{font-size:11.5px}
+.oi-b{font-size:10px}
+#overdueView > div > .sm{font-size:11px}
+.filters select{font-size:11px}
+.arag{font-size:11px}
+#odT{font-size:11px}
+.rrow label b{font-size:13px}
+.rrow label small{font-size:11px}
+.rbox input{font-size:15px}
+.rbox em{font-size:12px}
+.rdef{font-size:10px}
+.rimp{font-size:10.5px}
+.stsub{font-size:9px}
+.rgrp{font-size:10px}
+.crsum span{font-size:11px}
+.crsum small{font-size:10px}
+#crT .cru{font-size:10px}
+.crnote{font-size:11px}
+.crsum b{font-size:18px}
+#pT .cru, #uT .cru{font-size:10px}
+#pT tr.pg th{font-size:10px}
+.uadd label{font-size:11px}
+.uadd input, .uadd select{font-size:13px}
+#pT th, #pT td{font-size:11px}
+#odOrph{font-size:11px}
+}
+/* /TELEFON PUNTOSU */

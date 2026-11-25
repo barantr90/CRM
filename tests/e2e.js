@@ -857,6 +857,22 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.screenshot({path:path.join(SHOTS,'8-mobil-kart.png'),fullPage:true});
   await ctx.close();
 
+  step('8p. Telefonda yazılar 2 px küçük (CLAUDE.md kuralı)');
+  {const P=require('./punto.js'),css=fs.readFileSync(path.join(ROOT,'style.css'),'utf8');
+   ok(css.includes(P.A)&&css.trimEnd().endsWith(P.Z)&&css.slice(css.indexOf(P.A))===await P.build(browser,css),'style.css sonundaki telefon puntosu bloğu güncel (değilse: node tests/punto.js)');
+   const sizes=async(p,views)=>{const r={};for(const v of views){await v(p);await p.waitForTimeout(80);
+     Object.assign(r,await p.evaluate(()=>{const o={};let i=0;for(const e of document.querySelectorAll('body *')){if(!e.offsetParent&&getComputedStyle(e).position!=='fixed')continue;
+       if(![...e.childNodes].some(n=>n.nodeType===3&&n.textContent.trim()))continue;const k=(e.id||e.tagName)+'#'+(i++)+':'+e.textContent.trim().slice(0,20);o[k]=parseFloat(getComputedStyle(e).fontSize)}return o}))}return r};
+   const V=[async p=>{},async p=>{await p.click('#list .row:has-text("Düşüş Market")')},async p=>{await p.keyboard.press('Escape');await p.click('#tabV')},async p=>{await p.click('#tabK')},async p=>{await p.click('#tabH')},async p=>{await p.click('[data-qv=tablo]')},async p=>{await goAdm(p)}];
+   const {ctx:c1,page:p1}=await open(browser,{viewport:{width:390,height:844}}),now=await sizes(p1,V);
+   ok(await p1.evaluate(()=>getComputedStyle(document.body).fontSize)==='12px','telefonda gövde yazısı 12 px (önceden 14 px)');await c1.close();
+   const {ctx:c2,page:p2}=await open(browser,{viewport:{width:390,height:844}});
+   await p2.evaluate(c=>{document.querySelector('link[href="style.css"]').remove();const s=document.createElement('style');s.textContent=c;document.head.append(s)},P.strip(css));
+   const old=await sizes(p2,V);await c2.close();
+   const ks=Object.keys(old).filter(k=>k in now),bad=ks.filter(k=>{const d=old[k]-now[k];return /^SMALL#/.test(k)?d<1.5||d>P.DIFF+0.01:Math.abs(d-P.DIFF)>0.01});// <small> tarayıcıda üst öğeye orantılı (5/6): ~1,7 px
+   ok(ks.length>200&&!bad.length,`${ks.length} yazı öğesinin hepsi tam ${P.DIFF} px küçük`+(bad.length?': '+bad.slice(0,5).map(k=>`${k} ${old[k]}→${now[k]}`).join(' | '):''));
+   const {ctx:c3,page:p3}=await open(browser);ok(await p3.evaluate(()=>getComputedStyle(document.body).fontSize)==='16px','masaüstünde değişiklik yok (gövde 16 px)');await c3.close();}
+
   step('7m. Hedefler telefonda');
   ({ctx,page}=await open(browser,{viewport:{width:390,height:844}}));
   await page.click('#tabH');
