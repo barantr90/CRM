@@ -214,6 +214,22 @@ function rformCheck(f){let bad=0;for(const [k,,,mn,mx] of RULES){const e=f.eleme
   const im=f.querySelector(`[data-rimp="${k}"]`);if(im)im.textContent=ok?ruleImpact(k,v):`${String(mn).replace('.',',')}–${mx} arası bir değer girin`}
   {const a=rnum(f.elements.riskSilent.value),b=rnum(f.elements.silentMax.value);if(a!=null&&b!=null&&b<=a){f.elements.silentMax.closest('.rbox').classList.add('bad');const im=f.querySelector('[data-rimp="silentMax"]');if(im)im.textContent=`Faturasız gün sınırından (${a}) büyük olmalı`;bad++}}
   return !bad}
+// Açık fatura dosyasında olup CRM'de müşteri kaydı olmayan kodlar. Temsilcisi olmadığından yalnız tüm müşterileri görenlere (v_all) gösterilir; sunucu da (my_sync) bu kodları diğerlerine göndermez.
+function oiOrphans(){
+  if(!OI||!OI.map||!can('v_all'))return [];
+  const known=new Set(CALL.map(code));
+  return Object.keys(OI.map).filter(k=>!known.has(k)).map(k=>{const o=oiOf({code:k});if(!o)return null;
+    const due=o.L.filter(x=>x.rest>0&&x.due).map(x=>x.due).sort()[0]||'';return {k,o,due}}).filter(Boolean).sort((a,b)=>b.o.tot-a.o.tot||a.k.localeCompare(b.k));
+}
+function orphanHtml(){
+  const L=st.rep?[]:oiOrphans();if(!L.length)return '';
+  const tot=L.reduce((a,x)=>a+x.o.tot,0),od=L.reduce((a,x)=>a+x.o.od,0);
+  const dueTd=x=>{if(!x.due)return x.o.crn?'<span class="sm">yalnız alacak</span>':'–';const d=dueIn(x.due);return `${fmt(x.due)}${d<0?` <small class="odd">${-d} gün geçti</small>`:''}`};
+  const row=x=>`<tr${x.o.odn&&x.o.odMax>R.arag?' class="o30"':''}><td>${esc(x.k)}</td><td><b>${eurc(x.o.tot)}</b></td><td>${x.o.od>0?`<span class="odv">${eurc(x.o.od)}</span>`:'–'}</td><td>${x.o.L.length}</td><td>${dueTd(x)}</td></tr>`;
+  return `<div class="rethead"><h3 id="orphHead">CRM'de olmayan müşteri kodları <small class="sm">${L.length} kod · net ${eurc(tot)}${od>0?` · vadesi geçen ${eurc(od)}`:''}</small></h3></div>
+  <div class="ordp"><table id="odOrph"><thead><tr><th>Kod</th><th>Açık bakiye (net)</th><th>Vadesi geçen</th><th>Kalem</th><th>En eski vade</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>
+  <p class="sm">Bu kodlar açık fatura dosyasında var ama CRM müşteri listesinde yok; tutarları yukarıdaki toplamlara, kartlara ve Kredi Limiti sekmesine girmez. Müşteri Excel'iyle CRM'e eklenince ya da ERP'de kapatılınca bu listeden çıkar.</p>`;
+}
 function renderOverdue(){
   const has=!!(OI&&OI.map)&&can('v_overdue');$('#tabV').hidden=!has;
   const all=has?overdueRows():[];
@@ -228,7 +244,7 @@ function renderOverdue(){
   $('#overdue').innerHTML=`<div class="rethead"><h3>Vadesi Geçen Müşteriler <small class="sm">${fmt(OI.asOf)} verisi${st.rep?' · '+esc(st.rep):''} · ${L.length} müşteri · ${eur(sum)}</small></h3>
   <div class="seg2" role="group" aria-label="Süz">${fb('all',`Tümü (${all.length})`)}${fb('30',`${R.arag}+ gün (${n30})`)}${fb('arag',`ARAG (${nA})`)}</div></div>
   ${L.length?`<div class="ordp"><table id="odT"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Vadesi geçen</th><th>Fatura</th><th>En eski</th><th>ARAG</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>`:'<p class="empty">Bu süzgeçte müşteri yok.</p>'}
-  <p class="sm">Tutar: vadesi geçmiş faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Gün sayısı bugüne göre. Satıra tıklayınca müşteri kartı açılır.</p>`;
+  <p class="sm">Tutar: vadesi geçmiş faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Gün sayısı bugüne göre. Satıra tıklayınca müşteri kartı açılır.</p>${orphanHtml()}`;
 }
 // Kredi limiti: tanımlı limit (açık fatura dosyasından), açık bakiye (net) ve önerilen limit
 const limOf=o=>o&&typeof o.lim==='number'&&o.lim>0?o.lim:null;
@@ -923,9 +939,11 @@ async function readOpenInv(f){
       if(I.lim>=0&&num(r[I.lim])!=null)m.lim=num(r[I.lim]);if(I.v>=0&&num(r[I.v])!=null)m.vade=num(r[I.v]);
       m.inv.push([String(r[I.no]).trim(),d,t,r2(num(r[I.a])??rest),r2(rest),due]);n++}
     if(!n){toast('Dosyada açık fatura bulunamadı.',1);return}
-    const known=new Set(C.map(code)),ks=Object.keys(map),miss=ks.filter(k=>!known.has(k));
+    const known=new Set(CALL.map(code)),ks=Object.keys(map),miss=ks.filter(k=>!known.has(k));
     asOf=asOf||TODAY;
-    if(!confirm(`${n} açık kalem, ${ks.length} müşteri (veri tarihi ${fmt(asOf)}).${miss.length?`\n${miss.length} müşteri kodu CRM'de yok; onların kalemleri kartlarda görünmez.`:''}\n\nMevcut açık fatura verisinin yerine yazılsın mı?`))return;
+    const net=k=>r2(map[k].inv.reduce((a,x)=>a+x[4],0)),MX=12,ml=miss.slice().sort((a,b)=>net(b)-net(a)).map(k=>`${k} (${eurc(net(k))})`);
+    const missTxt=miss.length?`\n\n${miss.length} müşteri kodu CRM'de yok; kartlarda görünmez, Vadesi Geçen sekmesinde ayrı listelenir:\n${ml.slice(0,MX).join(', ')}${ml.length>MX?` ve ${ml.length-MX} kod daha`:''}`:'';
+    if(!confirm(`${n} açık kalem, ${ks.length} müşteri (veri tarihi ${fmt(asOf)}).${missTxt}\n\nMevcut açık fatura verisinin yerine yazılsın mı?`))return;
     await db.doc('sync/openinv').set({asOf,n,map,at:Date.now(),by:(window.CRM_AUTH||{}).email||''});
     toast(`Açık faturalar güncellendi: ${n} kalem, ${ks.length-miss.length} müşteri.`);
   }catch(err){toast('Açık fatura dosyası okunamadı.',1)}

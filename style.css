@@ -271,3 +271,5 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 @media(max-width:600px){#pT th,#pT td{padding-left:4px;padding-right:4px;font-size:13px}#uT td:nth-child(3),#uT th:nth-child(3){display:none}}
 
 .home{margin:4px 0 6px;min-height:40px}
+#odOrph td,#odOrph th{font-variant-numeric:tabular-nums}#odOrph td:first-child{font-weight:600}#odOrph .odd{color:var(--mut)}#odOrph tr.o30 .odd{color:var(--bad);font-weight:700}
+@media(max-width:600px){#odOrph th:nth-child(4),#odOrph td:nth-child(4){display:none}#odOrph{font-size:13px}#odOrph th,#odOrph td{padding-left:4px;padding-right:4px}#odOrph th{white-space:normal}#odOrph td:last-child small{display:block}}

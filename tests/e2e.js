@@ -279,7 +279,16 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(r.length===1&&r[0][1]==='Düşüş Market'&&r[0][3]==='€ 1.201'&&r[0][5]==='40 gün','tabloda yalnız vadesi geçen: '+JSON.stringify(r));
    await page.click('[data-ovf=arag]');ok(/Bu süzgeçte müşteri yok/.test(await txt(page,'#overdue')),'ARAG süzgeci başta boş');
    await page.click('[data-ovf=all]');
-   await page.screenshot({path:path.join(SHOTS,'3e-vadesi-gecen.png'),clip:{x:0,y:440,width:1400,height:300}});
+   // açık fatura dosyasında olup CRM'de olmayan kodlar ayrı bölümde
+   {const o=await page.$$eval('#odOrph tbody tr',tr=>tr.map(t=>[...t.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim())));
+    ok(o.length===2&&o[0][0]==='9999'&&o[0][1]==='€ 10,00'&&o[0][2]==='€ 10,00'&&o[0][3]==='1'&&/1 gün geçti/.test(o[0][4]),'CRM\'de olmayan 9999: bakiye, vadesi geçen, en eski vade: '+JSON.stringify(o[0]));
+    ok(o[1]&&o[1][0]==='8888'&&o[1][1]==='−€ 40,00'&&o[1][2]==='–'&&/alacak/.test(o[1][4]),'yalnız alacağı olan 8888 da listede: '+JSON.stringify(o[1]));
+    ok(/CRM'de olmayan müşteri kodları/.test(await txt(page,'#overdue'))&&/2 kod/.test(await txt(page,'#orphHead')),'bölüm başlığı: '+await txt(page,'#orphHead'));
+    ok(!(await page.$$eval('#odT tbody tr',tr=>tr.some(t=>/9999/.test(t.textContent)))),'ana tabloya karışmıyor');
+    await page.click('.chip[data-rep="Mehmet Halici"]');await page.click('#tabV');
+    ok(!(await page.$('#odOrph')),'temsilci seçiliyken bölüm gizli (bu kodların temsilcisi yok)');
+    await page.click('.chip[data-rep=""]');await page.click('#tabV');}
+   await page.screenshot({path:path.join(SHOTS,'3e-vadesi-gecen.png'),fullPage:true});
    await page.click('#odT .lnk');await page.waitForSelector('#detail h2');
    ok(await txt(page,'#detail h2')==='Düşüş Market'&&!(await page.isHidden('#listView')),'satıra tıklayınca müşteri kartı açılıyor');
    ok(/40 gün/.test(await txt(page,'#aragBox'))&&!!(await page.$('#aragOn')),'40 gün gecikmede ARAG süreci butonu var');
@@ -645,6 +654,14 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
      ok(r.pasif===60,'Ayarlar: pasif gün sınırı Yönetici ayarından (60)');
      ok(r.ss==='Pasif','Sessiz Market (70 gün) pasif sınırı 60 ile Pasif');
      ok(r.h.includes('Tempo % (aynı dönem)')&&!r.h.includes('Büyüme %')&&r.yf>0&&r.yf<=1&&/Ayarlar!\$B\$5/.test(r.tf),'Tempo % sütunu ve formülü sitedeki tanımla aynı ('+r.tf+')')}
+   // açık fatura içe aktarma: CRM'de olmayan kodlar onay penceresinde listelenir
+   const msg=await new Promise(async res=>{p2.once('dialog',d=>{res(d.message());d.dismiss()});
+     await p2.evaluate(()=>{const H=['Müsteri Kodu','Fatura No','Datum','Fatura Türü','Fatura Tutarı','Rest Offen','Faelligkeit'];
+       const ws=XLSX.utils.aoa_to_sheet([H,['1','RE1','2026-10-01','Fatura',100,100,'2026-10-31'],['77001','RE2','2026-09-01','Fatura',7418.28,7418.28,'2026-10-01'],['77002','CR1','2026-09-01','İade',-13.9,-13.9,'2026-09-01']]);
+       const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Export');
+       const f=new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],'oi.xlsx');const dt=new DataTransfer();dt.items.add(f);
+       const i=document.getElementById('oimp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))})});
+   ok(/2 müşteri kodu CRM'de yok/.test(msg)&&/77001 \(€ 7\.418,28\)/.test(msg)&&/77002 \(−€ 13,90\)/.test(msg)&&/Vadesi Geçen/.test(msg),'onayda CRM\'de olmayan kodlar ve tutarları: '+msg.replace(/\n/g,' / '));
    await c2.close();}}
 
 
@@ -803,6 +820,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(!(await page.$('#stSel')),'temsilci durumu değiştiremiyor (seçim yok)');
   ok(!(await page.$('#aragOn')),'temsilci ARAG butonunu görmüyor');
   ok(await page.isVisible('#tabV'),'temsilci Vadesi Geçen sekmesini görüyor');
+  await page.click('#tabV');ok(!(await page.$('#odOrph'))&&!/CRM'de olmayan/.test(await txt(page,'#overdue')),'tüm müşterileri görme izni olmayan temsilci CRM\'de olmayan kodları görmüyor');await goList(page);
   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('arag').doc('c2').set({active:true,at:'2026-11-20'})));await page.waitForTimeout(150);
   ok(/ARAG süreci aktif · 20\.11\.2026/.test(await txt(page,'#aragBox'))&&!(await page.$('#aragOff')),'temsilci aktif ARAG durumunu görüyor, kapatamıyor');
   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('statusov').doc('c2').set({status:'Pasif'})));await page.waitForTimeout(150);
