@@ -250,3 +250,5 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 @media(max-width:700px){.rrow{grid-template-columns:minmax(0,1fr)}}
 .rrow label small b{font-size:inherit}
 .stsub{font-size:12px;color:var(--mut);margin-top:2px}.stat.on .stsub{color:rgb(255 255 255/.85)}@media(max-width:600px){.stsub{font-size:11px}}
+
+.rgrp{font:700 12px "Instrument Sans",system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:18px 0 0;padding-top:12px;border-top:1px solid var(--line)}.rgrp:first-child{margin-top:8px;border-top:0;padding-top:0}.rgrp+.rrow{border-top:0}

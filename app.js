@@ -16,12 +16,12 @@ const low=s=>String(s||'').toLocaleLowerCase('tr');
 
 /* Kayıp riski ve iade kuralları */
 const RISK={dropPace:0.7,dropMin:3000,silentDays:45,silentMax:365,silentMin:1000};
-let RET_WARN=0.025;const RET_MIN=1000;
+let RET_WARN=0.025,RET_MIN=1000;
 // Yönetici sekmesinden değiştirilebilen kurallar (settings/rules). Boş/geçersiz değer varsayılana düşer.
-const RDEF={pasif:120,temas:30,arag:30,iade:2.5,riskPace:70,riskSilent:45};
+const RDEF={pasif:120,temas:30,arag:30,iade:2.5,retMin:1000,riskPace:70,dropMin:3000,riskSilent:45,silentMax:365,silentMin:1000};
 let R={...RDEF},RMETA={};
 function applyRules(d){R={...RDEF};RMETA=d||{};for(const k in RDEF){const v=Number((d||{})[k]);if(Number.isFinite(v)&&v>0)R[k]=v}
-  RET_WARN=R.iade/100;RISK.dropPace=R.riskPace/100;RISK.silentDays=R.riskSilent}
+  RET_WARN=R.iade/100;RET_MIN=R.retMin;RISK.dropPace=R.riskPace/100;RISK.dropMin=R.dropMin;RISK.silentDays=R.riskSilent;RISK.silentMax=R.silentMax;RISK.silentMin=R.silentMin}
 // Verinin tarihi: satış / iade verisinin geçerli olduğu son gün (Power BI eşitlemesi). Yoksa bugün.
 const dataTo=()=>(RET&&RET.through)||(MON&&MON.through)||TODAY;
 // yılın geçen kısmı (o gün dahil): bu yılın satışını geçen yılın cirosunun aynı dönemine göre kıyaslamak için
@@ -114,19 +114,25 @@ function overdueRows(){
 }
 // Yönetici sekmesi: kurallar ve ayarlar
 const RULES=[
-  ['pasif','Pasif gün sınırı','gün',7,730,1,'Son satış faturası bu kadar günden eskiyse müşteri otomatik <b>Pasif</b> olur. Elle belirlenen durum (kart / Excel) bunu geçersiz kılar. Excel\'e aktarmada da bu değer kullanılır.'],
-  ['temas','Temas günü','gün',1,365,1,'Son temastan (fatura ya da kayıt) bu kadar gün geçen aktif müşteri "temas yok" kutusunda sayılır ve listede noktayla işaretlenir.'],
-  ['arag','ARAG süreç günü','gün',1,365,1,'Müşterinin en eski vadesi geçen faturası bu kadar günü aşınca kartta <b>ARAG süreci</b> butonu çıkar.'],
-  ['iade','İade uyarı eşiği','%',0.1,50,0.1,'Aynı dönemdeki satış faturalarına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.'],
-  ['riskPace','Kayıp riski: ciro temposu','%',10,100,1,'Bu yılın satışı, geçen yılın cirosunun aynı dönemine göre bu yüzdenin altındaysa müşteri kayıp riskinde sayılır.'],
-  ['riskSilent','Kayıp riski: faturasız gün','gün',7,365,1,'Bu kadar gündür fatura kesilmeyen müşteri kayıp riskinde sayılır.']];
+  ['pasif','Pasif gün sınırı','gün',7,730,1,'Son satış faturası bu kadar günden eskiyse müşteri otomatik <b>Pasif</b> olur. Elle belirlenen durum (kart / Excel) bunu geçersiz kılar. Excel\'e aktarmada da bu değer kullanılır.','Durum ve temas'],
+  ['temas','Temas günü','gün',1,365,1,'Son temastan (fatura ya da kayıt) bu kadar gün geçen aktif müşteri "temas yok" kutusunda sayılır ve listede noktayla işaretlenir.','Durum ve temas'],
+  ['arag','ARAG süreç günü','gün',1,365,1,'Müşterinin en eski vadesi geçen faturası bu kadar günü aşınca kartta <b>ARAG süreci</b> butonu çıkar.','Açık faturalar'],
+  ['iade','İade uyarı eşiği','%',0.1,50,0.1,'Aynı dönemdeki satış faturalarına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.','İade'],
+  ['retMin','İade uyarısı: en az satış','€',0,1000000,100,'Aynı dönemdeki satış faturası bu tutarın altında olan müşteride iade oranı hesaplanmaz ve uyarı verilmez (küçük satışta tek iade oranı şişirir).','İade'],
+  ['riskPace','Kayıp riski: ciro temposu','%',10,100,1,'Bu yılın satışı, geçen yılın cirosunun aynı dönemine göre bu yüzdenin altındaysa müşteri kayıp riskinde sayılır.','Kayıp riski'],
+  ['dropMin','Ciro temposu: en az geçen yıl cirosu','€',0,10000000,100,'Ciro temposu kuralı yalnız geçen yıl cirosu bu tutar ve üzerindeki müşterilere uygulanır.','Kayıp riski'],
+  ['riskSilent','Kayıp riski: faturasız gün','gün',7,365,1,'Bu kadar gündür fatura kesilmeyen müşteri kayıp riskinde sayılır.','Kayıp riski'],
+  ['silentMax','Faturasız gün: en fazla','gün',30,3650,1,'Bundan uzun süredir faturası olmayan müşteri artık kayıp riski sayılmaz (çoktan kaybedilmiş kabul edilir). Faturasız gün sınırından büyük olmalı.','Kayıp riski'],
+  ['silentMin','Faturasız gün: en az yıllık ciro','€',0,10000000,100,'Faturasız gün kuralı yalnız yıllık cirosu (geçen yıl ya da bu yılın yıllığa çevrilmiş satışı) bu tutar ve üzerindeki müşterilere uygulanır.','Kayıp riski']];
+const RKEY={riskPace:'dropPace',dropMin:'dropMin',riskSilent:'silentDays',silentMax:'silentMax',silentMin:'silentMin'};
 function ruleImpact(k,v){
   if(!(v>0))return '';
   if(k==='pasif'){const n=C.filter(c=>!(c._st0&&c._st0.manual)&&!c.statusOv&&(c.lastInvoice?ago(c.lastInvoice)>v:((c._st0&&c._st0.status)||'Pasif')==='Pasif')).length;return `${n} müşteri otomatik pasif olur`}
   if(k==='temas'){const n=C.filter(c=>c.status!=='Pasif'&&(()=>{const d=ago(D.last[c.id]);return d===null||d>v})()).length;return `${n} aktif müşteri ${v}+ gündür temassız`}
   if(k==='arag'){if(!(OI&&OI.map))return '';const n=C.filter(c=>{const o=oiOf(c);return o&&o.odn&&o.odMax>v}).length;return `${n} müşteri ARAG'a uygun`}
   if(k==='iade'){if(!(RET&&RET.map))return '';const n=C.filter(c=>{const r=retOf(c);return r&&r.p>=v/100}).length;return `${n} müşteri eşiğin üzerinde`}
-  if(k==='riskPace'||k==='riskSilent'){const keep={...RISK};if(k==='riskPace')RISK.dropPace=v/100;else RISK.silentDays=v;const n=C.filter(c=>riskOf(c)).length;Object.assign(RISK,keep);return `${n} müşteri kayıp riskinde`}
+  if(k==='retMin'){if(!(RET&&RET.map))return '';const keep=RET_MIN;RET_MIN=v;const n=C.filter(c=>{const r=retOf(c);return r&&r.warn}).length;RET_MIN=keep;return `${n} müşteri iade uyarısı alır`}
+  if(RKEY[k]){const keep={...RISK};RISK[RKEY[k]]=k==='riskPace'?v/100:v;const n=C.filter(c=>riskOf(c)).length;Object.assign(RISK,keep);return `${n} müşteri kayıp riskinde`}
   return '';
 }
 function renderAdmin(){
@@ -136,9 +142,9 @@ function renderAdmin(){
   const upd=m.updatedAt?`Son güncelleme: ${fmt(iso(new Date(m.updatedAt)))}${m.by?' · '+esc(personOf(m.by).name||m.by):''}`:'Henüz değiştirilmedi: tüm değerler varsayılan.';
   $('#admin').innerHTML=`<div class="rethead"><h3>Kurallar ve Ayarlar <small class="sm">tüm kullanıcılar için geçerli</small></h3><span class="sm">${upd}</span></div>
   <form class="ordp rform" id="rform" autocomplete="off" novalidate>
-  ${RULES.map(([k,l,u,mn,mx,stp,d])=>`<div class="rrow"><label for="r_${k}"><b>${l}</b><small>${d}</small></label>
+  ${RULES.map(([k,l,u,mn,mx,stp,d,g],i)=>`${g!==(RULES[i-1]||[])[7]?`<h4 class="rgrp">${g}</h4>`:''}<div class="rrow"><label for="r_${k}"><b>${l}</b><small>${d}</small></label>
    <div class="rin"><span class="rbox"><input id="r_${k}" name="${k}" type="number" inputmode="decimal" min="${mn}" max="${mx}" step="${stp}" value="${R[k]}" ${can?'':'disabled'}><em>${u}</em></span>
-   <small class="rdef">Varsayılan: ${String(RDEF[k]).replace('.',',')} ${u}${R[k]!==RDEF[k]?' · <b>değiştirildi</b>':''}</small><small class="rimp" data-rimp="${k}">${ruleImpact(k,R[k])}</small></div></div>`).join('')}
+   <small class="rdef">Varsayılan: ${u==='€'?eur(RDEF[k]):String(RDEF[k]).replace('.',',')+' '+u}${R[k]!==RDEF[k]?' · <b>değiştirildi</b>':''}</small><small class="rimp" data-rimp="${k}">${ruleImpact(k,R[k])}</small></div></div>`).join('')}
   ${can?`<div class="qsave"><span class="sm" id="rmsg"></span><button type="button" class="ghost" id="rdef">Varsayılanlara dön</button><button type="submit" class="primary">Kaydet</button></div>`:''}
   </form>`;
 }
@@ -146,6 +152,7 @@ function renderAdmin(){
 const rnum=x=>{const n=parseFloat(String(x??'').trim().replace(',','.'));return Number.isFinite(n)?n:null};
 function rformCheck(f){let bad=0;for(const [k,,,mn,mx] of RULES){const e=f.elements[k];const v=rnum(e.value);const ok=v!=null&&v>=mn&&v<=mx;e.closest('.rbox').classList.toggle('bad',!ok);if(!ok)bad++;
   const im=f.querySelector(`[data-rimp="${k}"]`);if(im)im.textContent=ok?ruleImpact(k,v):`${String(mn).replace('.',',')}–${mx} arası bir değer girin`}
+  {const a=rnum(f.elements.riskSilent.value),b=rnum(f.elements.silentMax.value);if(a!=null&&b!=null&&b<=a){f.elements.silentMax.closest('.rbox').classList.add('bad');const im=f.querySelector('[data-rimp="silentMax"]');if(im)im.textContent=`Faturasız gün sınırından (${a}) büyük olmalı`;bad++}}
   return !bad}
 function renderOverdue(){
   const has=!!(OI&&OI.map);$('#tabV').hidden=!has;
