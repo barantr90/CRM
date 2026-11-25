@@ -20,7 +20,7 @@ let pass=0,fail=0;const errors=[];
 const ok=(cond,msg)=>{if(cond){pass++;console.log('  ✓',msg)}else{fail++;console.log('  ✗',msg)}};
 const step=t=>console.log('\n'+t);
 
-async function open(browser,{admin=true,role='',seed=null,user='baran.sengul@akar-group.com',viewport={width:1400,height:1000},scheme='light'}={}){
+async function open(browser,{visitLog=false,admin=true,role='',seed=null,user='baran.sengul@akar-group.com',viewport={width:1400,height:1000},scheme='light'}={}){
   const ctx=await browser.newContext({viewport,colorScheme:scheme});
   const page=await ctx.newPage();
   page.on('pageerror',e=>errors.push(e.message));
@@ -28,6 +28,9 @@ async function open(browser,{admin=true,role='',seed=null,user='baran.sengul@aka
   // dış kaynakları (font, CDN) kapat: test tamamen çevrimdışı
   await page.route(offline,r=>r.abort());
   await page.addInitScript(`try{if(!sessionStorage.getItem('__t')){localStorage.clear();sessionStorage.setItem('__t','1')}}catch(e){};${FIX};${seed?`Object.assign(window.__SEED,${JSON.stringify(seed)});`:''}window.CRM_IS_ADMIN=${admin};${role?`window.CRM_ROLE=${JSON.stringify(role)};`:''}window.CRM_USER=${JSON.stringify(user)};window.CRM_AUTH={email:${JSON.stringify(user)},async setPassword(){window.__pw=(window.__pw||0)+1},async signOut(){window.__out=(window.__out||0)+1}};${MOCK}`);
+  // ziyaret kaydı canlıda kapalı (VISIT_LOG=false); izin testleri için açık hâliyle yüklenir
+  if(visitLog){const src=fs.readFileSync(path.join(ROOT,'app.js'),'utf8');if(!src.includes('const VISIT_LOG=false;'))throw new Error('VISIT_LOG satırı bulunamadı');
+    await page.route(u=>u.pathname==='/app.js',r=>r.fulfill({contentType:'text/javascript; charset=utf-8',body:src.replace('const VISIT_LOG=false;','const VISIT_LOG=true;')}))}
   await page.goto(BASE+'/index.html');
   await page.waitForSelector('#list .row');
   return {ctx,page};
@@ -844,6 +847,19 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.click('[data-qv=tablo]');
   ok(await page.evaluate(()=>document.documentElement.scrollWidth)<=390,'Tablo telefonda sayfayı taşırmıyor (tablolar kendi içinde kayar)');
   await page.screenshot({path:path.join(SHOTS,'7m-tablo.png'),fullPage:true});
+  await ctx.close();
+
+  step('16. Ziyaret kaydı ve takip, e_notes iznine bağlı (veritabanı kuralıyla aynı)');
+  ({ctx,page}=await open(browser,{visitLog:true,admin:false,user:'lutfi.kaplan@akar-bv.nl'}));
+  await sel(page,'Sessiz Market');
+  ok(!!(await page.$('#aform'))&&await page.$$eval('#detail [data-done]',b=>b.length>0&&b.every(x=>!x.disabled)),'izin açık: ziyaret formu var, takip kutusu işaretlenebiliyor');
+  await ctx.close();
+  ({ctx,page}=await open(browser,{visitLog:true,admin:false,user:'lutfi.kaplan@akar-bv.nl',seed:{settings:{perms:{satis:{v_targets:true,v_overdue:true,e_notes:false}}}}}));
+  await sel(page,'Sessiz Market');
+  ok(!(await page.$('#aform')),'izin kapalı: ziyaret formu yok');
+  ok(await page.$$eval('#detail [data-done]',b=>b.length>0&&b.every(x=>x.disabled)),'izin kapalı: kartta takip kutusu kilitli');
+  await page.click('#tabT');
+  ok(await page.$$eval('#tasks [data-done]',b=>b.length>0&&b.every(x=>x.disabled)),'izin kapalı: Takipler sekmesinde takip kutusu kilitli');
   await ctx.close();
 
   step('Konsol hataları');

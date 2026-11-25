@@ -72,7 +72,7 @@ const PERMS=[
   ['v_overdue','Açık faturaları ve Vadesi Geçen sekmesini görür','Müşteri kartındaki açık faturalar ve vadesi geçen kutusu dahil.','Görüntüleme'],
   ['v_credit','Kredi Limiti sekmesini görür','Tanımlı limit, açık bakiye ve önerilen limit.','Görüntüleme'],
   ['v_all','Tüm temsilcilerin müşterilerini görür','Kapalıysa kullanıcı yalnız kendi adına kayıtlı müşterileri görür (e-postası temsilci adıyla eşleşmeli). Hedefler sekmesi bundan etkilenmez: tüm ekip görünür.','Görüntüleme'],
-  ['e_notes','Telefon ve yetkili kişi bilgisini düzenler','','Düzenleme'],
+  ['e_notes','Telefon ve yetkili kişi bilgisini düzenler','Ziyaret kaydı girme ve takibi tamamlandı işaretleme de bu izne bağlıdır.','Düzenleme'],
   ['e_status','Müşteri durumunu (Aktif / Pasif) elle değiştirir','','Düzenleme'],
   ['e_targets','Hedefleri girer ve değiştirir','','Düzenleme'],
   ['e_arag','ARAG sürecini başlatır ve kapatır','','Düzenleme'],
@@ -92,6 +92,8 @@ const isAdmin=()=>myRole()==='admin';
 // kullanıcının temsilci adı: kullanıcı listesindeki 'Temsilci' alanı (CRM_REP); yoksa e-postadan çıkarılan ad
 const ownRep=()=>{const n=window.CRM_REP!==undefined?window.CRM_REP:personOf(window.CRM_USER||(window.CRM_AUTH||{}).email||'').name;return n&&allReps().includes(n)?n:null};
 const repGuess=e=>{const n=personOf(e).name;return REPS.includes(n)?n:''};
+// ziyaret kaydı ve takip: veritabanında activities yazımı e_notes iznine bağlı (can_write_doc)
+const canNote=()=>canWrite&&can('e_notes');
 const repLock=()=>can('v_all')?null:(ownRep()||'—');
 const viewOk=v=>v==='board'?can('v_board'):v==='admin'?can('e_rules'):v==='perms'?isAdmin():v==='targets'?can('v_targets'):v==='overdue'?can('v_overdue'):v==='credit'?can('v_credit'):true;
 
@@ -416,7 +418,7 @@ function renderList(){
 }
 function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
-  return `<li><div class="tm"><b>${fmt(a.date)}</b><span class="ty t${TYPES.indexOf(a.type)}">${esc(a.type||'Not')}</span></div><div class="tb"><small>${esc(a.rep||'')}</small>${+a.amount?`<span class="amt">${eur(+a.amount)}</span>`:''}${a.outcome?`<p class="oc">${esc(a.outcome)}</p>`:''}${a.note?`<p>${esc(a.note)}</p>`:''}${a.nextAction||a.nextDate?`<label class="nx${a.done?' done':''}${late?' late':''}"><input type="checkbox" data-done="${esc(a.id)}" ${a.done?'checked':''} ${canWrite?'':'disabled'}> <span>${esc(a.nextAction||'Takip')}${a.nextDate?' · '+fmt(a.nextDate):''}</span></label>`:''}</div></li>`;
+  return `<li><div class="tm"><b>${fmt(a.date)}</b><span class="ty t${TYPES.indexOf(a.type)}">${esc(a.type||'Not')}</span></div><div class="tb"><small>${esc(a.rep||'')}</small>${+a.amount?`<span class="amt">${eur(+a.amount)}</span>`:''}${a.outcome?`<p class="oc">${esc(a.outcome)}</p>`:''}${a.note?`<p>${esc(a.note)}</p>`:''}${a.nextAction||a.nextDate?`<label class="nx${a.done?' done':''}${late?' late':''}"><input type="checkbox" data-done="${esc(a.id)}" ${a.done?'checked':''} ${canNote()?'':'disabled'}> <span>${esc(a.nextAction||'Takip')}${a.nextDate?' · '+fmt(a.nextDate):''}</span></label>`:''}</div></li>`;
 }
 // masaüstünde kart her zaman görünen alana sığar ve kendi içinde kayar (liste kaydırmasından bağımsız)
 function fitDetail(){const d=$('#detail');if(!d)return;if(innerWidth<=900){d.style.maxHeight='';return}
@@ -439,7 +441,7 @@ function renderDetail(){
   ${chainHtml(c)}
   <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
   ${oiHtml(c)}
-  ${VISIT_LOG&&canWrite?visitForm(c):''}
+  ${VISIT_LOG&&canNote()?visitForm(c):''}
   ${VISIT_LOG?`<h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`:''}`;
 }
 function ctaHtml(c,ct){
@@ -707,7 +709,7 @@ function renderTasks(){
   if(st.view!=='tasks')return;
   const wk=addDays(7);
   const g=[['Gecikmiş',t.filter(a=>a.nextDate<TODAY)],['Bugün',t.filter(a=>a.nextDate===TODAY)],['Önümüzdeki 7 gün',t.filter(a=>a.nextDate>TODAY&&a.nextDate<=wk)],['Daha sonra',t.filter(a=>a.nextDate>wk)]];
-  $('#tasks').innerHTML=t.length?g.filter(x=>x[1].length).map(([h,l])=>`<h3>${h} <small>${l.length}</small></h3><ul class="tk">${l.map(a=>`<li class="${h==='Gecikmiş'?'late':''}"><input type="checkbox" data-done="${esc(a.id)}" aria-label="Tamamlandı" ${canWrite?'':'disabled'}><span class="td">${fmt(a.nextDate)}</span><button class="lnk" type="button" data-open="${esc(a.customerId)}">${esc(cm[a.customerId].name)}</button><span class="ta">${esc(a.nextAction||'Takip')}</span><small>${esc(a.rep||cm[a.customerId].rep||'')}</small></li>`).join('')}</ul>`).join(''):'<p class="empty">Açık takip yok. Bir müşteriye kayıt girerken “Sıradaki adım” ve tarih yazarsanız burada listelenir.</p>';
+  $('#tasks').innerHTML=t.length?g.filter(x=>x[1].length).map(([h,l])=>`<h3>${h} <small>${l.length}</small></h3><ul class="tk">${l.map(a=>`<li class="${h==='Gecikmiş'?'late':''}"><input type="checkbox" data-done="${esc(a.id)}" aria-label="Tamamlandı" ${canNote()?'':'disabled'}><span class="td">${fmt(a.nextDate)}</span><button class="lnk" type="button" data-open="${esc(a.customerId)}">${esc(cm[a.customerId].name)}</button><span class="ta">${esc(a.nextAction||'Takip')}</span><small>${esc(a.rep||cm[a.customerId].rep||'')}</small></li>`).join('')}</ul>`).join(''):'<p class="empty">Açık takip yok. Bir müşteriye kayıt girerken “Sıradaki adım” ve tarih yazarsanız burada listelenir.</p>';
 }
 function render(){
   // satış temsilcisi (tüm müşteriler izni yok): yalnız kendi müşterileri C'de; tüm liste CALL
@@ -1032,7 +1034,7 @@ document.addEventListener('change',async e=>{
   if(t.closest('#qform')&&t.name&&t.name.includes('|')){const n=num(t.value);if(n!=null&&!(t.name.endsWith('|t')&&n<0)){t.value=eurIn(n);t.removeAttribute('aria-invalid')}else if(String(t.value).trim())t.setAttribute('aria-invalid','true');qformTotals(t.closest('form'));return}
   if(t.id==='qYear'||t.id==='qMonth'){if(st.qedit&&st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?')){render();return}
     st.qp=t.id==='qMonth'?t.value:t.value+(st.qp||qNow()).slice(4);st.qedit=false;st.qdirty=false;render();return}
-  if(t.dataset.done){const ok=await w(()=>db.collection('activities').doc(t.dataset.done).update({done:t.checked,doneAt:t.checked?TODAY:''}));if(ok&&t.checked)toast('Takip tamamlandı');if(!ok)t.checked=!t.checked;return}
+  if(t.dataset.done){if(!canNote()){t.checked=!t.checked;return}const ok=await w(()=>db.collection('activities').doc(t.dataset.done).update({done:t.checked,doneAt:t.checked?TODAY:''}));if(ok&&t.checked)toast('Takip tamamlandı');if(!ok)t.checked=!t.checked;return}
   if(t.name==='ch'&&t.closest('#aform')){st.type=t.value;return}
   if(t.name==='out'&&t.closest('#aform')){syncOutcome(t.closest('form'),true);return}
   if(t.id==='fseg'){st.seg=t.value;render()}
@@ -1082,6 +1084,7 @@ document.addEventListener('submit',async e=>{
     if(await w(()=>db.collection('customers').doc(id).set(obj))){closeModals();st.sel=id;st.view='list';toast('Güncellendi');render()}
     return}
   if(f.id==='aform'){
+    if(!canNote()){toast('Ziyaret kaydı girme izniniz yok.',1);return}
     const c=C.find(x=>x.id===st.sel);if(!c)return;const fd=Object.fromEntries(new FormData(f));
     const note=String(fd.note||'').trim(),outcome=String(fd.out||'');
     if(!note&&!outcome){toast('Bir sonuç seçin ya da not yazın.',1);return}
