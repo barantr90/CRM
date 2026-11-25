@@ -45,7 +45,7 @@ button.stat:hover{border-color:var(--ink)}
 .tab{min-height:44px;padding:0 14px;border:0;background:none;font-weight:600;color:var(--mut);border-bottom:3px solid transparent;margin-bottom:-1px}
 .tab.on{color:var(--ink);border-color:var(--acc)}
 .grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,7fr);gap:24px;align-items:start;padding-bottom:48px}
-.filters{display:grid;grid-template-columns:minmax(0,2fr) repeat(4,minmax(0,1fr));gap:8px;margin-bottom:8px}
+.filters{display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(0,1fr));gap:8px;margin-bottom:8px}
 input,select,textarea{width:100%;min-height:44px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font-size:16px}
 textarea{resize:vertical}
 .meta{display:flex;justify-content:space-between;color:var(--mut);font-size:14px;padding:4px 2px 8px}
@@ -220,3 +220,15 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 #odAlert{background:var(--badSoft);color:var(--bad)}
 @media(max-width:600px){.oi{padding:12px}.oi h3{font-size:19px}.oi-sum{grid-template-columns:repeat(2,minmax(0,1fr))}.oi-sum b{font-size:16px}.oi-a b{font-size:13.5px}.oi-b{font-size:12px}}
 @media(max-width:600px){.stats>:last-child:nth-child(odd){grid-column:1/-1}}
+
+/* ARAG ve Vadesi Geçen sekmesi */
+.arag{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin:10px 0 0;padding:8px 8px 8px 12px;border:1px solid var(--bad);border-radius:10px;font-size:14px;color:var(--bad)}
+.arag span{flex:1 1 220px}.arag .primary{background:var(--bad);border-color:var(--bad);color:#fff;font-weight:800;letter-spacing:.04em}
+.arag.on{background:var(--bad);color:#fff;border-color:var(--bad)}.arag.on span{flex:1 1 auto}.arag.on .ghost{background:transparent;color:#fff;border-color:rgba(255,255,255,.7)}
+.aragtag{flex:0 0 auto!important;font-weight:800;letter-spacing:.06em;background:#fff;color:#c62828;border-radius:5px;padding:0 6px}
+.rtag.ar{color:#fff;background:var(--bad);border-color:transparent;letter-spacing:.04em}
+#odT td.rk,#odT th:first-child{width:36px;color:var(--mut)!important;font-weight:400;text-align:right}#odT td:nth-child(2),#odT th:nth-child(2),#odT td:nth-child(3),#odT th:nth-child(3){text-align:left}#odT td:last-child,#odT th:last-child{text-align:center}#odT .odv{font-variant-numeric:tabular-nums}#odT tr.o30 .odd{color:var(--bad);font-weight:700}
+#overdueView>div>.sm{color:var(--mut);font-size:13px}
+@media(max-width:600px){.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.filters select{padding-left:8px;padding-right:4px;font-size:13px}.arag{font-size:13px}}
+@media(max-width:600px){#odT th:nth-child(1),#odT td:nth-child(1),#odT th:nth-child(3),#odT td:nth-child(3),#odT th:nth-child(5),#odT td:nth-child(5){display:none}#odT th,#odT td{padding-left:6px;padding-right:6px}}
+.arag.on{background:#c62828;border-color:#c62828}.rtag.ar{background:#c62828}@media(max-width:600px){#odT{font-size:13px}#odT th,#odT td{padding-left:4px;padding-right:4px}#odT th:last-child,#odT td:last-child{white-space:normal;width:48px}}

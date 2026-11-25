@@ -52,7 +52,7 @@ try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',renderT
 const umOpen=on=>{$('#umDrop').hidden=!on;$('#avBtn').setAttribute('aria-expanded',on)};
 
 let db=null,canWrite=true,loaded=false;
-let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,OI=null,MON=null,K={},TGS={},RK={};
+let C=[],A=[],D={last:{},open:{}},INV={},INVTO='',CIRO={},RET=null,OI=null,AR={},MON=null,K={},TGS={},RK={};
 /* iletişim bilgisi: temsilcinin girdiği (contacts) ile Excel'den geleni birleştirir; ikisi de doluysa yenisi geçerli */
 const pick=(a,ta,b,tb)=>a&&b?(ta>=tb?a:b):(a||b||'');
 const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.updatedAt||0;return {phone:pick(k.phone,tk,c.phone,tc),contact:pick(k.contact,tk,c.contact,tc)}};
@@ -86,6 +86,36 @@ function oiOf(c){
   return R;
 }
 const oiState=x=>x.rest<0?['cr','Alacak (müşteri lehine)']:x.days==null?['','Vade yok']:x.days<0?['od',`${-x.days} gün geçti`]:x.days===0?['td','Bugün vadeli']:['nd',`${x.days} gün kaldı`];
+// ARAG (tahsilat / hukuki takip) süreci: 'arag' koleksiyonunda müşteri başına {active,at,by}. Vadesi geçen en eski fatura 30 günü aşınca başlatılabilir.
+const ARAG_D=30;
+const aragOf=c=>AR[c.id]&&AR[c.id].active?AR[c.id]:null;
+const aragElig=o=>!!(o&&o.odn&&o.odMax>ARAG_D);
+function aragHtml(c,o){
+  const a=aragOf(c),adm=window.CRM_IS_ADMIN!==false&&canWrite;
+  if(a)return `<div class="arag on" id="aragBox"><span class="aragtag">ARAG</span><span>ARAG süreci aktif${a.at?` · ${fmt(a.at)} tarihinden beri`:''}</span>${adm?`<button type="button" class="ghost" id="aragOff" data-cid="${esc(c.id)}">Süreci kapat</button>`:''}</div>`;
+  if(!aragElig(o)||!adm)return '';
+  return `<div class="arag" id="aragBox"><span>En eski vadesi geçen fatura <b>${o.odMax} gün</b> gecikmiş (30 günü aştı).</span><button type="button" class="primary" id="aragOn" data-cid="${esc(c.id)}">ARAG süreci</button></div>`;
+}
+// Vadesi Geçen sekmesi
+function overdueRows(){
+  return C.filter(c=>!st.rep||c.rep===st.rep).map(c=>[c,oiOf(c)]).filter(([,o])=>o&&o.od>0).sort((a,b)=>b[1].od-a[1].od);
+}
+function renderOverdue(){
+  const has=!!(OI&&OI.map);$('#tabV').hidden=!has;
+  const all=has?overdueRows():[];
+  $('#tabV').textContent=has?`Vadesi Geçen (${all.length})`:'Vadesi Geçen';
+  if(st.view!=='overdue')return;
+  if(!has){$('#overdue').innerHTML='<p class="empty">Açık fatura verisi yok.</p>';return}
+  const f=['30','arag'].includes(st.ovf)?st.ovf:'all';
+  const L=f==='30'?all.filter(([,o])=>aragElig(o)):f==='arag'?all.filter(([c])=>aragOf(c)):all;
+  const sum=L.reduce((a,[,o])=>a+o.od,0),n30=all.filter(([,o])=>aragElig(o)).length,nA=all.filter(([c])=>aragOf(c)).length;
+  const fb=(k,l)=>`<button type="button" data-ovf="${k}" aria-pressed="${f===k}">${l}</button>`;
+  const row=([c,o],i)=>{const a=aragOf(c);return `<tr${aragElig(o)?' class="o30"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td><b class="odv">${eur(o.od)}</b></td><td>${o.odn}</td><td><span class="odd">${o.odMax} gün</span></td><td>${a?'<em class="rtag ar">ARAG</em>':aragElig(o)?'<span class="sm">30+ gün</span>':''}</td></tr>`};
+  $('#overdue').innerHTML=`<div class="rethead"><h3>Vadesi Geçen Müşteriler <small class="sm">${fmt(OI.asOf)} verisi${st.rep?' · '+esc(st.rep):''} · ${L.length} müşteri · ${eur(sum)}</small></h3>
+  <div class="seg2" role="group" aria-label="Süz">${fb('all',`Tümü (${all.length})`)}${fb('30',`30+ gün (${n30})`)}${fb('arag',`ARAG (${nA})`)}</div></div>
+  ${L.length?`<div class="ordp"><table id="odT"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Vadesi geçen</th><th>Fatura</th><th>En eski</th><th>ARAG</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>`:'<p class="empty">Bu süzgeçte müşteri yok.</p>'}
+  <p class="sm">Tutar: vadesi geçmiş faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Gün sayısı bugüne göre. Satıra tıklayınca müşteri kartı açılır.</p>`;
+}
 function oiHtml(c){
   if(!OI||!OI.map)return '';
   const o=oiOf(c),asOf=OI.asOf?`${fmt(OI.asOf)} itibarıyla`:'';
@@ -109,9 +139,9 @@ const code=c=>c.code||String(c.id||'').replace(/^c/,'');
 const has=(c,k)=>Object.prototype.hasOwnProperty.call(c,k);
 const inv=c=>(c.lastInvoice||c.sales2026!=null||c.invoices2026!=null)?{last:c.lastInvoice||'',no:c.lastInvoiceNo||'',sales:c.sales2026,n:c.invoices2026}:null;
 const ciroOf=c=>(c.ciro2025==null&&c.sales2026==null)?null:[c.ciro2025,c.sales2026];
-const st={q:'',rep:'',seg:'',chain:'',status:'',quick:'',sort:'name',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
-try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.sort)st.sort=s.sort;if(s.view)st.view=s.view;if(s.qv)st.qv=s.qv;if(s.rf)st.rf=s.rf}catch(e){}
-const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,sort:st.sort,view:st.view,qv:st.qv,rf:st.rf}))}catch(e){}};
+const st={q:'',rep:'',seg:'',chain:'',status:'',quick:'',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
+try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.view)st.view=s.view;if(s.qv)st.qv=s.qv;if(s.rf)st.rf=s.rf}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,view:st.view,qv:st.qv,rf:st.rf}))}catch(e){}};
 
 let tt;
 const toast=(m,bad)=>{const t=$('#toast');t.textContent=m;t.className='toast show'+(bad?' bad':'');clearTimeout(tt);tt=setTimeout(()=>{t.className='toast'},3400)};
@@ -161,7 +191,7 @@ function visible(){
   if(st.quick==='cold')r=r.filter(isCold);
   if(st.quick==='od'){const m=new Map();r=r.filter(c=>{const o=oiOf(c);if(o&&o.od>0){m.set(c.id,o.od);return true}return false});r.sort((a,b)=>m.get(b.id)-m.get(a.id));return r}
   if(st.quick==='risk'){r=r.filter(c=>RK[c.id]);r.sort((a,b)=>RK[b.id].val-RK[a.id].val);return r}
-  r.sort(st.sort==='last'?(a,b)=>(D.last[a.id]||'').localeCompare(D.last[b.id]||''):(a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'));
+  r.sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'tr'));
   return r;
 }
 
@@ -222,7 +252,7 @@ function renderList(){
   if(!r.length){$('#list').innerHTML='<li class="empty">Bu filtrelere uyan müşteri yok.</li>';return}
   $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
     const sub=st.quick==='od'&&oi?`<small class="rk">${eur(oi.od)} vadesi geçmiş · en eski ${oi.odMax} gün</small>`:st.quick==='risk'&&rk?`<small class="rk">${esc(riskText(rk))}</small>`:`<small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small>`;
-    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${oi&&oi.od>0&&st.quick!=='od'?`<em class="rtag rt" title="Vadesi geçmiş açık fatura: ${eur(oi.od)}">vade ${oi.odMax} gün</em>`:''}${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
+    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${aragOf(c)?'<em class="rtag ar" title="ARAG süreci aktif">ARAG</em>':''}${oi&&oi.od>0&&st.quick!=='od'?`<em class="rtag rt" title="Vadesi geçmiş açık fatura: ${eur(oi.od)}">vade ${oi.odMax} gün</em>`:''}${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
 }
 function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
@@ -239,7 +269,7 @@ function renderDetail(){
   el.innerHTML=`<button class="back" id="back" type="button">← Listeye dön</button>
   <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${statusHtml(c)}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
 </div>
-  ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${oi&&oi.od>0?`<p class="alert" id="odAlert">Vadesi geçmiş açık fatura: ${eur(oi.od)} · ${oi.odn} fatura, en eski ${oi.odMax} gün</p>`:''}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
+  ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${oi&&oi.od>0?`<p class="alert" id="odAlert">Vadesi geçmiş açık fatura: ${eur(oi.od)} · ${oi.odn} fatura, en eski ${oi.odMax} gün</p>`:''}${aragHtml(c,oi)}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
   ${ctaHtml(c,ct)}
   ${chainHtml(c)}
   <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
@@ -513,18 +543,19 @@ function render(){
   {const segs=allSegs();if(st.seg&&st.seg!=='__bos'&&!segs.includes(st.seg))st.seg='';const html='<option value="">Sgmt. Tümü</option>'+segs.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__bos">Segment: boş</option>';if($('#fseg').innerHTML!==html)$('#fseg').innerHTML=html}
   {const chs=[...new Set(C.map(chainOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));if(st.chain&&st.chain!=='__any'&&!chs.includes(st.chain))st.chain='';
    const html='<option value="">Zincir Tümü</option><option value="__any">Yalnız zincirler</option>'+chs.map(v=>`<option value="${esc(v)}">${esc(v)} (${chainStores(v).length})</option>`).join('');if($('#fchain').innerHTML!==html)$('#fchain').innerHTML=html;$('#fchain').value=st.chain||''}
-  $('#fseg').value=st.seg;$('#fstat').value=st.status;$('#fsort').value=st.sort;
+  $('#fseg').value=st.seg;$('#fstat').value=st.status;
   if(st.view==='board'&&window.CRM_IS_ADMIN===false)st.view='list';
   if(st.view==='tasks'&&!VISIT_LOG)st.view='list';
+  if(st.view==='overdue'&&!(OI&&OI.map)&&loaded)st.view='list';
   $('#tabT').hidden=!VISIT_LOG;$('#dueLeg').hidden=!VISIT_LOG;
   document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
-  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';
+  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';
   // açık formlardaki yazılanları yeniden çizimde koru
   const keep={};let foc=null;
   for(const id of ['aform','ctform','qform']){const f=$('#'+id);if(!f||(id!=='qform'&&st.formFor!==st.sel))continue;
     keep[id]=[...f.elements].filter(e=>e.name).map(e=>({n:e.name,t:e.type,v:e.value,c:e.checked,touched:e.dataset.touched}));
     const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.name&&ae.type!=='radio'&&ae.type!=='checkbox')foc=[id,ae.name]}
-  renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();
+  renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();renderOverdue();
   renderDetail();
   for(const [id,vals] of Object.entries(keep)){const g=$('#'+id);if(!g)continue;
     for(const e of g.elements){if(!e.name)continue;const k=(e.type==='radio'||e.type==='checkbox')?vals.find(x=>x.n===e.name&&x.v===e.value):vals.find(x=>x.n===e.name);if(!k)continue;
@@ -790,6 +821,12 @@ document.addEventListener('click',async e=>{
   if(t.id==='qEdit'){st.qedit=true;st.qdirty=false;render();const i=$('#qform input');if(i)i.focus();return}
   if(t.id==='qCancel'){if(st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?'))return;st.qedit=false;st.qdirty=false;render();return}
   if(t.dataset.rep!==undefined){st.rep=t.dataset.rep;saveUi();render();return}
+  if(t.dataset.ovf!==undefined){st.ovf=t.dataset.ovf;render();return}
+  if(t.id==='aragOn'||t.id==='aragOff'){if(window.CRM_IS_ADMIN===false)return;const id=t.dataset.cid,c=C.find(x=>x.id===id);if(!c)return;
+    if(t.id==='aragOff'&&!confirm(`${c.name} için ARAG süreci kapatılsın mı?`))return;
+    const o=oiOf(c)||{};
+    const ok=await w(()=>t.id==='aragOn'?db.collection('arag').doc(id).set({active:true,at:TODAY,customer:c.name,code:code(c),od:Math.round((o.od||0)*100)/100,odMax:o.odMax||0,by:window.CRM_USER||''}):db.collection('arag').doc(id).delete());
+    if(ok)toast(t.id==='aragOn'?`${c.name}: ARAG süreci aktif`:`${c.name}: ARAG süreci kapatıldı`);return}
   if(t.dataset.oiall!==undefined){st.oiAll=st.oiAll===t.dataset.oiall?null:t.dataset.oiall;render();return}
   if(t.dataset.quick!==undefined){st.ord=false;st.quick=st.quick===t.dataset.quick?'':t.dataset.quick;st.view='list';render();return}
   if(t.dataset.view){st.view=t.dataset.view;saveUi();render();return}
@@ -823,7 +860,6 @@ document.addEventListener('change',async e=>{
     const ok=await w(()=>v?db.collection('statusov').doc(id).set({status:v,customer:c.name,updatedAt:Date.now(),by:window.CRM_USER||''}):db.collection('statusov').doc(id).delete());
     if(ok)toast(v?`${c.name}: ${v} olarak işaretlendi`:`${c.name}: durum yeniden otomatik (${statusAuto(c)||'–'})`);else render();return}
   if(t.id==='fstat'){st.status=t.value;render()}
-  if(t.id==='fsort'){st.sort=t.value;saveUi();render()}
   if(t.id==='oimp'){umOpen(false);if(t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readOpenInv(f)}return}
   if(t.id==='ximp')umOpen(false);
   if(t.id==='ximp'&&t.files[0]&&window.CRM_IS_ADMIN!==false){const f=t.files[0];t.value='';readImport(f);return}
@@ -894,6 +930,7 @@ render();
   db.collection('contacts').onSnapshot(s=>{K=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('qtargets').onSnapshot(s=>{QTS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('targets').onSnapshot(s=>{TGS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
+  db.collection('arag').onSnapshot(s=>{AR=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.doc('sync/openinv').onSnapshot(d=>{OI=d.exists?d.data():null;render()},()=>{});
   db.doc('sync/returns').onSnapshot(d=>{RET=d.exists?d.data():null;render()},()=>{});
   db.collection('activities').orderBy('date','desc').limit(1000).onSnapshot(s=>{A=s.docs.map(d=>({...d.data(),id:d.id}));render()},err=>{st.err=true;render()});
