@@ -232,3 +232,6 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 @media(max-width:600px){.filters{grid-template-columns:repeat(3,minmax(0,1fr))}.filters select{padding-left:8px;padding-right:4px;font-size:13px}.arag{font-size:13px}}
 @media(max-width:600px){#odT th:nth-child(1),#odT td:nth-child(1),#odT th:nth-child(3),#odT td:nth-child(3),#odT th:nth-child(5),#odT td:nth-child(5){display:none}#odT th,#odT td{padding-left:6px;padding-right:6px}}
 .arag.on{background:#c62828;border-color:#c62828}.rtag.ar{background:#c62828}@media(max-width:600px){#odT{font-size:13px}#odT th,#odT td{padding-left:4px;padding-right:4px}#odT th:last-child,#odT td:last-child{white-space:normal;width:48px}}
+/* liste ve kart birbirinden bağımsız kayar: kart kendi içinde kayar, sonuna gelince sayfayı (listeyi) sürüklemez */
+@media(min-width:901px){.detail{max-height:calc(100vh - 24px);max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}}
+@media(max-width:900px){.detail{overscroll-behavior:contain}body:has(.detail.open){overflow:hidden}}

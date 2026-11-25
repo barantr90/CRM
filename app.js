@@ -258,9 +258,14 @@ function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
   return `<li><div class="tm"><b>${fmt(a.date)}</b><span class="ty t${TYPES.indexOf(a.type)}">${esc(a.type||'Not')}</span></div><div class="tb"><small>${esc(a.rep||'')}</small>${+a.amount?`<span class="amt">${eur(+a.amount)}</span>`:''}${a.outcome?`<p class="oc">${esc(a.outcome)}</p>`:''}${a.note?`<p>${esc(a.note)}</p>`:''}${a.nextAction||a.nextDate?`<label class="nx${a.done?' done':''}${late?' late':''}"><input type="checkbox" data-done="${esc(a.id)}" ${a.done?'checked':''} ${canWrite?'':'disabled'}> <span>${esc(a.nextAction||'Takip')}${a.nextDate?' · '+fmt(a.nextDate):''}</span></label>`:''}</div></li>`;
 }
+// masaüstünde kart her zaman görünen alana sığar ve kendi içinde kayar (liste kaydırmasından bağımsız)
+function fitDetail(){const d=$('#detail');if(!d)return;if(innerWidth<=900){d.style.maxHeight='';return}
+  const t=Math.max(d.getBoundingClientRect().top,12);d.style.maxHeight=Math.max(innerHeight-t-12,240)+'px'}
+{let raf=0;const f=()=>{if(!raf)raf=requestAnimationFrame(()=>{raf=0;fitDetail()})};addEventListener('scroll',f,{passive:true});addEventListener('resize',f)}
 function renderDetail(){
   const el=$('#detail'),c=C.find(x=>x.id===st.sel);
   el.classList.toggle('open',!!c);
+  if(st.lastSel!==st.sel){st.lastSel=st.sel;el.scrollTop=0}
   if(!c){st.formFor=null;el.innerHTML=`<div class="ph"><h2>Bir müşteri seçin</h2><p>Listeden bir market seçtiğinizde bilgileri, geçmiş ziyaretleri ve sıradaki takip burada görünür.</p><ul><li>Üstteki kutulara tıklayarak bugünkü rutu, takibi gelmiş ya da uzun süredir ziyaret edilmeyen müşterileri süzebilirsiniz.</li>${VISIT_LOG?'<li>Her ziyaretten sonra kısa bir not girin; not o günün tarihiyle kaydedilir.</li>':''}</ul></div>`;return}
   const acts=A.filter(a=>a.customerId===c.id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt||0)-(a.createdAt||0));
   const reps=allReps();if(c.rep&&!reps.includes(c.rep))reps.push(c.rep);
@@ -556,7 +561,7 @@ function render(){
     keep[id]=[...f.elements].filter(e=>e.name).map(e=>({n:e.name,t:e.type,v:e.value,c:e.checked,touched:e.dataset.touched}));
     const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.name&&ae.type!=='radio'&&ae.type!=='checkbox')foc=[id,ae.name]}
   renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();renderOverdue();
-  renderDetail();
+  renderDetail();fitDetail();
   for(const [id,vals] of Object.entries(keep)){const g=$('#'+id);if(!g)continue;
     for(const e of g.elements){if(!e.name)continue;const k=(e.type==='radio'||e.type==='checkbox')?vals.find(x=>x.n===e.name&&x.v===e.value):vals.find(x=>x.n===e.name);if(!k)continue;
       if(e.type==='radio'||e.type==='checkbox')e.checked=k.c;else e.value=k.v;if(k.touched)e.dataset.touched=k.touched}

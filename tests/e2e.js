@@ -287,6 +287,28 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await sel(page,'Düşüş Market');page.once('dialog',d=>d.accept());await page.click('#aragOff');await page.waitForTimeout(150);
    ok(!(await doc(page,'arag/c1'))&&!!(await page.$('#aragOn')),'süreç kapatılınca kayıt silindi, buton geri geldi');}
 
+  step('3f. Liste ve kart bağımsız kayıyor');
+  {const {ctx:c2,page:p2}=await open(browser,{viewport:{width:1400,height:650}});
+   await sel(p2,'Düşüş Market');
+   {const r=await p2.evaluate(()=>{scrollTo(0,0);return new Promise(res=>requestAnimationFrame(()=>requestAnimationFrame(()=>{const b=document.querySelector('#detail').getBoundingClientRect();res([b.top,b.bottom])})))});
+    ok(r[1]<=650+1&&r[0]>100,'sayfa en üstteyken de kartın altı ekranda (kart '+Math.round(r[0])+'–'+Math.round(r[1])+' px)')}
+   const m=()=>p2.evaluate(()=>{const d=document.querySelector('#detail'),r=d.getBoundingClientRect();return {win:scrollY,det:d.scrollTop,sh:d.scrollHeight,ch:d.clientHeight,top:r.top,bottom:r.bottom}});
+   // listeyi ekranın üstüne getir: kart yapışık hâle gelsin
+   await p2.evaluate(()=>scrollTo(0,document.querySelector('#list').getBoundingClientRect().top+scrollY-20));await p2.waitForTimeout(100);
+   let a=await m();ok(a.sh>a.ch+50,'kart ekrandan uzun ve kendi içinde kayabilir ('+a.sh+' > '+a.ch+')');
+   ok(a.bottom<=650+1,'kartın altı ekranın dışına taşmıyor');
+   const box=await p2.$eval('#detail',d=>{const r=d.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+Math.min(r.height,500)/2}});
+   await p2.mouse.move(box.x,box.y);await p2.mouse.wheel(0,400);await p2.waitForTimeout(250);
+   let b=await m();ok(b.det>a.det&&b.win===a.win,'kart üzerinde kaydırınca yalnız kart kayıyor (kart '+a.det+'→'+b.det+', sayfa '+a.win+'→'+b.win+')');
+   await p2.mouse.wheel(0,5000);await p2.waitForTimeout(250);await p2.mouse.wheel(0,600);await p2.waitForTimeout(250);
+   let c=await m();ok(c.win===a.win,'kartın sonuna gelince sayfa/liste sürüklenmiyor');
+   const lb=await p2.$eval('#list',l=>{const r=l.getBoundingClientRect();return {x:r.x+r.width/2,y:300}});
+   await p2.mouse.move(lb.x,lb.y);await p2.mouse.wheel(0,-150);await p2.waitForTimeout(250);
+   let d=await m();ok(d.win<c.win&&d.det===c.det,'liste üzerinde kaydırınca sayfa kayıyor, kartın kendi kaydırması değişmiyor (sayfa '+c.win+'→'+d.win+', kart '+c.det+'→'+d.det+')');
+   await p2.click('#list .row:has-text("Sağlıklı Market")');await p2.waitForTimeout(100);
+   ok((await m()).det===0,'başka müşteri seçilince kart en üstten açılıyor');
+   await c2.close();}
+
   step('5. İade uyarısı');
   const tags=await page.$$eval('#list .row',rs=>rs.map(r=>[r.querySelector('b').textContent,(r.querySelector('.rtag[title^="İade"]')||{}).textContent||'']));
   ok(tags.find(t=>t[0]==='İadeci Market')[1]==='iade %12,0','İadeci Market listede "iade %12,0" etiketi taşıyor');
