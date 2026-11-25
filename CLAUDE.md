@@ -1,103 +1,72 @@
 # Akar Benelux NL CRM
 
-Hollanda'daki market müşterileri için satış CRM'i. Kullanıcılar Türkçe konuşur; arayüz metinleri, kod yorumları, commit mesajları ve kullanıcıya verilen yanıtlar **Türkçe** olur.
+Hollanda'daki market müşterileri için satış CRM'i. Arayüz metinleri, kod yorumları, commit mesajları, PR açıklamaları ve kullanıcıya verilen yanıtlar **Türkçe** olur.
 
-## Yapı
+## Mimari
 
-Derleme adımı yok: düz HTML + vanilla JS; `main` dalındaki dosyalar statik olarak yayınlanan canlı sitedir.
+Derleme adımı yok. Uygulama düz HTML ve vanilla JS'ten oluşur; `main` dalı canlı sitedir.
 
-| Dosya | İçerik |
-|---|---|
-| `index.html` | İskelet: üst bar ve sağ üst menü (`#umDrop`), sekmeler (`nav.tabs`), görünüm bölümleri (`#listView`, `#targetsView`, `#boardView`, `#overdueView`, `#creditView`, `#adminView`, `#permsView`), modallar |
-| `app.js` | Tüm uygulama mantığı. Tek blok `{ ... }` içinde; global yok |
-| `style.css` | Tüm stiller. Renkler `:root` değişkenleri; gece modu `[data-theme=dark]` |
-| `supabase-baglanti.js` | Supabase'i Firestore benzeri `db` arayüzüne çevirir, giriş ekranı, `window.CRM_ROLE / CRM_REP / CRM_USERS` |
-| `config.js` | Supabase URL ve anon key (herkese açık anahtar; gizli bilgi değil) |
-| `tests/` | Uçtan uca testler (Playwright + bellek içi sahte veritabanı) |
+- `index.html`: iskelet (sekmeler, görünüm bölümleri, sağ üst menü).
+- `app.js`: tüm mantık, tek blok içinde.
+  - Veri global dizilerde: `CALL` (tüm müşteriler), `C` (kullanıcının görebildikleri), `OI`, `RET`, `MON`, `QTS`, …
+  - Her değişimde `render()` → `derive()` → `renderX()` çağrılır.
+  - Olaylar belge düzeyinde dinlenir ve `data-*` özniteliklerinden ayırt edilir.
+- `style.css`: renkler `:root` değişkenlerinde; gece modu `[data-theme=dark]` ile.
+- `supabase-baglanti.js`: Supabase'i Firestore benzeri bir `db` arayüzüne çevirir. Girişi ve `CRM_ROLE` / `CRM_REP` / `CRM_USERS` değerlerini sağlar.
+- `config.js`: Supabase URL ve anon key (herkese açık).
 
-### app.js akışı
-- Veri global dizilerde: `CALL` (tüm müşteriler), `C` (kullanıcının görebildiği müşteriler), `A` (activities), `OI` (açık faturalar), `RET` (iade), `MON` (bu ay), `QTS` (hedefler), `SO` (elle durum), `K` (iletişim), `AR` (ARAG), `PM` (izinler).
-- Her veri değişiminde `render()` çağrılır. Önce `derive()` çalışır, sonra her bölümün `renderX()` fonksiyonu kendini çizer. Bir bölüm açık değilse `renderX()` erken döner ama sekme etiketini günceller.
-- `render()` açık formlardaki yazılanları korur (`aform`, `ctform`, `qform`, `rform`, `pform`, `uform`). `rform` ve `pform` yalnız kirliyse korunur (`st.rdirty` / `st.pdirty`).
-- Olaylar belge düzeyinde dinlenir (`click` / `change` / `input` / `submit`) ve `data-*` öznitelikleriyle ayrılır.
-- UI durumu `st` nesnesinde tutulur. `rep`, `view`, `qv` ve `rf` alanları localStorage'daki `crm-ui` anahtarında saklanır.
+## Veritabanı
 
-## Veritabanı (Supabase)
+- Supabase projesi `kbryjqxqtjekooiwtpou`.
+- Tek tablo: `docs(collection, id, data jsonb)`.
+- Müşteri kayıtları:
+  - `customers`: müşteriler (id `c<kod>`, alanlar `code` ve `rep`).
+  - Müşteri id'sine bağlı kayıtlar: `contacts`, `statusov`, `arag`, `activities`.
+- Diğer kayıtlar:
+  - `qtargets`: aylık hedefler.
+  - `settings/rules` ve `settings/perms`: ayarlar ve izinler.
+  - `sync/month`, `sync/returns`, `sync/openinv`: toplu veri, müşteri koduna göre `map`.
+- `sync` kayıtları istemciden `my_sync()` RPC'siyle okunur.
+- Satış verisi her sabah zamanlanmış bir görevle Power BI / Excel'den güncellenir. Açık faturalar menüden içe aktarılır.
 
-- Proje: `kbryjqxqtjekooiwtpou`. Tek tablo: `docs(collection text, id text, data jsonb, updated_at)`.
-- Erişim `supabase-baglanti.js` üzerinden yapılır:
-  - `db.collection(c).doc(id).get/set/update/delete`, `db.doc('c/id')` ve `onSnapshot`.
-  - Canlı güncellemeler `postgres_changes` ile gelir.
-  - **`sync` koleksiyonu tablodan değil `my_sync(p_id)` RPC'sinden okunur.**
+## Roller ve güvenlik
 
-### Koleksiyonlar
+- Roller `allowed_users(email, role, rep)` tablosunda tanımlı: `admin`, `satis`, `muhasebe`.
+- İzin anahtarları `PERMS` listesinde, varsayılanları `PDEF` nesnesinde.
+- SQL tarafında `has_perm()` aynı varsayılanları içerir; ikisi **birlikte** değiştirilir.
+- Kurallar iki katmanda uygulanır ve ikisi de güncellenmelidir:
+  - istemcide: `can()`, `viewOk()`, `repLock()`
+  - veritabanında: RLS fonksiyonları `can_write_doc`, `sees_customer`, `my_sync`.
+- `v_all` izni olmayan satış temsilcisi:
+  - yalnız `rep` alanı kendi adı olan müşterileri görür;
+  - Hedefler bu kısıtlamanın dışındadır.
+- Şema değişikliği `apply_migration` ile yapılır. Sonra kurallar kullanıcı taklidiyle denenir:
+  `set local role authenticated` + `request.jwt.claims`, bir `begin … rollback` bloğu içinde.
 
-| Koleksiyon | İçerik |
-|---|---|
-| `customers` | Müşteri kayıtları. Kimlik `c<kod>`, alan `code`. Diğer alanlar: `rep`, `ciro2025`, `sales2026`, `lastInvoice`, `status`, `statusManual`, `segment`, `chain`, `visitDay`, … |
-| `activities` | Notlar ve takipler (`customerId`). Ziyaret kaydı şu an kapalı: `VISIT_LOG=false` |
-| `contacts` | Temsilcinin girdiği telefon / yetkili (kimlik = müşteri id) |
-| `statusov` | Elle Aktif/Pasif (kimlik = müşteri id) |
-| `arag` | ARAG tahsilat süreci (kimlik = müşteri id) |
-| `qtargets` | Aylık hedefler (kimlik `YYYY-MM`) |
-| `settings/rules` | Yönetici ayarları |
-| `settings/perms` | Rol izinleri |
-| `sync/month` | Bu ay: `map[kod]=[satış, fatura adedi, iade, fiyat farkı]` |
-| `sync/returns` | Yıl başından iade: `map[kod]=[satış, iade, iadeAdet, ff, ffAdet, satışAdet]`, `through` |
-| `sync/openinv` | Açık faturalar: `map[kod]={lim, vade, inv:[[no, tarih, F/I/P, tutar, kalan, vade]]}`, `asOf` |
-| `issues` | Otomatik görevlerin sorun kayıtları |
+## İş kuralları
 
-- Satış verisi Power BI / Excel dışa aktarımından gelir. Sabah çalışan zamanlanmış bir görev `customers` (`lastInvoice`, `sales2026` vb.) ile `sync/month` ve `sync/returns` kayıtlarını günceller.
-- Açık faturalar menüdeki "Açık faturaları içe aktar" ile ERP Excel'inden yüklenir.
+- Eşikler koda sabit yazılmaz.
+  - Yeni eşik `RDEF` ve `RULES` listesine eklenir; Yönetici ayarlarından değiştirilir.
+  - Ayarın etkisini gösteren metin `ruleImpact()` ile üretilir.
+- Bir rakam birden çok yerde gösteriliyorsa **tek bir fonksiyondan** hesaplanır. Kart, liste, Karne ve Excel aynı sonucu verir. Temel fonksiyonlar:
+  - `autoSt` (durum), `riskCalc` (kayıp riski), `retOf` (iade)
+  - `oiOf` (açık fatura), `credRec` (kredi önerisi), `tgtMap` (hedef)
+- Tempo her yerde `sales2026 / (ciro2025 × YF) − 1` formülüyle hesaplanır.
+  - Yıl etiketleri dinamiktir: `CY` / `PY`.
+  - `YF` verinin tarihinden (`dataTo()`) türetilir.
+- Durum önceliği: elle (`statusov`) > Excel (`statusManual`) > otomatik.
 
-### Roller, izinler ve RLS
-- Roller `allowed_users(email, role, rep)` tablosunda: `admin` (Yönetici), `satis` (Satış temsilcisi), `muhasebe`. `rep`, kullanıcının temsilci adıdır.
-- Ana yönetici `supabase-baglanti.js` içindeki `ADMIN_EMAIL` ile SQL'deki `is_admin()` fonksiyonudur. Her zaman yöneticidir.
-- İzin anahtarları `app.js` → `PERMS`, varsayılanlar `PDEF`. Aynı varsayılanlar SQL'deki `has_perm()` içinde de vardır; **ikisi birlikte değiştirilir.**
-- SQL yardımcıları:
-  - `is_allowed`, `is_admin`, `my_role`, `my_rep`, `has_perm(p)`, `sees_all`, `sees_customer(id)`
-  - `can_write_doc(col, id)`, `can_delete_doc(col)`, `my_sync(id)`
-- `v_all` izni olmayan kullanıcı veritabanında da yalnız kendi müşterilerini görür (`customers.data->>'rep' = my_rep()`) ve onlara bağlı kayıtlara erişir. `sync` verisi ona yalnız kendi kodlarıyla döner.
-- **Hedefler** kısıtlamanın dışındadır: `qtargets` ve `settings` herkese açıktır, Hedefler sekmesi tüm ekibi gösterir.
-- İstemcide aynı kurallar `can(k)`, `isAdmin()`, `repLock()` ve `viewOk(view)` ile uygulanır.
-- **Yeni bir yazma veya görünüm eklerken hem istemci kontrolünü hem RLS'i güncelle.**
-- Şema değişikliği Supabase MCP `apply_migration` ile yapılır. Sonra kurallar kullanıcı taklidiyle test edilir:
-  ```sql
-  begin;
-  set local role authenticated;
-  select set_config('request.jwt.claims','{"email":"…","role":"authenticated"}',true);
-  -- kuralı deneyen sorgular
-  rollback;
-  ```
+## Kod kuralları
 
-## İş kuralları (değiştirmeden önce oku)
-
-- **Ayarlar** `RDEF` içinde tanımlı; Yönetici ayarları ekranından değişir (`settings/rules`). Sabit eşik yazma; yeni eşik `RDEF` ve `RULES` listesine eklenir, etki metni `ruleImpact()` ile verilir. Tanımlı ayarlar:
-  - `pasif` 120, `temas` 30, `arag` 30
-  - `credDays` 15, `credCut` 50, `iade` 2.5
-  - `riskPace` 70, `dropMin` 3000, `riskSilent` 45, `silentMax` 365, `silentMin` 1000
-- **Durum:** son satış faturası `R.pasif` günden eskiyse müşteri Pasif olur. Öncelik sırası: `statusov` (sitede elle) > `statusManual` (Excel) > otomatik (`autoSt`).
-- **Kayıp riski** (`riskCalc`) yalnız aktif müşterilerde hesaplanır; pasifler risk kutusunun altında ayrıca sayılır. İki koşul vardır:
-  - tempo düşüşü
-  - faturasız gün
-- **Tempo / büyüme** her yerde `sales2026 / (ciro2025 × YF) − 1` ile hesaplanır.
-  - `YF`, verinin tarihine göre yılın geçen oranıdır: `dataTo()` = `RET.through` ya da `MON.through` ya da bugün.
-  - `CY` / `PY` (bu yıl / geçen yıl) etiketleri dinamiktir; yılı metne gömme.
-- **İade oranı** (`retOf`): |iade| ÷ aynı dönemin satış faturaları. Uyarı eşiği `R.iade` %.
-- **Açık faturalar** (`oiOf`): vadesi geçen, gelmeyen ve alacak ayrı hesaplanır. Toplam = net kalan.
-- **ARAG:** en eski gecikme `R.arag` günü aşınca kartta buton çıkar.
-- **Kredi limiti önerisi** (`credRec`):
-  - Formül: aylık ortalama satış × (vade + `credDays`) ÷ 30, € 500'e yukarı yuvarlanır.
-  - Gecikme `R.arag` günü aşarsa öneri `credCut` % düşürülür; ARAG aktifse öneri 0.
-- **Aylık hedef** = Hedefler sekmesinde o ay girilen kategori hedeflerinin toplamı (`tgtMap`).
-- Bir veri birden çok yerde gösteriliyorsa **tek fonksiyondan** hesaplanmalı. Kart, liste, Karne ve Excel'e aktarım aynı sonucu vermeli.
-
-## Biçim ve dil
-- Para: `eur(n)` → `€ 1.234`, kuruşlu: `eurc`. Yüzde: `gPct` / `gCls`, `pct1`, Türkçe ek: `pctEk`.
-- Tarih: `fmt('2026-11-25')` → `25.11.2026`.
-- Küçük harf için `low()` (Türkçe I/ı). Ayar kutularında ondalık sayı `rnum()` ile okunur, çünkü `num()` noktayı binlik ayırıcı sayar.
+- Biçim yardımcıları:
+  - Para: `eur` / `eurc`.
+  - Tarih: `fmt`.
+  - Yüzde: `gPct`, `pctEk`.
+  - Küçük harf: `low()`.
+  - Ondalık giriş: `rnum()`. `num()` noktayı binlik ayırıcı sayar.
 - Kullanıcıdan gelen her metin `esc()` ile basılır.
-- Telefon genişliği (390 px) ve gece modu her değişiklikte çalışmalı; tablolar kendi içinde kayar, sayfa yatay taşmaz.
+- `render()` açık formları korur. Yeni bir form eklendiğinde koruma listesine de eklenir.
+- Her değişiklik 390 px telefon genişliğinde ve gece modunda da çalışmalı. Sayfa yatay taşmamalı.
 
 ## Test
 
@@ -105,19 +74,23 @@ Derleme adımı yok: düz HTML + vanilla JS; `main` dalındaki dosyalar statik o
 node tests/e2e.js
 ```
 
-- Sayfa yerel bir sunucudan, `tests/mockdb.js` (bellek içi db) ve `tests/fixture.js` (`window.__SEED` örnek verisi) ile açılır; gerçek veriye dokunulmaz.
-- Excel'e aktarım testi için: `XLSX_LIB=/yol/xlsx.full.min.js node tests/e2e.js`.
-- `open(browser, {admin, role, user, seed})` farklı rol ve izinlerle sayfa açar. Diğer yardımcılar:
-  - `goAdm(page)`: menüden Yönetici ayarlarını açar.
-  - `goList(page)`: ana sayfaya döner.
-  - `doc(page, 'col/id')`: sahte db'deki kaydı okur.
-- **Her değişiklikte yeni davranış için test ekle ve tüm testlerin geçtiğini gör.** Hatayı düzeltirken önce eski kodda başarısız olan bir test yaz.
-- Ekran görüntüleri `tests/screens/` altına yazılır (git'e girmez); arayüz değişikliğinden sonra bak.
+- Testler Playwright ile, bellek içi `tests/mockdb.js` ve `tests/fixture.js` verisiyle çalışır.
+- Excel testi için `XLSX_LIB=<yol>` verilir.
+- Yardımcılar: `open(browser, {admin, role, user, seed})`, `goAdm`, `goList`, `doc`.
+- Her yeni davranışa test eklenir.
+- Hata düzeltilirken önce eski kodda başarısız olan test yazılır.
+- Tüm testler geçmeden birleştirme yapılmaz.
+- Arayüz değişikliğinden sonra `tests/screens/` altındaki ekran görüntülerine bakılır.
 
 ## Çalışma şekli
-- Değişiklikler PR ile `main`'e birleştirilir (main = canlı site). PR açıklaması Türkçe yazılır: özet ve test sonucu.
-- Kullanıcıya her işten sonra kısa bir Türkçe özet verilir: ne değişti, canlıda nasıl görünür, PR bağlantısı, test sayısı. Sayfanın Ctrl+F5 ile yenilenmesi hatırlatılır.
-- Canlı veriyle ilgili sayıları (müşteri adedi, oran vb.) Supabase'den bağımsız SQL ile doğrula; tahmin yazma.
-- **Müşteri verisi içeren dosyaları (Excel, CSV, dışa aktarımlar) repoya koyma.**
-- Gizli anahtar yazma: `config.js`'teki anon key dışında anahtar yoktur; service key kullanılmaz.
-- Yetki kuralı: hedef, durum, ayar, izin ve içe aktarma gibi yazma işlemleri yalnız izni olan role açıktır. Varsayılan olarak bunlar yalnız Yöneticiye açıktır; diğer roller görüntüler.
+
+- Değişiklik PR ile `main`'e birleştirilir. PR açıklaması özet ve test sonucunu içerir.
+- Her işin sonunda kullanıcıya kısa bir Türkçe özet verilir:
+  - ne değişti ve canlıda nasıl görünür;
+  - PR bağlantısı ve test sayısı;
+  - Ctrl+F5 hatırlatması.
+- Canlı sayılar Supabase'den SQL ile doğrulanır; tahmin yazılmaz.
+- Repoya müşteri verisi (Excel, CSV) ve gizli anahtar konmaz.
+- Yazma işlemleri yalnız izni olan role açıktır:
+  - hedef, durum, ayar, izin, içe aktarma;
+  - varsayılan olarak yalnız Yönetici.
