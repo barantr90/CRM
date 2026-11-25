@@ -16,7 +16,12 @@ const low=s=>String(s||'').toLocaleLowerCase('tr');
 
 /* Kayıp riski ve iade kuralları */
 const RISK={dropPace:0.7,dropMin:3000,silentDays:45,silentMax:365,silentMin:1000};
-const RET_WARN=0.025,RET_MIN=1000;
+let RET_WARN=0.025;const RET_MIN=1000;
+// Yönetici sekmesinden değiştirilebilen kurallar (settings/rules). Boş/geçersiz değer varsayılana düşer.
+const RDEF={pasif:120,temas:30,arag:30,iade:2.5,riskPace:70,riskSilent:45};
+let R={...RDEF},RMETA={};
+function applyRules(d){R={...RDEF};RMETA=d||{};for(const k in RDEF){const v=Number((d||{})[k]);if(Number.isFinite(v)&&v>0)R[k]=v}
+  RET_WARN=R.iade/100;RISK.dropPace=R.riskPace/100;RISK.silentDays=R.riskSilent}
 // yılın geçen kısmı: 2026 satışını 2025 cirosunun aynı dönemine göre kıyaslamak için
 const YF=(()=>{const y=+TODAY.slice(0,4);if(y>2026)return 1;const s=Date.UTC(y,0,1),n=Date.UTC(y,+TODAY.slice(5,7)-1,+TODAY.slice(8,10));const len=(Date.UTC(y+1,0,1)-s)/864e5;return ((n-s)/864e5+1)/len})();
 const OUTCOMES=[['Sipariş alındı',0,''],['Tekrar gel',7,'Tekrar ziyaret et'],['Fiyat itirazı',14,'Fiyat itirazını yeniden görüş'],['Rakip var',30,'Rakip durumunu kontrol et'],['Kapalıydı / yetkili yok',3,'Tekrar uğra'],['Bilgi notu',0,'']];
@@ -87,19 +92,53 @@ function oiOf(c){
 }
 const oiState=x=>x.rest<0?['cr','Alacak (müşteri lehine)']:x.days==null?['','Vade yok']:x.days<0?['od',`${-x.days} gün geçti`]:x.days===0?['td','Bugün vadeli']:['nd',`${x.days} gün kaldı`];
 // ARAG (tahsilat / hukuki takip) süreci: 'arag' koleksiyonunda müşteri başına {active,at,by}. Vadesi geçen en eski fatura 30 günü aşınca başlatılabilir.
-const ARAG_D=30;
 const aragOf=c=>AR[c.id]&&AR[c.id].active?AR[c.id]:null;
-const aragElig=o=>!!(o&&o.odn&&o.odMax>ARAG_D);
+const aragElig=o=>!!(o&&o.odn&&o.odMax>R.arag);
 function aragHtml(c,o){
   const a=aragOf(c),adm=window.CRM_IS_ADMIN!==false&&canWrite;
   if(a)return `<div class="arag on" id="aragBox"><span class="aragtag">ARAG</span><span>ARAG süreci aktif${a.at?` · ${fmt(a.at)} tarihinden beri`:''}</span>${adm?`<button type="button" class="ghost" id="aragOff" data-cid="${esc(c.id)}">Süreci kapat</button>`:''}</div>`;
   if(!aragElig(o)||!adm)return '';
-  return `<div class="arag" id="aragBox"><span>En eski vadesi geçen fatura <b>${o.odMax} gün</b> gecikmiş (30 günü aştı).</span><button type="button" class="primary" id="aragOn" data-cid="${esc(c.id)}">ARAG süreci</button></div>`;
+  return `<div class="arag" id="aragBox"><span>En eski vadesi geçen fatura <b>${o.odMax} gün</b> gecikmiş (${R.arag} günü aştı).</span><button type="button" class="primary" id="aragOn" data-cid="${esc(c.id)}">ARAG süreci</button></div>`;
 }
 // Vadesi Geçen sekmesi
 function overdueRows(){
   return C.filter(c=>!st.rep||c.rep===st.rep).map(c=>[c,oiOf(c)]).filter(([,o])=>o&&o.od>0).sort((a,b)=>b[1].od-a[1].od);
 }
+// Yönetici sekmesi: kurallar ve ayarlar
+const RULES=[
+  ['pasif','Pasif gün sınırı','gün',7,730,1,'Son satış faturası bu kadar günden eskiyse müşteri otomatik <b>Pasif</b> olur. Elle belirlenen durum (kart / Excel) bunu geçersiz kılar. Excel\'e aktarmada da bu değer kullanılır.'],
+  ['temas','Temas günü','gün',1,365,1,'Son temastan (fatura ya da kayıt) bu kadar gün geçen aktif müşteri "temas yok" kutusunda sayılır ve listede noktayla işaretlenir.'],
+  ['arag','ARAG süreç günü','gün',1,365,1,'Müşterinin en eski vadesi geçen faturası bu kadar günü aşınca kartta <b>ARAG süreci</b> butonu çıkar.'],
+  ['iade','İade uyarı eşiği','%',0.1,50,0.1,'2026 satışına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.'],
+  ['riskPace','Kayıp riski: ciro temposu','%',10,100,1,'2026 satışı, 2025 cirosunun aynı dönemine göre bu yüzdenin altındaysa müşteri kayıp riskinde sayılır.'],
+  ['riskSilent','Kayıp riski: faturasız gün','gün',7,365,1,'Bu kadar gündür fatura kesilmeyen müşteri kayıp riskinde sayılır.']];
+function ruleImpact(k,v){
+  if(!(v>0))return '';
+  if(k==='pasif'){const n=C.filter(c=>!(c._st0&&c._st0.manual)&&!c.statusOv&&(c.lastInvoice?ago(c.lastInvoice)>v:((c._st0&&c._st0.status)||'Pasif')==='Pasif')).length;return `${n} müşteri otomatik pasif olur`}
+  if(k==='temas'){const n=C.filter(c=>c.status!=='Pasif'&&(()=>{const d=ago(D.last[c.id]);return d===null||d>v})()).length;return `${n} aktif müşteri ${v}+ gündür temassız`}
+  if(k==='arag'){if(!(OI&&OI.map))return '';const n=C.filter(c=>{const o=oiOf(c);return o&&o.odn&&o.odMax>v}).length;return `${n} müşteri ARAG'a uygun`}
+  if(k==='iade'){if(!(RET&&RET.map))return '';const n=C.filter(c=>{const r=retOf(c);return r&&r.p>=v/100}).length;return `${n} müşteri eşiğin üzerinde`}
+  if(k==='riskPace'||k==='riskSilent'){const keep={...RISK};if(k==='riskPace')RISK.dropPace=v/100;else RISK.silentDays=v;const n=C.filter(c=>riskOf(c)).length;Object.assign(RISK,keep);return `${n} müşteri kayıp riskinde`}
+  return '';
+}
+function renderAdmin(){
+  const isAdm=window.CRM_IS_ADMIN!==false;$('#tabA').hidden=!isAdm;
+  if(st.view!=='admin')return;
+  const can=isAdm&&canWrite,m=RMETA||{};
+  const upd=m.updatedAt?`Son güncelleme: ${fmt(iso(new Date(m.updatedAt)))}${m.by?' · '+esc(personOf(m.by).name||m.by):''}`:'Henüz değiştirilmedi: tüm değerler varsayılan.';
+  $('#admin').innerHTML=`<div class="rethead"><h3>Kurallar ve Ayarlar <small class="sm">tüm kullanıcılar için geçerli</small></h3><span class="sm">${upd}</span></div>
+  <form class="ordp rform" id="rform" autocomplete="off" novalidate>
+  ${RULES.map(([k,l,u,mn,mx,stp,d])=>`<div class="rrow"><label for="r_${k}"><b>${l}</b><small>${d}</small></label>
+   <div class="rin"><span class="rbox"><input id="r_${k}" name="${k}" type="number" inputmode="decimal" min="${mn}" max="${mx}" step="${stp}" value="${R[k]}" ${can?'':'disabled'}><em>${u}</em></span>
+   <small class="rdef">Varsayılan: ${String(RDEF[k]).replace('.',',')} ${u}${R[k]!==RDEF[k]?' · <b>değiştirildi</b>':''}</small><small class="rimp" data-rimp="${k}">${ruleImpact(k,R[k])}</small></div></div>`).join('')}
+  ${can?`<div class="qsave"><span class="sm" id="rmsg"></span><button type="button" class="ghost" id="rdef">Varsayılanlara dön</button><button type="submit" class="primary">Kaydet</button></div>`:''}
+  </form>`;
+}
+// sayı kutusu değeri: ondalık ayırıcı nokta ya da virgül (binlik ayırıcı yok)
+const rnum=x=>{const n=parseFloat(String(x??'').trim().replace(',','.'));return Number.isFinite(n)?n:null};
+function rformCheck(f){let bad=0;for(const [k,,,mn,mx] of RULES){const e=f.elements[k];const v=rnum(e.value);const ok=v!=null&&v>=mn&&v<=mx;e.closest('.rbox').classList.toggle('bad',!ok);if(!ok)bad++;
+  const im=f.querySelector(`[data-rimp="${k}"]`);if(im)im.textContent=ok?ruleImpact(k,v):`${String(mn).replace('.',',')}–${mx} arası bir değer girin`}
+  return !bad}
 function renderOverdue(){
   const has=!!(OI&&OI.map);$('#tabV').hidden=!has;
   const all=has?overdueRows():[];
@@ -110,9 +149,9 @@ function renderOverdue(){
   const L=f==='30'?all.filter(([,o])=>aragElig(o)):f==='arag'?all.filter(([c])=>aragOf(c)):all;
   const sum=L.reduce((a,[,o])=>a+o.od,0),n30=all.filter(([,o])=>aragElig(o)).length,nA=all.filter(([c])=>aragOf(c)).length;
   const fb=(k,l)=>`<button type="button" data-ovf="${k}" aria-pressed="${f===k}">${l}</button>`;
-  const row=([c,o],i)=>{const a=aragOf(c);return `<tr${aragElig(o)?' class="o30"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td><b class="odv">${eur(o.od)}</b></td><td>${o.odn}</td><td><span class="odd">${o.odMax} gün</span></td><td>${a?'<em class="rtag ar">ARAG</em>':aragElig(o)?'<span class="sm">30+ gün</span>':''}</td></tr>`};
+  const row=([c,o],i)=>{const a=aragOf(c);return `<tr${aragElig(o)?' class="o30"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td><b class="odv">${eur(o.od)}</b></td><td>${o.odn}</td><td><span class="odd">${o.odMax} gün</span></td><td>${a?'<em class="rtag ar">ARAG</em>':aragElig(o)?`<span class="sm">${R.arag}+ gün</span>`:''}</td></tr>`};
   $('#overdue').innerHTML=`<div class="rethead"><h3>Vadesi Geçen Müşteriler <small class="sm">${fmt(OI.asOf)} verisi${st.rep?' · '+esc(st.rep):''} · ${L.length} müşteri · ${eur(sum)}</small></h3>
-  <div class="seg2" role="group" aria-label="Süz">${fb('all',`Tümü (${all.length})`)}${fb('30',`30+ gün (${n30})`)}${fb('arag',`ARAG (${nA})`)}</div></div>
+  <div class="seg2" role="group" aria-label="Süz">${fb('all',`Tümü (${all.length})`)}${fb('30',`${R.arag}+ gün (${n30})`)}${fb('arag',`ARAG (${nA})`)}</div></div>
   ${L.length?`<div class="ordp"><table id="odT"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Vadesi geçen</th><th>Fatura</th><th>En eski</th><th>ARAG</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>`:'<p class="empty">Bu süzgeçte müşteri yok.</p>'}
   <p class="sm">Tutar: vadesi geçmiş faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Gün sayısı bugüne göre. Satıra tıklayınca müşteri kartı açılır.</p>`;
 }
@@ -162,9 +201,10 @@ const allReps=()=>[...new Set([...REPS,...C.map(c=>c.rep).filter(Boolean)])];
 
 /* Elle durum: 'statusov' koleksiyonunda müşteri başına {status}. Öncelik: sitede elle > Excel 'Durum (elle)' > otomatik. */
 let SO={};
+const autoSt=c=>c.lastInvoice?(ago(c.lastInvoice)>R.pasif?'Pasif':'Aktif'):((c._st0&&c._st0.status)||'Pasif');
 function applyStatus(){for(const c of C){if(!c._st0)c._st0={status:c.status||'',manual:c.statusManual||''};const ov=(SO[c.id]||{}).status||'';
-  c.statusOv=ov;c.statusManual=ov||c._st0.manual;c.status=ov||c._st0.manual||c._st0.status}}
-const statusAuto=c=>(c._st0&&(c._st0.manual||c._st0.status))||'';
+  c.statusOv=ov;c.statusManual=ov||c._st0.manual;c.status=ov||c._st0.manual||autoSt(c)}}
+const statusAuto=c=>(c._st0&&c._st0.manual)||autoSt(c);
 function statusHtml(c){
   const adm=window.CRM_IS_ADMIN===true&&canWrite;
   if(!adm)return c.status?`<span class="tag"${c.statusOv?' title="Durum elle belirlendi"':''}>${esc(c.status)}${c.statusOv?' · elle':''}</span>`:'';
@@ -181,7 +221,7 @@ function derive(){
   D={last,open};
   RK={};for(const c of C){const r=riskOf(c);if(r)RK[c.id]=r}
 }
-const noContact30=c=>{const d=ago(D.last[c.id]);return d===null||d>30};
+const noContact30=c=>{const d=ago(D.last[c.id]);return d===null||d>R.temas};
 const isCold=c=>c.status!=='Pasif'&&noContact30(c);
 const isDue=c=>(D.open[c.id]||[]).some(a=>a.nextDate<=TODAY);
 
@@ -214,7 +254,7 @@ function renderTop(){
 function renderStats(){
   const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
   const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0);
-  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,'30+ gündür temas yok (aktif)'],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
+  const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,`${R.temas}+ gündür temas yok (aktif)`],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
   $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
   $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span></button>`).join('')+ordStat(mine);
   renderOrd();
@@ -249,12 +289,12 @@ function renderOrd(){
 function renderList(){
   const r=visible();
   $('#count').textContent=`${r.length} müşteri`;
-  $('#qf').textContent=st.quick?{route:'Filtre: bugünkü rut',due:'Filtre: takibi gelenler',cold:'Filtre: 30+ gün temas yok',risk:'Filtre: kayıp riski (en büyük kayıp üstte)',od:'Filtre: vadesi geçmiş açık faturası olanlar (en büyük tutar üstte)'}[st.quick]:'';
+  $('#qf').textContent=st.quick?{route:'Filtre: bugünkü rut',due:'Filtre: takibi gelenler',cold:`Filtre: ${R.temas}+ gün temas yok`,risk:'Filtre: kayıp riski (en büyük kayıp üstte)',od:'Filtre: vadesi geçmiş açık faturası olanlar (en büyük tutar üstte)'}[st.quick]:'';
   if(!C.length){$('#list').innerHTML=`<li class="empty">${loaded?'Henüz müşteri yok. <b>İçe aktar</b> ile Excel listenizi yükleyin.':'Yükleniyor…'}</li>`;return}
   if(!r.length){$('#list').innerHTML='<li class="empty">Bu filtrelere uyan müşteri yok.</li>';return}
   $('#list').innerHTML=r.map(c=>{const d=ago(D.last[c.id]),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
     const sub=st.quick==='od'&&oi?`<small class="rk">${eur(oi.od)} vadesi geçmiş · en eski ${oi.odMax} gün</small>`:st.quick==='risk'&&rk?`<small class="rk">${esc(riskText(rk))}</small>`:`<small>${esc([c.chain,c.city,c.rep,c.visitDay].filter(Boolean).join(' · ')||'—')}</small>`;
-    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${aragOf(c)?'<em class="rtag ar" title="ARAG süreci aktif">ARAG</em>':''}${oi&&oi.od>0&&st.quick!=='od'?`<em class="rtag rt" title="Vadesi geçmiş açık fatura: ${eur(oi.od)}">vade ${oi.odMax} gün</em>`:''}${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="30+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
+    return `<li><button class="row${st.sel===c.id?' sel':''}" data-id="${esc(c.id)}"><span class="seg${segCls(c.segment)}" title="${esc(c.segment||'')}">${esc(c.segment||'–')}</span><span class="rm"><b${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</b>${sub}</span><span class="lc${noContact30(c)?' cold':''}">${aragOf(c)?'<em class="rtag ar" title="ARAG süreci aktif">ARAG</em>':''}${oi&&oi.od>0&&st.quick!=='od'?`<em class="rtag rt" title="Vadesi geçmiş açık fatura: ${eur(oi.od)}">vade ${oi.odMax} gün</em>`:''}${rt&&rt.warn?`<em class="rtag rt" title="İade oranı %${pct1(RET_WARN)} üzerinde">iade %${pct1(rt.p)}</em>`:''}${rk&&st.quick!=='risk'?'<em class="rtag" title="Kayıp riski">risk</em>':''}${VISIT_LOG&&isDue(c)?'<em class="tk-tag">takip</em>':''}${noContact30(c)?'<i class="dot" title="${R.temas}+ gündür temas yok"></i>':''}${d===null?'temas yok':d===0?'bugün':d+' gün'}</span></button></li>`}).join('');
 }
 function actRow(a){
   const late=!a.done&&a.nextDate&&a.nextDate<=TODAY;
@@ -551,18 +591,18 @@ function render(){
   {const chs=[...new Set(C.map(chainOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));if(st.chain&&st.chain!=='__any'&&!chs.includes(st.chain))st.chain='';
    const html='<option value="">Zincir Tümü</option><option value="__any">Yalnız zincirler</option>'+chs.map(v=>`<option value="${esc(v)}">${esc(v)} (${chainStores(v).length})</option>`).join('');if($('#fchain').innerHTML!==html)$('#fchain').innerHTML=html;$('#fchain').value=st.chain||''}
   $('#fseg').value=st.seg;$('#fstat').value=st.status;
-  if(st.view==='board'&&window.CRM_IS_ADMIN===false)st.view='list';
+  if((st.view==='board'||st.view==='admin')&&window.CRM_IS_ADMIN===false)st.view='list';
   if(st.view==='tasks'&&!VISIT_LOG)st.view='list';
   if(st.view==='overdue'&&!(OI&&OI.map)&&loaded)st.view='list';
-  $('#tabT').hidden=!VISIT_LOG;$('#dueLeg').hidden=!VISIT_LOG;
+  $('#tabT').hidden=!VISIT_LOG;$('#tLeg').textContent=R.temas;$('#dueLeg').hidden=!VISIT_LOG;
   document.querySelectorAll('.tab').forEach(b=>{const on=b.dataset.view===st.view;b.classList.toggle('on',on);b.setAttribute('aria-selected',on)});
-  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';
+  $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';$('#adminView').hidden=st.view!=='admin';
   // açık formlardaki yazılanları yeniden çizimde koru
   const keep={};let foc=null;
-  for(const id of ['aform','ctform','qform']){const f=$('#'+id);if(!f||(id!=='qform'&&st.formFor!==st.sel))continue;
+  for(const id of ['aform','ctform','qform','rform']){const f=$('#'+id);if(!f||(id!=='qform'&&id!=='rform'&&st.formFor!==st.sel))continue;
     keep[id]=[...f.elements].filter(e=>e.name).map(e=>({n:e.name,t:e.type,v:e.value,c:e.checked,touched:e.dataset.touched}));
     const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.name&&ae.type!=='radio'&&ae.type!=='checkbox')foc=[id,ae.name]}
-  renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();renderOverdue();
+  renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();renderOverdue();renderAdmin();
   renderDetail();fitDetail();
   for(const [id,vals] of Object.entries(keep)){const g=$('#'+id);if(!g)continue;
     for(const e of g.elements){if(!e.name)continue;const k=(e.type==='radio'||e.type==='checkbox')?vals.find(x=>x.n===e.name&&x.v===e.value):vals.find(x=>x.n===e.name);if(!k)continue;
@@ -650,7 +690,7 @@ function aggPBI(rows,type){
   return {map:m,to:to?fromSerial(to):''};
 }
 function readSettings(wb){
-  const S={pasif:120,ref:TODAY,type:TYPE_DEFAULT};const ws=wb.Sheets['Ayarlar'];if(!ws)return S;
+  const S={pasif:R.pasif,ref:TODAY,type:TYPE_DEFAULT};const ws=wb.Sheets['Ayarlar'];if(!ws)return S;
   for(let r=1;r<=30;r++){const k=low(String((ws['A'+r]||{}).v||''));const c=ws['B'+r];if(!c||!k)continue;const v=c.v;
     if(k.startsWith('pasif')){const n=num(v);if(n)S.pasif=n}
     else if(k.startsWith('referans')){if(!c.f){const d=cellVal(v,'d');if(d)S.ref=d}}
@@ -689,7 +729,7 @@ function setCell(ws,a,c){ws[a]=c}
 async function exportXLSX(){
   try{
     const X=await loadXLSX();toast('Excel hazırlanıyor…');
-    const pb=await getPBI();const S={pasif:120,ref:TODAY,type:TYPE_DEFAULT};
+    const pb=await getPBI();const S={pasif:R.pasif,ref:TODAY,type:TYPE_DEFAULT};
     const list=[...C].sort((a,b)=>String(a.rep||'').localeCompare(String(b.rep||''),'tr')||String(a.name||'').localeCompare(String(b.name||''),'tr'));
     const LR=list.length+1;const ws={};
     COLS.forEach((c,j)=>setCell(ws,XL(j)+1,{t:'s',v:c[0]}));
@@ -828,6 +868,7 @@ document.addEventListener('click',async e=>{
   if(t.id==='qEdit'){st.qedit=true;st.qdirty=false;render();const i=$('#qform input');if(i)i.focus();return}
   if(t.id==='qCancel'){if(st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?'))return;st.qedit=false;st.qdirty=false;render();return}
   if(t.dataset.rep!==undefined){st.rep=t.dataset.rep;saveUi();render();return}
+  if(t.id==='rdef'){const f=$('#rform');for(const k in RDEF)f.elements[k].value=RDEF[k];rformCheck(f);$('#rmsg').textContent='Varsayılan değerler yazıldı; kaydetmek için Kaydet\'e basın';return}
   if(t.dataset.ovf!==undefined){st.ovf=t.dataset.ovf;render();return}
   if(t.id==='aragOn'||t.id==='aragOff'){if(window.CRM_IS_ADMIN===false)return;const id=t.dataset.cid,c=C.find(x=>x.id===id);if(!c)return;
     if(t.id==='aragOff'&&!confirm(`${c.name} için ARAG süreci kapatılsın mı?`))return;
@@ -873,9 +914,15 @@ document.addEventListener('change',async e=>{
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('paste',qPaste);
-document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('#qform'))}if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
+document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#rform')){rformCheck(t.closest('#rform'));$('#rmsg').textContent='Kaydedilmemiş değişiklik var'}if(t.closest&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('#qform'))}if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if((e.key==='Enter'||e.key===' ')&&e.target.id==='oimpBtn'){e.preventDefault();$('#oimp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
+  if(e.target.id==='rform'){e.preventDefault();if(window.CRM_IS_ADMIN===false)return;const f=e.target;
+    if(!rformCheck(f)){toast('Hatalı değerleri düzeltin.',1);return}
+    const d={};for(const k in RDEF)d[k]=rnum(f.elements[k].value);
+    const ch=Object.keys(RDEF).filter(k=>d[k]!==R[k]);if(!ch.length){toast('Değişiklik yok.');return}
+    const ok=await w(()=>db.doc('settings/rules').set({...d,updatedAt:Date.now(),by:window.CRM_USER||''}));
+    if(ok){toast('Ayarlar kaydedildi: '+ch.map(k=>RULES.find(r=>r[0]===k)[1]).join(', '));$('#rmsg').textContent=''}return}
   e.preventDefault();const f=e.target;
   if(f.id==='cform'){
     const v={};for(const k of FIELDS)v[k]=String(f.elements[k].value||'').trim();
@@ -937,6 +984,7 @@ render();
   db.collection('contacts').onSnapshot(s=>{K=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('qtargets').onSnapshot(s=>{QTS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('arag').onSnapshot(s=>{AR=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
+  db.doc('settings/rules').onSnapshot(d=>{applyRules(d.exists?d.data():null);render()},()=>{});
   db.doc('sync/openinv').onSnapshot(d=>{OI=d.exists?d.data():null;render()},()=>{});
   db.doc('sync/returns').onSnapshot(d=>{RET=d.exists?d.data():null;render()},()=>{});
   db.collection('activities').orderBy('date','desc').limit(1000).onSnapshot(s=>{A=s.docs.map(d=>({...d.data(),id:d.id}));render()},err=>{st.err=true;render()});

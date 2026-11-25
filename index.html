@@ -28,6 +28,7 @@
     <button class="tab" data-view="targets" role="tab" id="tabH">Hedefler</button>
     <button class="tab" data-view="board" role="tab" id="tabB" hidden>Karne</button>
     <button class="tab" data-view="overdue" role="tab" id="tabV" hidden>Vadesi Geçen</button>
+    <button class="tab" data-view="admin" role="tab" id="tabA" hidden>Yönetici</button>
   </nav>
   <main class="grid" id="listView">
     <section>
@@ -37,7 +38,7 @@
         <select id="fchain" aria-label="Zincir"><option value="">Zincir Tümü</option></select>
         <select id="fstat" aria-label="Durum"><option value="">Tümü</option><option>Aktif</option><option>Pasif</option></select>
       </div>
-      <div class="meta"><span id="count"></span><span><i class="dot"></i> 30+ gün temas yok <span id="dueLeg">· <em class="tk-tag">takip</em> takip zamanı gelmiş</span> <span id="qf"></span></span></div>
+      <div class="meta"><span id="count"></span><span><i class="dot"></i> <span id="tLeg">30</span>+ gün temas yok <span id="dueLeg">· <em class="tk-tag">takip</em> takip zamanı gelmiş</span> <span id="qf"></span></span></div>
       <ul class="list" id="list"></ul>
     </section>
     <section class="detail" id="detail" aria-live="polite"></section>
@@ -46,6 +47,7 @@
   <section class="board" id="targetsView" hidden><div id="targets"></div></section>
   <section class="board" id="boardView" hidden><div id="board"></div></section>
   <section class="board" id="overdueView" hidden><div id="overdue"></div></section>
+  <section class="board" id="adminView" hidden><div id="admin"></div></section>
 </div>
 
 <div class="modal" id="modal" hidden>
