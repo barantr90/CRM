@@ -173,33 +173,99 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await page.isVisible('#listView')&&JSON.stringify(await rows(page))==='["Düşüş Market","Sessiz Market"]','risk sayısına tıklayınca o temsilcinin risk listesi açılıyor');
   await page.click('.chip[data-rep=""]');await page.click('[data-quick=risk]');
 
-  step('7. Hedef takibi (ayrı sekme)');
+  step('7. Çeyrek hedef takibi');
   await page.click('#tabB');
-  ok(!(await page.$('#board #tform'))&&!(await page.$$eval('#board h3',h=>h.map(x=>x.textContent))).some(t=>t.startsWith('Aylık')),'hedefler artık Karne sekmesinde değil');
+  ok(!(await page.$$eval('#board h3',h=>h.map(x=>x.textContent))).some(t=>/Hedef/.test(t)),'hedefler Karne sekmesinde değil');
   await page.click('#tabH');
   ok(await page.isVisible('#targetsView')&&await page.isHidden('#boardView')&&await page.isHidden('#listView'),'Hedefler sekmesi ayrı açılıyor');
-  const heads7=await page.$$eval('#tform thead th',t=>t.map(x=>x.textContent));
-  ok(JSON.stringify(heads7)==='["Temsilci","A","B","C","D","E","Hedef","Bu Ay Net Ciro","Gerçekleşme"]','hedef tablosu: Temsilci, A–E, Hedef, Bu Ay Net Ciro, Gerçekleşme');
-  ok((await page.$$('#tform .eurin i')).length===25&&await txt(page,'#tform .eurin i')==='€','her hücrede € simgesi (5 temsilci × 5 kategori)');
-  await page.fill('#tform [name="Lütfi Kaplan|A"]','abc');await page.click('#tform button[type=submit]');
-  ok(/€ tutarı olmalı/.test(await txt(page,'#toast')),'geçersiz hedef reddedildi');
-  await page.fill('#tform [name="Lütfi Kaplan|A"]','1500');await page.press('#tform [name="Lütfi Kaplan|A"]','Tab');
-  ok(await page.inputValue('#tform [name="Lütfi Kaplan|A"]')==='1.500','1500 yazınca alan "1.500" biçimine geçiyor');
-  await page.fill('#tform [name="Lütfi Kaplan|B"]','2.500');await page.fill('#tform [name="Mehmet Halici|A"]','10.000');
-  ok(await txt(page,'#tform [data-tt="Lütfi Kaplan"]')==='€ 4.000','satır toplamı canlı: € 4.000');
-  ok(await txt(page,'#tform [data-ct="A"]')==='€ 11.500'&&await txt(page,'#tform [data-ct="_all"]')==='€ 14.000','sütun ve genel toplam canlı: A € 11.500, toplam € 14.000');
-  await page.screenshot({path:path.join(SHOTS,'7-hedef-tablo.png'),fullPage:true});
-  await page.click('#tform button[type=submit]');await page.waitForTimeout(100);
-  const tg=await doc(page,'targets/'+F.TODAY.slice(0,7));
-  ok(tg&&tg.grid['Lütfi Kaplan'].A===1500&&tg.grid['Lütfi Kaplan'].B===2500&&tg.reps['Lütfi Kaplan']===4000&&tg.reps['Mehmet Halici']===10000,'kategori hedefleri ve temsilci toplamları kaydedildi');
-  ok(JSON.stringify(tg.cats)==='["A","B","C","D","E"]','kategori adları kayıtta');
-  ok(/^%30/.test(await txt(page,'#tform [data-tp="Lütfi Kaplan"]'))&&!!(await page.$('#tform [data-tp="Lütfi Kaplan"] .bar')),'Lütfi gerçekleşme %30 ve çubuk');
-  ok(/^%66/.test(await txt(page,'#tform [data-tp="_all"]')),'toplam gerçekleşme %66 (9.200 / 14.000)');
-  await page.screenshot({path:path.join(SHOTS,'7-hedefler-sekme.png'),fullPage:true});
-  await page.click('#tabB');
+  const QK=F.QK,[QY,QQ]=QK.split('-');
+  // dönemin geçen kısmı (uygulamadaki formülün aynısı)
+  const qs=(+QQ.slice(1)-1)*3+1,qStart=`${QY}-${String(qs).padStart(2,'0')}-01`,qEnd=new Date(Date.UTC(+QY,qs+2,0)).toISOString().slice(0,10);
+  const dd=x=>Date.parse(x)/864e5,PACE=F.TODAY<qStart?0:F.TODAY>qEnd?1:(dd(F.TODAY)-dd(qStart)+1)/(dd(qEnd)-dd(qStart)+1);
+  const expCls=p=>p>=1?'q-good':p<PACE?'q-bad':'';
+  ok(await page.$eval(`[data-qp="${QK}"]`,e=>e.classList.contains('on')),'açılışta içinde bulunulan çeyrek seçili: '+QK);
+  ok((await txt(page,'#targets h3')).includes(QQ+' '+QY),'başlıkta dönem: '+await txt(page,'#targets h3'));
+  ok(/dönemin %\d+'i geçti|henüz başlamadı|tamamlandı/.test(await txt(page,'.qinfo')),'tempo açıklaması: '+await txt(page,'.qinfo'));
+  ok((await page.$$eval('#targets [data-qp]',b=>b.map(x=>x.textContent))).join(',')===`Q1,Q2,Q3,Q4,${QY} Yıl`,'dönem seçenekleri: Q1–Q4 ve yıl');
+
+  // Özet görünümü (varsayılan)
+  ok(await page.getAttribute('[data-qv=ozet]','aria-pressed')==='true','varsayılan görünüm: Özet');
+  const big=n=>txt(page,`[data-qcard="${n}"] .qbig`);
+  ok(await big('Özgür Firat')==='%84','Özgür genel gerçekleşme %84 (Excel ile aynı)');
+  ok(await big('Lütfi Kaplan')==='%56','Lütfi genel gerçekleşme %56 (Excel ile aynı)');
+  ok(await big('Akar Benelux Toplam')==='%80','ekip toplamı %80 (312.763 / 389.000)');
+  ok(await big('Mehmet Halici')==='–','verisi olmayan temsilci: –');
+  {const c=await page.$eval('[data-qcard="Özgür Firat"] [data-qc="icecek"] > b',e=>[e.textContent,e.className]);ok(c[0]==='%124'&&c[1]==='q-good','Özgür İçecek %124 yeşil (hedef aşıldı)')}
+  {const c=await page.$eval('[data-qcard="Özgür Firat"] [data-qc="nonfood"] > b',e=>[e.textContent,e.className]);ok(c[0]==='%6'&&c[1]===expCls(0.06),`Özgür Non-Food %6 → ${expCls(0.06)||'normal'} (tempo %${Math.round(PACE*100)})`)}
+  {const c=await page.$eval('[data-qcard="Özgür Firat"] [data-qc="atis"] > b',e=>e.className);ok(c===expCls(122499/180000),'Özgür Atıştırmalık %68 rengi tempoya göre doğru')}
+  ok((await page.$$('[data-qcard="Özgür Firat"] .qbar b')).length===(PACE>0&&PACE<1?6:0),'çubuklarda "bugün olması gereken" çizgisi');
+  ok(/Tahsilat hedefi: € 390\.747 · gerçekleşen henüz girilmedi/.test(await txt(page,'[data-qcard="Özgür Firat"]')),'Özgür kartında tahsilat hedefi ve açıklama');
+  ok(/Hedefe kalan: € 54\.434/.test(await txt(page,'[data-qcard="Özgür Firat"] .qleft')),'Özgür hedefe kalan: € 54.434 (339.000 − 284.566)');
+  ok(/Bu dönem için veri girilmemiş/.test(await txt(page,'[data-qcard="Mehmet Halici"]'))&&!(await page.$('[data-qcard="Mehmet Halici"] .qcats')),'verisi olmayan temsilci sade gösteriliyor');
+  await page.screenshot({path:path.join(SHOTS,'7-ozet.png'),fullPage:true});
+
+  // Tablo görünümü (Excel düzeni)
+  await page.click('[data-qv=tablo]');
+  ok(await page.getAttribute('[data-qv=tablo]','aria-pressed')==='true'&&await page.evaluate(()=>JSON.parse(localStorage.getItem('crm-ui')).qv)==='tablo','Tablo görünümü seçildi ve hatırlanıyor');
+  const qrow=(b,i)=>page.$eval(`[data-qblock="${b}"] table`,(t,i)=>[...t.rows[i].cells].map(c=>c.textContent.replace(/ /g,' ').trim()),i);
+  ok(JSON.stringify(await page.$$eval('[data-qblock="Özgür Firat"] .ordp:first-child thead th',t=>t.map(x=>x.textContent)))==='["Kategori","2025 Sell-Out","2026 Hedef","2026 Sell-Out","Gerçekleşme","26 vs 25"]','tablo başlıkları Excel ile aynı sırada');
+  {const r=await qrow('Özgür Firat',1);ok(JSON.stringify(r)==='["Atıştırmalık","€ 154.917","€ 180.000","€ 122.499","%68","−%21"]','Özgür Atıştırmalık satırı: '+r.join(' | '))}
+  {const r=await qrow('Özgür Firat',6);ok(JSON.stringify(r)==='["Genel Toplam","€ 287.315","€ 339.000","€ 284.566","%84","−%1"]','Özgür Genel Toplam: '+r.join(' | '))}
+  {const f=await page.$eval('[data-qblock="Özgür Firat"] .ordp:nth-child(2) table',t=>[...t.rows].map(r=>[...r.cells].map(c=>c.textContent.replace(/ /g,' ').trim()).join('|')));
+   ok(f[2]==='Tahsilat|€ 390.747|–|–'&&f[4]==='İade|€ 5.085|–|–','Özgür finans: Tahsilat 390.747, İade 5.085 (bölme hatası yerine –) → '+JSON.stringify(f))}
+  ok(await page.$eval('#targets .qblock',e=>e.dataset.qblock)==='Akar Benelux Toplam','ekip toplamı en üstte');
+  {const r=await qrow('Akar Benelux Toplam',6);ok(r[2]==='€ 389.000'&&r[3]==='€ 312.763','ekip toplamı: hedef 389.000, sell-out 312.763')}
+  await page.screenshot({path:path.join(SHOTS,'7-tablo.png'),fullPage:true});
+  await page.click('.chip[data-rep="Lütfi Kaplan"]');
+  ok(JSON.stringify(await page.$$eval('#targets .qblock',b=>b.map(x=>x.dataset.qblock)))==='["Lütfi Kaplan"]','temsilci seçilince yalnızca onun tablosu');
+  await page.click('.chip[data-rep=""]');
+
+  // Yıl ve boş dönem
+  await page.click(`[data-qp="${QY}-Y"]`);
+  ok((await txt(page,'#targets h3')).includes('Yılı')&&!(await page.$('#qEdit')),'yıl görünümü: Q1–Q4 toplamı, düzenleme yok');
+  {const r=await qrow('Özgür Firat',6);ok(r[3]==='€ 284.566','yıl toplamı çeyreklerin toplamı')}
+  const other=QQ==='Q1'?'Q2':'Q1';
+  await page.click(`[data-qp="${QY}-${other}"]`);
+  ok(/hedef girilmemiş/.test(await txt(page,'.qempty')),'verisi olmayan çeyrekte açıklama');
+
+  // Düzenleme (yalnızca yönetici)
+  await page.click(`[data-qp="${QK}"]`);
+  await page.click('#qEdit');
+  ok((await page.$$('#qform input')).length===5*(15+8),'düzenleme: 5 temsilci × (15 satış + 8 finans) kutu');
+  ok(await page.inputValue('#qform [name="Özgür Firat|c|atis|p"]')==='154.917','mevcut değerler kutularda');
+  // Excel'den yapıştırma: başlık satırı, kategori sütunu, € biçimi ve % sütunu dahil
+  const TSV='KATEGORI\t2025 SELL-OUT\t2026 HEDEF\t2026 SELL-OUT\tGERCEKLESME\nATISTIRMALIK\t€ 113.240 \t€ 135.000 \t€ 111.920 \t83%\nICECEK\t€ 25.088 \t€ 32.000 \t€ 18.182 \t57%\nMUTFAK\t€ 27.392\t€ 34.000\t€ 33.522\t99%\nNON-FOOD\t€ 174\t€ 1.000\t€ 440\t44%\nTEMEL GIDA\t€ 6.377\t€ 10.000\t€ 7.350\t73%';
+  await page.focus('#qform [name="Gökhan Genç|c|atis|p"]');
+  await page.evaluate(t=>{const e=document.activeElement;const dt=new DataTransfer();dt.setData('text/plain',t);e.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}))},TSV);
+  ok(await page.inputValue('#qform [name="Gökhan Genç|c|atis|p"]')==='113.240'&&await page.inputValue('#qform [name="Gökhan Genç|c|temel|a"]')==='7.350','Excel bloğu yapıştırıldı: 5 satır × 3 sütun yerine oturdu');
+  ok(/15 hücre yapıştırıldı/.test(await txt(page,'#toast')),'bildirim: '+await txt(page,'#toast'));
+  ok(await txt(page,'#qform [data-qs="Gökhan Genç|t"]')==='€ 212.000'&&await txt(page,'#qform [data-qr="Gökhan Genç|_"]')==='%81','canlı toplam: Gökhan hedef € 212.000, gerçekleşme %81 (Excel ile aynı)');
+  // finans bloğu: "€ -" ve #DIV/0! hücreleri
+  await page.focus('#qform [name="Gökhan Genç|f|devir|t"]');
+  await page.evaluate(t=>{const e=document.activeElement;const dt=new DataTransfer();dt.setData('text/plain',t);e.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}))},'ONCEKI AY DEVIR\t€ -\t€ -\t#DIV/0!\nTAHSILAT\t€ 172.949\t€ -\t0%\nFKNS\t0\t0\t#DIV/0!\nIADE\t€ 3.180\t€ -\t0%');
+  ok(await page.inputValue('#qform [name="Gökhan Genç|f|tahsilat|t"]')==='172.949'&&await page.inputValue('#qform [name="Gökhan Genç|f|devir|t"]')===''&&await page.inputValue('#qform [name="Gökhan Genç|f|iade|t"]')==='3.180','finans bloğu yapıştırıldı ("€ -" boş, #DIV/0! atlandı)');
+  await page.fill('#qform [name="Baran Sengül|c|atis|t"]','5000');await page.fill('#qform [name="Baran Sengül|c|atis|a"]','-625');await page.press('#qform [name="Baran Sengül|c|atis|a"]','Tab');
+  ok(await page.inputValue('#qform [name="Baran Sengül|c|atis|a"]')==='-625','eksi sell-out kabul ediliyor (-625)');
+  await page.fill('#qform [name="Mehmet Halici|c|atis|t"]','-5');await page.click('#qform button[type=submit]');
+  ok(/hatalı/.test(await txt(page,'#toast'))&&await page.getAttribute('#qform [name="Mehmet Halici|c|atis|t"]','aria-invalid')==='true','eksi hedef reddedildi ve kutu işaretlendi');
+  await page.fill('#qform [name="Mehmet Halici|c|atis|t"]','');
+  await page.screenshot({path:path.join(SHOTS,'7-duzenle.png'),fullPage:true});
+  // vazgeç uyarısı
+  page.once('dialog',d=>d.dismiss());await page.click('#qCancel');
+  ok(!!(await page.$('#qform')),'kaydedilmemiş değişiklikte Vazgeç onay soruyor (hayır → düzenlemede kalır)');
+  await page.click('#qform button[type=submit]');await page.waitForTimeout(150);
+  const qd=await doc(page,'qtargets/'+QK);
+  ok(qd&&JSON.stringify(qd.reps['Gökhan Genç'].c.atis)==='{"p":113240,"t":135000,"a":111920}'&&qd.reps['Gökhan Genç'].f.tahsilat.t===172949,'Gökhan kaydedildi');
+  ok(qd.reps['Baran Sengül'].c.atis.a===-625&&qd.reps['Özgür Firat'].c.icecek.a===117932&&!qd.reps['Mehmet Halici'],'eksi değer kaydı; Özgür korundu; boş temsilci kaydedilmedi');
+  ok(!(await page.$('#qform'))&&/kaydedildi/.test(await txt(page,'#toast')),'kaydedince düzenleme kapandı');
+  await page.click('[data-qv=ozet]');
+  ok(await big('Gökhan Genç')==='%81','Özet\'te Gökhan %81');
+  await page.click('[data-qv=tablo]');await page.click('[data-qv=ozet]');
+
+  // aylık net ciro kutusu (değişmedi)
   await page.click('[data-view=list]');
   await page.click('.chip[data-rep="Lütfi Kaplan"]');
-  {const v=await txt(page,'#ordBtn');ok(/hedef € 4\.000 \(%30\)/.test(v),'Lütfi seçiliyken sipariş kutusunda hedef ve yüzde → '+JSON.stringify(v))}
+  {const v=await txt(page,'#ordBtn');ok(/hedef € 4\.000 \(%30\)/.test(v),'Lütfi seçiliyken net ciro kutusunda aylık hedef ve yüzde → '+JSON.stringify(v))}
   ok(!!(await page.$('#ordBtn .bar i')),'ilerleme çubuğu var');
   await page.click('.chip[data-rep=""]');
   ok(/hedef € 14\.000/.test(await txt(page,'#ordBtn')),'tüm temsilcilerde toplam hedef € 14.000');
@@ -232,16 +298,13 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
   ok(await page.isVisible('#tabH'),'temsilci Hedefler sekmesini görüyor');
   await page.click('#tabH');
-  ok(/hedef girilmemiş/.test(await txt(page,'#targets')),'hedef yoksa bilgi mesajı');
-  await page.evaluate(m=>window.claude.use('db').then(db=>db.doc('targets/'+m).set({month:m,cats:['A','B','C','D','E'],grid:{'Lütfi Kaplan':{A:3000,B:1000}},reps:{'Lütfi Kaplan':4000,'Özgür Firat':5000}})),F.TODAY.slice(0,7));
-  await page.waitForTimeout(100);
-  ok(!(await page.$('#tform'))&&!(await page.$('#targets input')),'temsilci hedefleri yalnızca görüntülüyor: giriş alanı ve kaydet yok');
+  ok(!(await page.$('#qEdit'))&&!(await page.$('#targets input')),'temsilci yalnızca görüntülüyor: Düzenle ve giriş kutusu yok');
   ok(/yalnızca görüntüleme/.test(await txt(page,'#targets h3')),'başlıkta "yalnızca görüntüleme" yazıyor');
-  ok(await txt(page,'#tgT [data-tt="Lütfi Kaplan"]')==='€ 4.000'&&/^%30/.test(await txt(page,'#tgT [data-tp="Lütfi Kaplan"]')),'temsilci hedefi ve gerçekleşmeyi görüyor: € 4.000 · %30');
-  ok(await txt(page,'#tgT [data-tt="Özgür Firat"]')==='€ 5.000 kategorisiz','kategorisiz eski hedef de görünüyor');
+  ok(await txt(page,'[data-qcard="Özgür Firat"] .qbig')==='%84'&&await txt(page,'[data-qcard="Lütfi Kaplan"] .qbig')==='%56','temsilci tüm ekibin hedeflerini görüyor');
+  await page.click('[data-qv=tablo]');ok(!!(await page.$('[data-qblock="Lütfi Kaplan"]')),'temsilci Tablo görünümünü de açabiliyor');
   await page.screenshot({path:path.join(SHOTS,'7-temsilci-hedefler.png'),fullPage:true});
-  await page.evaluate(()=>{window.CRM_IS_ADMIN=undefined});await page.click('#tabH');
-  ok(!(await page.$('#tform')),'yönetici olarak doğrulanmamış kullanıcı hedef formunu görmüyor');
+  await page.evaluate(()=>{window.CRM_IS_ADMIN=undefined});await page.click('[data-qv=ozet]');
+  ok(!(await page.$('#qEdit')),'yönetici olarak doğrulanmamış kullanıcı Düzenle görmüyor');
   await ctx.close();
 
   step('8. Telefon ekranı (390 px) ve koyu tema');
@@ -260,6 +323,16 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   const ctaOk=await page.$eval('.cta',e=>e.getBoundingClientRect().right<=390);
   ok(ctaOk,'butonlar ekrana sığıyor');
   await page.screenshot({path:path.join(SHOTS,'8-mobil-kart.png'),fullPage:true});
+  await ctx.close();
+
+  step('7m. Hedefler telefonda');
+  ({ctx,page}=await open(browser,{viewport:{width:390,height:844}}));
+  await page.click('#tabH');
+  ok(await page.evaluate(()=>document.documentElement.scrollWidth)<=390,'Özet telefonda yana taşmıyor');
+  await page.screenshot({path:path.join(SHOTS,'7m-ozet.png'),fullPage:true});
+  await page.click('[data-qv=tablo]');
+  ok(await page.evaluate(()=>document.documentElement.scrollWidth)<=390,'Tablo telefonda sayfayı taşırmıyor (tablolar kendi içinde kayar)');
+  await page.screenshot({path:path.join(SHOTS,'7m-tablo.png'),fullPage:true});
   await ctx.close();
 
   step('Konsol hataları');
