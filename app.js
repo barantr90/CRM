@@ -62,7 +62,7 @@ const mapsHref=c=>'https://www.google.com/maps/dir/?api=1&destination='+encodeUR
 function riskOf(c){
   if(c.statusManual==='Pasif')return null;
   const c25=typeof c.ciro2025==='number'?c.ciro2025:0;
-  const s26=typeof c.sales2026==='number'?c.sales2026:typeof c.ciro2026==='number'?c.ciro2026:null;
+  const s26=typeof c.sales2026==='number'?c.sales2026:null;
   const iv=inv(c),d=iv&&iv.last?ago(iv.last):null;const why=[];let val=0;
   if(c25>=RISK.dropMin&&s26!=null){const exp=c25*YF,pace=s26/exp;if(pace<RISK.dropPace){const loss=exp-s26;why.push({k:'drop',pace,loss});val=Math.max(val,loss)}}
   const yearly=Math.max(c25,s26!=null?s26/YF:0);
@@ -79,7 +79,7 @@ const barHtml=(v,t)=>{if(!t)return '';const p=v/t;return `<span class="bar" titl
 const code=c=>c.code||String(c.id||'').replace(/^c/,'');
 const has=(c,k)=>Object.prototype.hasOwnProperty.call(c,k);
 const inv=c=>(c.lastInvoice||c.sales2026!=null||c.invoices2026!=null)?{last:c.lastInvoice||'',no:c.lastInvoiceNo||'',sales:c.sales2026,n:c.invoices2026}:null;
-const ciroOf=c=>(c.ciro2025==null&&c.ciro2026==null)?null:[c.ciro2025,c.ciro2026];
+const ciroOf=c=>(c.ciro2025==null&&c.sales2026==null)?null:[c.ciro2025,c.sales2026];
 const st={q:'',rep:'',seg:'',chain:'',status:'',quick:'',sort:'name',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
 try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.sort)st.sort=s.sort;if(s.view)st.view=s.view;if(s.qv)st.qv=s.qv;if(s.rf)st.rf=s.rf}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,sort:st.sort,view:st.view,qv:st.qv,rf:st.rf}))}catch(e){}};
@@ -213,7 +213,6 @@ function renderDetail(){
   ${ctaHtml(c,ct)}
   ${chainHtml(c)}
   <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
-  ${c.notes?`<p class="notes">${esc(c.notes)}</p>`:''}
   ${VISIT_LOG&&canWrite?visitForm(c):''}
   ${VISIT_LOG?`<h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`:''}`;
 }
@@ -520,11 +519,11 @@ function retRows(c){
   const r=RET.map[code(c)];
   if(!r)return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>Bu dönemde kayıt yok</dd></div>`;
   const [sales,iade,iadeN,ff,ffN]=r;
-  const base=typeof c.ciro2026==='number'?c.ciro2026:null;
+  const base=typeof c.sales2026==='number'?c.sales2026:null;
   const pct=v=>base>0&&v?`<span class="rp">%${(Math.abs(v)/base*100).toFixed(1).replace('.',',')}</span>`:'';
   const bad=!!(retOf(c)||{}).warn;
   const line=(l,v,n,p)=>`<div class="rl${bad&&l==='İade'?' bad':''}"><span>${l}</span><b>${v?eur(v):'€ 0'}</b><small>${n||0} fatura</small>${p?pct(v):'<span></span>'}</div>`;
-  return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar Excel'deki Ciro 2026 YTD'ye (${eur(base)}) göre.`:'Ciro 2026 YTD boş olduğu için oran gösterilemiyor.'}</p></dd></div>`;
+  return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar 2026 net satışa (${eur(base)}) göre.`:'2026 net satış boş olduğu için oran gösterilemiyor.'}</p></dd></div>`;
 }
 
 /* customer modal */
@@ -551,7 +550,7 @@ const COLS=[['Kod','code','t'],['Müşteri','name','t'],['Zincir','chain','t'],
  ['Temsilci','rep','t'],['Rut günü','visitDay','day'],['Ziyaret sıklığı','freq','t'],['Ziyaret haftaları','weeks','t'],['Ödeme vadesi','pay','t'],
  ['Yetkili','contact','t'],['Telefon','phone','t'],['Adres','address','t'],['Posta kodu','postcode','t'],['Şehir','city','t'],
  ['Son fatura tarihi','lastInvoice','d',1],['Son fatura no','lastInvoiceNo','t',1],['2026 net satış (€)','sales2026','n',1],['2026 fatura sayısı','invoices2026','n',1],
- ['Ciro 2025 (€)','ciro2025','n'],['Ciro 2026 (€)','ciro2026','n'],['Büyüme %','_growth','f',1],['Notlar','notes','t']];
+ ['Ciro 2025 (€)','ciro2025','n'],['Büyüme %','_growth','f',1]];
 const DATA_KEYS=COLS.filter(c=>!c[1].startsWith('_')).map(c=>c[1]);
 const PBI_KEYS=['lastInvoice','lastInvoiceNo'];
 const PBI_HEAD=['Datum','BelegNr','Belegart','Distributor','DebitorenNr','DebitorenBez','Segment','Ort','Land','EUR','KTN','TON','Verkaeufer'];
@@ -582,7 +581,7 @@ function aggPBI(rows,type){
   return {map:m,to:to?fromSerial(to):''};
 }
 function readSettings(wb){
-  const S={pasif:90,ref:TODAY,type:TYPE_DEFAULT};const ws=wb.Sheets['Ayarlar'];if(!ws)return S;
+  const S={pasif:120,ref:TODAY,type:TYPE_DEFAULT};const ws=wb.Sheets['Ayarlar'];if(!ws)return S;
   for(let r=1;r<=30;r++){const k=low(String((ws['A'+r]||{}).v||''));const c=ws['B'+r];if(!c||!k)continue;const v=c.v;
     if(k.startsWith('pasif')){const n=num(v);if(n)S.pasif=n}
     else if(k.startsWith('referans')){if(!c.f){const d=cellVal(v,'d');if(d)S.ref=d}}
@@ -621,21 +620,21 @@ function setCell(ws,a,c){ws[a]=c}
 async function exportXLSX(){
   try{
     const X=await loadXLSX();toast('Excel hazırlanıyor…');
-    const pb=await getPBI();const S={pasif:90,ref:TODAY,type:TYPE_DEFAULT};
+    const pb=await getPBI();const S={pasif:120,ref:TODAY,type:TYPE_DEFAULT};
     const list=[...C].sort((a,b)=>String(a.rep||'').localeCompare(String(b.rep||''),'tr')||String(a.name||'').localeCompare(String(b.name||''),'tr'));
     const LR=list.length+1;const ws={};
     COLS.forEach((c,j)=>setCell(ws,XL(j)+1,{t:'s',v:c[0]}));
-    const A=colOf('code'),G=colOf('statusManual'),R=colOf('lastInvoice'),T=colOf('sales2026'),V=colOf('ciro2025'),W=colOf('ciro2026');
+    const A=colOf('code'),G=colOf('statusManual'),R=colOf('lastInvoice'),T=colOf('sales2026'),V=colOf('ciro2025');
     const P='PowerBI_Veri!',ty='Ayarlar!$B$4';
     list.forEach((c,i)=>{const r=i+2,iv=inv(c),cr=ciroOf(c);
-      const val={...c,...ctOf(c),code:code(c),statusManual:c.statusManual||'',lastInvoice:iv?iv.last:'',lastInvoiceNo:iv?iv.no:'',sales2026:iv?iv.sales:0,invoices2026:iv?iv.n:0,ciro2025:cr?cr[0]:null,ciro2026:cr?cr[1]:null};
-      val._growth=(typeof val.ciro2025==='number'&&val.ciro2025>0&&typeof val.ciro2026==='number')?(val.ciro2026-val.ciro2025)/val.ciro2025:'';
+      const val={...c,...ctOf(c),code:code(c),statusManual:c.statusManual||'',lastInvoice:iv?iv.last:'',lastInvoiceNo:iv?iv.no:'',sales2026:iv?iv.sales:0,invoices2026:iv?iv.n:0,ciro2025:cr?cr[0]:null};
+      val._growth=(typeof val.ciro2025==='number'&&val.ciro2025>0&&typeof val.sales2026==='number')?(val.sales2026-val.ciro2025)/val.ciro2025:'';
       COLS.forEach(([h,k,t,isF],j)=>{const a=XL(j)+r;let v=val[k];let cell;
         if(t==='d')cell=v?{t:'n',v:serial(v),z:'dd.mm.yyyy'}:{t:'s',v:''};
         else if(t==='n'||t==='f')cell=(v==null||v==='')?{t:'s',v:''}:{t:'n',v:+v,z:k==='invoices2026'?'0':k==='_growth'?'0.0%':'#,##0.00'};
         else cell={t:'s',v:v==null?'':String(v)};
         if(k==='status')cell.f=`IF(${G}${r}<>"",${G}${r},IF(${R}${r}="","Pasif",IF(Ayarlar!$B$3-${R}${r}>Ayarlar!$B$2,"Pasif","Aktif")))`;
-        if(k==='_growth'){cell.f=`IF(AND(ISNUMBER(${V}${r}),${V}${r}>0),(${W}${r}-${V}${r})/${V}${r},"")`;cell.z='0.0%'}
+        if(k==='_growth'){cell.f=`IF(AND(ISNUMBER(${V}${r}),${V}${r}>0),(${T}${r}-${V}${r})/${V}${r},"")`;cell.z='0.0%'}
         const lit=k==='lastInvoice'?(val.lastInvoice?`DATE(${val.lastInvoice.slice(0,4)},${+val.lastInvoice.slice(5,7)},${+val.lastInvoice.slice(8,10)})`:'""'):k==='lastInvoiceNo'?`"${String(val.lastInvoiceNo||'').replace(/"/g,'""')}"`:String(+val[k]||0);
         const keep=f=>`IF(COUNTA(${P}$A:$A)<=1,${lit},${f})`;
         if(k==='lastInvoice'){cell.f=keep(`IF(COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})=0,"",_xlfn.MAXIFS(${P}$A:$A,${P}$N:$N,$${A}${r},${P}$C:$C,${ty}))`);cell.z='dd.mm.yyyy'}
@@ -644,7 +643,7 @@ async function exportXLSX(){
         if(k==='invoices2026'){cell.f=keep(`COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})`);if(cell.t==='s')Object.assign(cell,{t:'n',v:0});cell.z='0'}
         setCell(ws,a,cell)})});
     ws['!ref']=`A1:${XL(COLS.length-1)}${LR}`;
-    ws['!cols']=[10,36,14,9,14,10,15,11,13,12,11,16,15,32,11,18,13,15,15,12,14,14,10,40].map(w=>({wch:w}));
+    ws['!cols']=[10,36,14,9,14,10,15,11,13,12,11,16,15,32,11,18,13,15,15,12,14,10].map(w=>({wch:w}));
     ws['!autofilter']={ref:`A1:${XL(COLS.length-1)}${LR}`};
     // Ayarlar
     const st={};const A2=[['Ayar','Değer','Açıklama'],['Pasif gün sınırı',S.pasif,'Son satış faturası bundan eskiyse Pasif'],['Referans tarih',null,'Varsayılan: bugünün tarihi (=BUGÜN()). Sabit bir tarih de yazabilirsiniz.'],['Satış faturası türü',S.type,'PowerBI_Veri sayfasındaki Belegart değeri']];
@@ -686,7 +685,7 @@ async function readImport(f){
       if(seen.has(o.code)){dup++;continue}seen.add(o.code);parsed.push(o);
     }
     const keys=[...new Set(idx.map(x=>x[0]))];
-    const dflt=k=>['sales2026','invoices2026','ciro2025','ciro2026'].includes(k)?null:'';
+    const dflt=k=>['sales2026','invoices2026','ciro2025'].includes(k)?null:'';
     const byCode=new Map(C.map(c=>[code(c),c]));const writes=[];let same=0;
     for(const o of parsed){const old=byCode.get(o.code);
       const d={};for(const k of DATA_KEYS)d[k]=PBI_KEYS.includes(k)?(old?(old[k]??dflt(k)):dflt(k)):keys.includes(k)?(o[k]??dflt(k)):dflt(k);
