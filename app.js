@@ -301,8 +301,9 @@ const qPct=(a,t)=>t?a/t:null;
 const qGrow=(a,p)=>p>0?a/p-1:null;
 // renk: hedefe ulaştı = yeşil yazı; dönemin geçen kısmının gerisinde = kırmızı. İade bir sınırdır: aşılınca kırmızı.
 const qCls=(pct,pace,inv)=>pct==null?'':inv?(pct>1?'q-bad':''):(pct>=1?'q-good':pct<pace?'q-bad':'');
-const qPctTxt=x=>x==null?'–':(x<0?'−%':'%')+Math.abs(Math.round(x*100));
-const qGrowTxt=x=>x==null?'–':(x>0?'+':x<0?'−':'')+'%'+Math.abs(Math.round(x*100));
+const rnd=x=>Math.sign(x)*Math.round(Math.abs(x)); // Excel gibi: -12,5 → -13
+const qPctTxt=x=>{if(x==null)return '–';const r=rnd(x*100);return (r<0?'−%':'%')+Math.abs(r)};
+const qGrowTxt=x=>{if(x==null)return '–';const r=rnd(x*100);return (r>0?'+':r<0?'−':'')+'%'+Math.abs(r)};
 const qGrowCls=x=>x==null?'':x<0?'down':'up';
 const qMoney=v=>v?eur(v):'–';
 function qBar(pct,pace,inv){
