@@ -1,0 +1,50 @@
+# Uçtan uca testler: her PR'da ve main'e her push'ta çalışır.
+# Testler bellek içi veritabanıyla çalışır; Supabase'e ve gerçek veriye dokunulmaz.
+name: E2E testleri
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Repoda package.json yok; sürümler burada sabitlenir.
+      # xlsx sürümü app.js'nin CDN'den yüklediği sürümle aynı olmalı.
+      - name: Bağımlılıkları kur
+        run: npm install --no-save --no-package-lock playwright@1.63.0 xlsx@0.18.5
+
+      - name: Chromium'u kur
+        run: npx playwright install --with-deps chromium
+
+      - name: Testleri çalıştır
+        env:
+          XLSX_LIB: ${{ github.workspace }}/node_modules/xlsx/dist/xlsx.full.min.js
+        run: node tests/e2e.js
+
+      # Ekran görüntüleri, arayüz değişikliklerini incelemek için indirilebilir.
+      - name: Ekran görüntülerini yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ekran-goruntuleri
+          path: tests/screens/
+          retention-days: 14
+          if-no-files-found: ignore
