@@ -131,7 +131,9 @@ function oiHtml(c){
   ${o.vade!=null?`<p class="oi-note">Ödeme vadesi: ${o.vade} gün. Gün sayıları bugüne göre hesaplanır.</p>`:''}</section>`;
 }
 const monthKey=()=>(MON&&MON.month)||TODAY.slice(0,7);
-const tgtOf=rep=>{const t=(TGS[monthKey()]||{}).reps||{};return rep?(+t[rep]||0):Object.values(t).reduce((a,v)=>a+(+v||0),0)};
+// aylık hedef = Hedefler sekmesinde o ay için girilen kategori hedeflerinin toplamı (qtargets)
+const tgtMap=()=>{const q=(QTS[monthKey()]||{}).reps||{},o={};for(const [r,v] of Object.entries(q)){const s=Object.values((v&&v.c)||{}).reduce((a,x)=>a+(+(x&&x.t)||0),0);if(s)o[r]=s}return o};
+const tgtOf=rep=>{const t=tgtMap();return rep?(t[rep]||0):Object.values(t).reduce((a,v)=>a+v,0)};
 // ayın ne kadarı geçti (hedef temposu için)
 const monthFrac=()=>{const mk=monthKey();if(mk!==TODAY.slice(0,7))return 1;const y=+mk.slice(0,4),m=+mk.slice(5,7);return +TODAY.slice(8,10)/new Date(y,m,0).getDate()};
 const barHtml=(v,t)=>{if(!t)return '';const p=v/t;return `<span class="bar" title="Hedefin %${Math.round(p*100)}${pctEk(Math.round(p*100))}"><i class="${p<monthFrac()?'behind':''}" style="width:${Math.min(100,Math.max(0,p*100)).toFixed(1)}%"></i></span>`};
@@ -233,7 +235,7 @@ function ordStat(mine){
 function renderOrd(){
   const el=$('#ordp');if(!st.ord){el.innerHTML='';return}
   const reps=monRows();if(!reps){el.innerHTML='<div class="ordp"><p>Bu ayın verisi henüz yüklenmedi.</p></div>';return}
-  for(const r of Object.keys((TGS[monthKey()]||{}).reps||{}))if(+TGS[monthKey()].reps[r]&&!reps[r])reps[r]={sat:0,iade:0,ff:0,amt:0,n:0,cust:0};
+  for(const r of Object.keys(tgtMap()))if(!reps[r])reps[r]={sat:0,iade:0,ff:0,amt:0,n:0,cust:0};
   const rows=Object.entries(reps).sort((a,b)=>b[1].amt-a[1].amt);
   const sum=k=>rows.reduce((a,[,o])=>a+o[k],0);const tot=sum('amt');
   const upd=MON.updatedAt?` · güncelleme ${fmt(MON.updatedAt)}`:'';const thr=MON.through?` · ${fmt(MON.through)} dahil`:'';
@@ -339,7 +341,7 @@ function renderBoard(){
   const nAkt=retAll.filter(([c])=>!isPas(c)).length,nPas=retAll.length-nAkt;
   const retRow=([c,r],i)=>`<tr${isPas(c)?' class="pasr"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td>${eur(r.sales)}</td><td>${eur(Math.abs(r.iade))}</td><td><b class="warn">%${pct1(r.p)}</b></td></tr>`;
   const rfBtn=(k,l)=>`<button type="button" data-rf="${k}" aria-pressed="${rf===k}">${l}</button>`;
-  const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`,TG=(TGS[mk]||{}).reps||{};
+  const mname=`${MONTHS_LONG[+mk.slice(5,7)-1]} ${mk.slice(0,4)}`;
   $('#board').innerHTML=`<h3>Temsilci Karnesi</h3>
   <div class="ordp"><div class="oh"><b>Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre (yılın %${Math.round(YF*100)}${pctEk(Math.round(YF*100))})</b>${VISIT_LOG?'<small>Kayıt = ziyaret/telefon notu (7 gün / 30 gün)</small>':''}</div>
   <table id="boardT"><thead><tr><th>Temsilci</th><th>Müşteri</th><th>Ciro 2025</th><th>2026 YTD</th><th>Tempo</th>${VISIT_LOG?'<th>Kayıt 7g / 30g</th>':''}<th>Kayıp Riski</th></tr></thead>

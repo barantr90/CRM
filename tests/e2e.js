@@ -472,13 +472,15 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(await big('Gökhan Genç')==='%81','Özet\'te Gökhan %81');
   await page.click('[data-qv=tablo]');await page.click('[data-qv=ozet]');
 
-  // aylık net ciro kutusu (değişmedi)
+  // aylık net ciro kutusu: hedef = Hedefler sekmesindeki o ayın kategori hedefleri toplamı
   await page.click('[data-view=list]');
   await page.click('.chip[data-rep="Lütfi Kaplan"]');
-  {const v=await txt(page,'#ordBtn');ok(/hedef € 4\.000 \(%30\)/.test(v),'Lütfi seçiliyken net ciro kutusunda aylık hedef ve yüzde → '+JSON.stringify(v))}
+  {const v=await txt(page,'#ordBtn');ok(/hedef € 50\.000 \(%2\)/.test(v),'Lütfi: hedef = Hedefler sekmesindeki kategori hedefleri (40.000+3.500+5.500+500+500 = € 50.000), %2 → '+JSON.stringify(v))}
   ok(!!(await page.$('#ordBtn .bar i')),'ilerleme çubuğu var');
   await page.click('.chip[data-rep=""]');
-  ok(/hedef € 14\.000/.test(await txt(page,'#ordBtn')),'tüm temsilcilerde toplam hedef € 14.000');
+  {const exp=await page.evaluate(()=>{const q=window.__store.get('qtargets/'+window.__FIX.QK).reps;return Object.values(q).reduce((a,r)=>a+Object.values(r.c||{}).reduce((b,x)=>b+(+x.t||0),0),0)});
+   const v=await txt(page,'#ordBtn');ok(v.includes('hedef € '+exp.toLocaleString('nl-NL')),'tüm temsilcilerde toplam hedef Hedefler sekmesiyle aynı (€ '+exp.toLocaleString('nl-NL')+') → '+v)}
+  ok(!/14\.000/.test(await txt(page,'#ordBtn')),'eski aylık hedef kaydı (targets) artık kullanılmıyor');
   await page.click('#ordBtn');
   const heads=await page.$$eval('#ordp th',t=>t.map(x=>x.textContent));
   ok(heads.includes('Hedef')&&heads.includes('Gerçekleşme'),'net ciro tablosunda Hedef ve Gerçekleşme sütunları');
