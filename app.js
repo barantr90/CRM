@@ -16,12 +16,12 @@ const low=s=>String(s||'').toLocaleLowerCase('tr');
 
 /* Kayıp riski ve iade kuralları */
 const RISK={dropPace:0.7,dropMin:3000,silentDays:45,silentMax:365,silentMin:1000};
-let RET_WARN=0.025,RET_MIN=1000;
+let RET_WARN=0.025;
 // Yönetici sekmesinden değiştirilebilen kurallar (settings/rules). Boş/geçersiz değer varsayılana düşer.
-const RDEF={pasif:120,temas:30,arag:30,iade:2.5,retMin:1000,riskPace:70,dropMin:3000,riskSilent:45,silentMax:365,silentMin:1000};
+const RDEF={pasif:120,temas:30,arag:30,iade:2.5,riskPace:70,dropMin:3000,riskSilent:45,silentMax:365,silentMin:1000};
 let R={...RDEF},RMETA={};
 function applyRules(d){R={...RDEF};RMETA=d||{};for(const k in RDEF){const v=Number((d||{})[k]);if(Number.isFinite(v)&&v>0)R[k]=v}
-  RET_WARN=R.iade/100;RET_MIN=R.retMin;RISK.dropPace=R.riskPace/100;RISK.dropMin=R.dropMin;RISK.silentDays=R.riskSilent;RISK.silentMax=R.silentMax;RISK.silentMin=R.silentMin}
+  RET_WARN=R.iade/100;RISK.dropPace=R.riskPace/100;RISK.dropMin=R.dropMin;RISK.silentDays=R.riskSilent;RISK.silentMax=R.silentMax;RISK.silentMin=R.silentMin}
 // Verinin tarihi: satış / iade verisinin geçerli olduğu son gün (Power BI eşitlemesi). Yoksa bugün.
 const dataTo=()=>(RET&&RET.through)||(MON&&MON.through)||TODAY;
 // yılın geçen kısmı (o gün dahil): bu yılın satışını geçen yılın cirosunun aynı dönemine göre kıyaslamak için
@@ -83,7 +83,7 @@ function riskCalc(c){
   return why.length?{why,val}:null;
 }
 const riskText=r=>r?r.why.map(x=>x.k==='drop'?`Ciro temposu %${Math.round(x.pace*100)} · ${eur(x.loss)} geride`:`${x.days} gündür fatura yok (aylık ~${eur(x.monthly)})`).join(' · '):'';
-function retOf(c){if(!RET||!RET.map)return null;const r=RET.map[code(c)];if(!r||!(r[0]>=RET_MIN))return null;const p=Math.abs(r[1]||0)/r[0];return {p,iade:r[1]||0,sales:r[0],warn:p>=RET_WARN}}
+function retOf(c){if(!RET||!RET.map)return null;const r=RET.map[code(c)];if(!r||!(r[0]>0))return null;const p=Math.abs(r[1]||0)/r[0];return {p,iade:r[1]||0,sales:r[0],warn:p>=RET_WARN}}
 // Açık faturalar (sync/openinv): map[kod]={lim,vade,inv:[[no,faturaTarihi,tür F/I/P,tutar,kalan,vadeTarihi]]}
 const OI_T={F:'Fatura',I:'İade',P:'Fiyat farkı'};
 const eurc=n=>(n<0?'−':'')+'€ '+Math.abs(n||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -118,7 +118,6 @@ const RULES=[
   ['temas','Temas günü','gün',1,365,1,'Son temastan (fatura ya da kayıt) bu kadar gün geçen aktif müşteri "temas yok" kutusunda sayılır ve listede noktayla işaretlenir.','Durum ve temas'],
   ['arag','ARAG süreç günü','gün',1,365,1,'Müşterinin en eski vadesi geçen faturası bu kadar günü aşınca kartta <b>ARAG süreci</b> butonu çıkar.','Açık faturalar'],
   ['iade','İade uyarı eşiği','%',0.1,50,0.1,'Aynı dönemdeki satış faturalarına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.','İade'],
-  ['retMin','İade uyarısı: en az satış','€',0,1000000,100,'Aynı dönemdeki satış faturası bu tutarın altında olan müşteride iade oranı hesaplanmaz ve uyarı verilmez (küçük satışta tek iade oranı şişirir).','İade'],
   ['riskPace','Kayıp riski: ciro temposu','%',10,100,1,'Bu yılın satışı, geçen yılın cirosunun aynı dönemine göre bu yüzdenin altındaysa müşteri kayıp riskinde sayılır.','Kayıp riski'],
   ['dropMin','Ciro temposu: en az geçen yıl cirosu','€',0,10000000,100,'Ciro temposu kuralı yalnız geçen yıl cirosu bu tutar ve üzerindeki müşterilere uygulanır.','Kayıp riski'],
   ['riskSilent','Kayıp riski: faturasız gün','gün',7,365,1,'Bu kadar gündür fatura kesilmeyen müşteri kayıp riskinde sayılır.','Kayıp riski'],
@@ -131,7 +130,6 @@ function ruleImpact(k,v){
   if(k==='temas'){const n=C.filter(c=>c.status!=='Pasif'&&(()=>{const d=ago(D.last[c.id]);return d===null||d>v})()).length;return `${n} aktif müşteri ${v}+ gündür temassız`}
   if(k==='arag'){if(!(OI&&OI.map))return '';const n=C.filter(c=>{const o=oiOf(c);return o&&o.odn&&o.odMax>v}).length;return `${n} müşteri ARAG'a uygun`}
   if(k==='iade'){if(!(RET&&RET.map))return '';const n=C.filter(c=>{const r=retOf(c);return r&&r.p>=v/100}).length;return `${n} müşteri eşiğin üzerinde`}
-  if(k==='retMin'){if(!(RET&&RET.map))return '';const keep=RET_MIN;RET_MIN=v;const n=C.filter(c=>{const r=retOf(c);return r&&r.warn}).length;RET_MIN=keep;return `${n} müşteri iade uyarısı alır`}
   if(RKEY[k]){const keep={...RISK};RISK[RKEY[k]]=k==='riskPace'?v/100:v;const n=C.filter(c=>riskOf(c)).length;Object.assign(RISK,keep);return `${n} müşteri kayıp riskinde`}
   return '';
 }
@@ -269,10 +267,10 @@ function renderTop(){
 }
 function renderStats(){
   const mine=C.filter(c=>!st.rep||c.rep===st.rep),ids=new Set(mine.map(c=>c.id));
-  const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0),rkPasL=mine.filter(c=>c.status==='Pasif'&&riskCalc(c)),rkPas=rkPasL.length,sumOf=k=>rkPasL.reduce((a,c)=>a+(typeof c[k]==='number'?c[k]:0),0);
+  const rk=mine.filter(c=>RK[c.id]),rkv=rk.reduce((a,c)=>a+RK[c.id].val,0),rkPasL=mine.filter(c=>c.status==='Pasif'),rkPas=rkPasL.length,sumOf=k=>rkPasL.reduce((a,c)=>a+(typeof c[k]==='number'?c[k]:0),0);
   const S=[['route',mine.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME).length,`Bugün rutta (${TODAYNAME||'hafta sonu'})`],['risk',rk.length,`Kayıp riski · ${eur(rkv)}`],...(VISIT_LOG?[['due',mine.filter(isDue).length,'Takip zamanı gelmiş']]:[]),['cold',mine.filter(isCold).length,`${R.temas}+ gündür temas yok (aktif)`],...(OI&&OI.map?(()=>{let n=0,v=0;for(const c of mine){const o=oiOf(c);if(o&&o.od>0){n++;v+=o.od}}return [['od',n,`Vadesi geçen · ${eur(v)}`]]})():[])];
   $('#stats').style.setProperty('--n',S.length+1);$('#stats').style.setProperty('--m',S.length+1===4?2:3);
-  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Kayıp riski ölçütlerine uyan ama pasif olduğu için sayılmayan müşteri">Pasif müşteri: ${rkPas}</small><small class="stsub" id="rkPasC" title="Bu pasif müşterilerin toplam cirosu: ${PY} yılı ve ${CY} YTD (net satış)">${PY}: ${eur(sumOf('ciro2025'))} · ${CY}: ${eur(sumOf('sales2026'))}</small>`:''}</button>`).join('')+ordStat(mine);
+  $('#stats').innerHTML=S.map(([k,v,l])=>`<button class="stat${st.quick===k?' on':''}" data-quick="${k}" aria-pressed="${st.quick===k}"><b>${v}</b><span>${l}</span>${k==='risk'?`<small class="stsub" id="rkPas" title="Pasif müşterilerin tamamı (kayıp riskine sayılmaz)">Pasif müşteri: ${rkPas}</small><small class="stsub" id="rkPasC" title="Bu pasif müşterilerin toplam cirosu: ${PY} yılı ve ${CY} YTD (net satış)">${PY}: ${eur(sumOf('ciro2025'))} · ${CY}: ${eur(sumOf('sales2026'))}</small>`:''}</button>`).join('')+ordStat(mine);
   renderOrd();
 }
 const MONTHS_LONG=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
@@ -619,7 +617,7 @@ function render(){
   $('#listView').hidden=st.view!=='list';$('#tasksView').hidden=st.view!=='tasks';$('#boardView').hidden=st.view!=='board';$('#targetsView').hidden=st.view!=='targets';$('#overdueView').hidden=st.view!=='overdue';$('#adminView').hidden=st.view!=='admin';
   // açık formlardaki yazılanları yeniden çizimde koru
   const keep={};let foc=null;
-  for(const id of ['aform','ctform','qform','rform']){const f=$('#'+id);if(!f||(id!=='qform'&&id!=='rform'&&st.formFor!==st.sel))continue;
+  for(const id of ['aform','ctform','qform','rform']){const f=$('#'+id);if(!f||(id==='rform'&&!st.rdirty)||(id!=='qform'&&id!=='rform'&&st.formFor!==st.sel))continue;
     keep[id]=[...f.elements].filter(e=>e.name).map(e=>({n:e.name,t:e.type,v:e.value,c:e.checked,touched:e.dataset.touched}));
     const ae=document.activeElement;if(ae&&f.contains(ae)&&ae.name&&ae.type!=='radio'&&ae.type!=='checkbox')foc=[id,ae.name]}
   renderTop();renderStats();renderList();renderTasks();renderBoard();renderTargets();renderOverdue();renderAdmin();
@@ -651,7 +649,7 @@ function retRows(c){
   const pct=v=>base>0&&v?`<span class="rp">%${(Math.abs(v)/base*100).toFixed(1).replace('.',',')}</span>`:'';
   const bad=!!(retOf(c)||{}).warn;
   const line=(l,v,n,p)=>`<div class="rl${bad&&l==='İade'?' bad':''}"><span>${l}</span><b>${v?eur(v):'€ 0'}</b><small>${n||0} fatura</small>${p?pct(v):'<span></span>'}</div>`;
-  return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar aynı dönemdeki satış faturalarına (${eur(base)}) göre${base<RET_MIN?`; satış ${eur(RET_MIN)} altında olduğu için uyarı verilmez`:''}.`:'Bu dönemde satış faturası olmadığı için oran gösterilemiyor.'}</p></dd></div>`;
+  return `<div class="cmp ret"><dt>İade ve fiyat farkı (${per})</dt><dd>${line('Satış faturası',sales,r[5],0)}${line('İade',iade,iadeN,1)}${line('Fiyat farkı',ff,ffN,1)}<p class="rn">${base>0?`Oranlar aynı dönemdeki satış faturalarına (${eur(base)}) göre.`:'Bu dönemde satış faturası olmadığı için oran gösterilemiyor.'}</p></dd></div>`;
 }
 
 /* customer modal */
@@ -887,7 +885,7 @@ document.addEventListener('click',async e=>{
   if(t.id==='qEdit'){st.qedit=true;st.qdirty=false;render();const i=$('#qform input');if(i)i.focus();return}
   if(t.id==='qCancel'){if(st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?'))return;st.qedit=false;st.qdirty=false;render();return}
   if(t.dataset.rep!==undefined){st.rep=t.dataset.rep;saveUi();render();return}
-  if(t.id==='rdef'){const f=$('#rform');for(const k in RDEF)f.elements[k].value=RDEF[k];rformCheck(f);$('#rmsg').textContent='Varsayılan değerler yazıldı; kaydetmek için Kaydet\'e basın';return}
+  if(t.id==='rdef'){st.rdirty=true;const f=$('#rform');for(const k in RDEF)f.elements[k].value=RDEF[k];rformCheck(f);$('#rmsg').textContent='Varsayılan değerler yazıldı; kaydetmek için Kaydet\'e basın';return}
   if(t.dataset.ovf!==undefined){st.ovf=t.dataset.ovf;render();return}
   if(t.id==='aragOn'||t.id==='aragOff'){if(window.CRM_IS_ADMIN===false)return;const id=t.dataset.cid,c=C.find(x=>x.id===id);if(!c)return;
     if(t.id==='aragOff'&&!confirm(`${c.name} için ARAG süreci kapatılsın mı?`))return;
@@ -896,7 +894,7 @@ document.addEventListener('click',async e=>{
     if(ok)toast(t.id==='aragOn'?`${c.name}: ARAG süreci aktif`:`${c.name}: ARAG süreci kapatıldı`);return}
   if(t.dataset.oiall!==undefined){st.oiAll=st.oiAll===t.dataset.oiall?null:t.dataset.oiall;render();return}
   if(t.dataset.quick!==undefined){st.ord=false;st.quick=st.quick===t.dataset.quick?'':t.dataset.quick;st.view='list';render();return}
-  if(t.dataset.view){st.view=t.dataset.view;saveUi();render();return}
+  if(t.dataset.view){if(st.view==='admin'&&t.dataset.view!=='admin'&&st.rdirty){if(!confirm('Kaydedilmemiş ayar değişiklikleri silinsin mi?'))return;st.rdirty=false}st.view=t.dataset.view;saveUi();render();return}
   if(t.id==='ctEdit'){st.ctEdit=st.sel;render();const f=$('#ctform');if(f)f.elements.phone.focus();return}
   if(t.id==='ctCancel'){st.ctEdit=null;render();return}
   if(t.dataset.nd!==undefined){const f=t.closest('form');const n=+t.dataset.nd;f.elements.nextDate.value=n?addDays(n):'';f.elements.nextDate.dataset.touched='1';if(!n){f.elements.nextAction.value='';f.elements.nextAction.dataset.touched='1'}else if(!f.elements.nextAction.value)f.elements.nextAction.value='Takip';return}
@@ -933,15 +931,15 @@ document.addEventListener('change',async e=>{
 });
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('paste',qPaste);
-document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#rform')){rformCheck(t.closest('#rform'));$('#rmsg').textContent='Kaydedilmemiş değişiklik var'}if(t.closest&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('#qform'))}if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
+document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#rform')){st.rdirty=true;rformCheck(t.closest('#rform'));$('#rmsg').textContent='Kaydedilmemiş değişiklik var'}if(t.closest&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('#qform'))}if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
 document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if((e.key==='Enter'||e.key===' ')&&e.target.id==='oimpBtn'){e.preventDefault();$('#oimp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
   if(e.target.id==='rform'){e.preventDefault();if(window.CRM_IS_ADMIN===false)return;const f=e.target;
     if(!rformCheck(f)){toast('Hatalı değerleri düzeltin.',1);return}
     const d={};for(const k in RDEF)d[k]=rnum(f.elements[k].value);
-    const ch=Object.keys(RDEF).filter(k=>d[k]!==R[k]);if(!ch.length){toast('Değişiklik yok.');return}
+    const ch=Object.keys(RDEF).filter(k=>d[k]!==R[k]);if(!ch.length){st.rdirty=false;toast('Değişiklik yok.');render();return}
     const ok=await w(()=>db.doc('settings/rules').set({...d,updatedAt:Date.now(),by:window.CRM_USER||''}));
-    if(ok){toast('Ayarlar kaydedildi: '+ch.map(k=>RULES.find(r=>r[0]===k)[1]).join(', '));$('#rmsg').textContent=''}return}
+    if(ok){st.rdirty=false;applyRules({...RMETA,...d,updatedAt:Date.now(),by:window.CRM_USER||''});toast('Ayarlar kaydedildi: '+ch.map(k=>RULES.find(r=>r[0]===k)[1]).join(', '));render()}return}
   e.preventDefault();const f=e.target;
   if(f.id==='cform'){
     const v={};for(const k of FIELDS)v[k]=String(f.elements[k].value||'').trim();
