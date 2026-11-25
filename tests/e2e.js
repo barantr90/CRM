@@ -108,6 +108,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   const tile=await txt(page,'[data-quick=risk]');
   ok(await txt(page,'[data-quick=risk] b')==='2',`risk kutusu yalnız aktif 2 müşteri gösteriyor ("${tile}")`);
   ok(await txt(page,'#rkPas')==='Pasif müşteri: 2','kutunun altında küçük punto: Pasif müşteri: 2 (Kayıp Market, Kapanan Market)');
+  {await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('statusov').doc('c4').set({status:'Pasif'})));await page.waitForTimeout(150);
+   ok(await txt(page,'#rkPas')==='Pasif müşteri: 3'&&/^2025: € 50\.500 · 2026: € 100$/.test(await txt(page,'#rkPasC')),'riskte olmayan pasif (Küçük Kiosk) de sayılıyor ve cirosu eklendi: '+await txt(page,'#rkPas')+' · '+await txt(page,'#rkPasC'));
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('statusov').doc('c4').delete()));await page.waitForTimeout(150);}
   ok(await txt(page,'#rkPasC')==='2025: € 50.000 · 2026: € 0','altında pasiflerin cirosu: 2025 € 50.000 (10.000+40.000), 2026 € 0 → '+await txt(page,'#rkPasC'));
   ok(await page.$eval('#rkPas',e=>parseFloat(getComputedStyle(e).fontSize)<parseFloat(getComputedStyle(e.previousElementSibling).fontSize)),'pasif satırı daha küçük punto');
   await page.click('[data-quick=risk]');
@@ -500,7 +503,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   {ok(await page.isVisible('#tabA'),'yönetici "Yönetici" sekmesini görüyor');
    await page.click('#tabA');
    const vals=await page.$$eval('#rform input',i=>i.map(x=>[x.name,x.value]));
-   ok(JSON.stringify(vals)==='[["pasif","120"],["temas","30"],["arag","30"],["iade","2.5"],["retMin","1000"],["riskPace","70"],["dropMin","3000"],["riskSilent","45"],["silentMax","365"],["silentMin","1000"]]','10 kural, varsayılan değerlerle: '+JSON.stringify(vals));
+   ok(JSON.stringify(vals)==='[["pasif","120"],["temas","30"],["arag","30"],["iade","2.5"],["riskPace","70"],["dropMin","3000"],["riskSilent","45"],["silentMax","365"],["silentMin","1000"]]','9 kural, varsayılan değerlerle: '+JSON.stringify(vals));
    ok(JSON.stringify(await page.$$eval('#rform .rgrp',h=>h.map(x=>x.textContent)))==='["Durum ve temas","Açık faturalar","İade","Kayıp riski"]','kurallar 4 başlık altında gruplu');
    ok(await txt(page,'#r_dropMin ~ em')==='€'&&/Varsayılan: € 3\.000/.test(await txt(page,'#rform .rrow:has(#r_dropMin) .rdef')),'tutar kuralları € ile ve varsayılanı € 3.000');
    ok(/Henüz değiştirilmedi/.test(await txt(page,'#admin')),'henüz değiştirilmedi notu');
@@ -540,20 +543,30 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    const riskN=async()=>+(await page.evaluate(()=>document.querySelector('[data-quick=risk] b').textContent));
    await page.click('.tab[data-view=list]');const r0=await riskN();
    ok(!!(await page.$('#list .row[data-id="c6"] .rtag.rt')),'İadeci Market iade uyarısı var (satış € 20.000 ≥ € 1.000)');
-   await page.click('#tabA');await page.fill('#r_retMin','50000');
-   ok(/0 müşteri iade uyarısı alır/.test(await txt(page,'[data-rimp=retMin]'))||/müşteri iade uyarısı alır/.test(await txt(page,'[data-rimp=retMin]')),'en az satış etkisi: '+await txt(page,'[data-rimp=retMin]'));
+   await page.click('#tabA');
    await page.fill('#r_dropMin','100000');await page.fill('#r_silentMax','60');
    await page.fill('#r_riskSilent','60');
    ok(await page.$eval('#r_silentMax',e=>e.closest('.rbox').classList.contains('bad'))&&/büyük olmalı/.test(await txt(page,'[data-rimp=silentMax]')),'en fazla faturasız gün, faturasız gün sınırından büyük olmalı');
    await page.fill('#r_riskSilent','45');
    await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
-   const d3=await doc(page,'settings/rules');ok(d3&&d3.retMin===50000&&d3.dropMin===100000&&d3.silentMax===60,'yeni eşikler kaydedildi');
+   const d3=await doc(page,'settings/rules');ok(d3&&!('retMin' in d3)&&d3.dropMin===100000&&d3.silentMax===60,'yeni eşikler kaydedildi');
    await page.click('.tab[data-view=list]');
-   ok(!(await page.$('#list .row[data-id="c6"] .rtag.rt')),'en az satış € 50.000: İadeci Market (€ 20.000) artık iade uyarısı almıyor');
    const r1=await riskN();ok(r1===r0-2,`en az ciro € 100.000 ve en fazla 60 gün: Düşüş (€ 60.000) ve Sessiz (70 gün) riskten çıktı (${r0} → ${r1})`);
    await page.click('#tabA');await page.click('#rdef');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
-   await page.click('.tab[data-view=list]');ok(await riskN()===r0&&!!(await page.$('#list .row[data-id="c6"] .rtag.rt')),'varsayılanlara dönünce eski hâline geldi');
+   await page.click('.tab[data-view=list]');ok(await riskN()===r0,'varsayılanlara dönünce eski hâline geldi');
    await page.click('#tabA');
+   // kalıcılık: kaydedilen ayar sayfa yenilenince formda kayıtlı hâliyle görünür
+   await page.click('#tabA');await page.fill('#r_arag','21');await page.fill('#r_riskPace','20');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
+   // sayfayı Yönetici sekmesi açıkken ve ayarlar veritabanında kayıtlıyken yeniden aç (ayarlar ilk çizimden sonra gelir)
+   {const c3=await browser.newContext({viewport:{width:1400,height:1000}});const p3=await c3.newPage();p3.on('pageerror',e=>errors.push(e.message));await p3.route(offline,r=>r.abort());
+    await p3.addInitScript(`try{localStorage.setItem('crm-ui',JSON.stringify({view:'admin'}))}catch(e){};${FIX};window.__SEED.settings={rules:{arag:21,riskPace:20,updatedAt:1,by:'baran.sengul@akar-group.com'}};window.CRM_IS_ADMIN=true;window.CRM_USER="baran.sengul@akar-group.com";window.CRM_AUTH={email:"baran.sengul@akar-group.com"};${MOCK}`);
+    await p3.goto(BASE+'/index.html');await p3.waitForSelector('#rform');await p3.waitForTimeout(300);
+    ok(await p3.inputValue('#r_arag')==='21'&&await p3.inputValue('#r_riskPace')==='20','sayfa açılınca kayıtlı ayarlar formda görünüyor (ARAG 21, tempo %20) — eskiden varsayılanlar görünüyordu');
+    ok(/değiştirildi/.test(await txt(p3,'#rform .rrow:has(#r_arag) .rdef')),'kayıtlı değerde "değiştirildi" işareti');
+    await c3.close();}
+   await page.fill('#r_temas','12');page.once('dialog',d=>d.dismiss());await page.click('.tab[data-view=list]');
+   ok(await page.isVisible('#rform')&&await page.inputValue('#r_temas')==='12','kaydedilmemiş değişiklik varken sekmeden çıkarken soruyor (vazgeçince kalıyor)');
+   await page.click('#rdef');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
    await page.screenshot({path:path.join(SHOTS,'9-yonetici.png'),fullPage:true});}
   await ctx.close();
 
