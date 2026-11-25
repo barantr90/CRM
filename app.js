@@ -80,7 +80,7 @@ const code=c=>c.code||String(c.id||'').replace(/^c/,'');
 const has=(c,k)=>Object.prototype.hasOwnProperty.call(c,k);
 const inv=c=>(c.lastInvoice||c.sales2026!=null||c.invoices2026!=null)?{last:c.lastInvoice||'',no:c.lastInvoiceNo||'',sales:c.sales2026,n:c.invoices2026}:null;
 const ciroOf=c=>(c.ciro2025==null&&c.ciro2026==null)?null:[c.ciro2025,c.ciro2026];
-const st={q:'',rep:'',seg:'',status:'',quick:'',sort:'name',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
+const st={q:'',rep:'',seg:'',chain:'',status:'',quick:'',sort:'name',sel:null,view:'list',type:'Ziyaret',formFor:null,arm:null};
 try{const s=JSON.parse(localStorage.getItem('crm-ui')||'{}');if(s.rep)st.rep=s.rep;if(s.sort)st.sort=s.sort;if(s.view)st.view=s.view;if(s.qv)st.qv=s.qv;if(s.rf)st.rf=s.rf}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('crm-ui',JSON.stringify({rep:st.rep,sort:st.sort,view:st.view,qv:st.qv,rf:st.rf}))}catch(e){}};
 
@@ -114,7 +114,7 @@ const isDue=c=>(D.open[c.id]||[]).some(a=>a.nextDate<=TODAY);
 
 function visible(){
   const q=low(st.q);
-  let r=C.filter(c=>(!st.rep||c.rep===st.rep)&&(!st.seg||(st.seg==='__bos'?!c.segment:c.segment===st.seg))&&(!st.status||(c.status||'')===st.status)&&(!q||low([c.name,c.chain,c.city,c.postcode,ctOf(c).contact,c.address].join(' ')).includes(q)));
+  let r=C.filter(c=>(!st.rep||c.rep===st.rep)&&(!st.seg||(st.seg==='__bos'?!c.segment:c.segment===st.seg))&&(!st.status||(c.status||'')===st.status)&&(!st.chain||(st.chain==='__any'?!!chainOf(c):chainOf(c)===st.chain))&&(!q||low([c.name,c.chain,c.city,c.postcode,ctOf(c).contact,c.address].join(' ')).includes(q)));
   if(st.quick==='route')r=r.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME);
   if(st.quick==='due')r=r.filter(isDue);
   if(st.quick==='cold')r=r.filter(isCold);
@@ -199,6 +199,7 @@ function renderDetail(){
 </div>
   ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
   ${ctaHtml(c,ct)}
+  ${chainHtml(c)}
   <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
   ${c.notes?`<p class="notes">${esc(c.notes)}</p>`:''}
   ${VISIT_LOG&&canWrite?visitForm(c):''}
@@ -418,6 +419,44 @@ function renderTargets(){
     ${body}`;
   if(st.qedit){const f=$('#qform');if(f)qformTotals(f)}
 }
+/* ===== Zincir müşteriler =====
+   Excel'deki "Zincir" sütunu aynı olan mağazalar bir zincir sayılır. Kartta zincirin özeti ve tüm mağazaları gösterilir. */
+const CHAIN_NAMES={}; // istenirse elle ad: {'Aksa':'Aksa Groothandel – Zincir'}
+const chainOf=c=>String(c.chain||'').trim();
+const chainStores=ch=>C.filter(c=>chainOf(c)===ch);
+function chainName(ch){if(CHAIN_NAMES[ch])return CHAIN_NAMES[ch];
+  const sm=/markt|market/i.test(ch)?'':chainStores(ch).some(c=>/s[uü]permar(k|kt|ket)\b/i.test(c.name||''))?' Supermarkt':'';
+  return `${ch}${sm} – Zincir`}
+function chainHtml(c){
+  const ch=chainOf(c);if(!ch)return '';const S=chainStores(ch);if(S.length<2)return '';
+  const n=v=>typeof v==='number'&&isFinite(v)?v:0;
+  const monAmt=x=>{const v=MON&&MON.map&&MON.map[code(x)];if(!v)return 0;const [sat=0,,iade=0,ff=0]=v;return sat+iade+ff};
+  const both=S.filter(x=>typeof x.ciro2025==='number'&&x.ciro2025>0&&typeof x.sales2026==='number');
+  const pb=both.reduce((a,x)=>a+x.ciro2025,0),sb=both.reduce((a,x)=>a+x.sales2026,0);
+  const gTxt=g=>g==null?'–':`<span class="${g<0?'down':'up'}">${g>0?'+':''}${pct1(g)}%</span>`;
+  const tempo=x=>typeof x.ciro2025==='number'&&x.ciro2025>0&&typeof x.sales2026==='number'?x.sales2026/(x.ciro2025*YF)-1:null;
+  let rs=0,ri=0;for(const x of S){const r=RET&&RET.map&&RET.map[code(x)];if(r){rs+=r[0]||0;ri+=Math.abs(r[1]||0)}}
+  const rp=rs?ri/rs:null,rk=S.filter(x=>RK[x.id]),nA=S.filter(x=>x.status!=='Pasif').length;
+  const reps=[...new Set(S.map(x=>x.rep).filter(Boolean))];
+  const rows=[...S].sort((a,b)=>n(b.sales2026)-n(a.sales2026));
+  const last=x=>{const v=inv(x);return v&&v.last?`${fmt(v.last)} <small>(${ago(v.last)} gün)</small>`:'–'};
+  const tile=(k,v)=>`<div><dt>${k}</dt><dd>${v}</dd></div>`;
+  return `<section class="chainbox" id="chainBox" aria-label="Zincir özeti">
+    <div class="ch-h"><h3>${esc(chainName(ch))}</h3><button type="button" class="lnk" data-chainf="${esc(ch)}">Mağazaları listede göster</button></div>
+    <dl class="chtiles">
+      ${tile('Mağaza',`${S.length} <small>(${nA} aktif${S.length-nA?`, ${S.length-nA} pasif`:''})</small>`)}
+      ${tile('Ciro 2025',eur(S.reduce((a,x)=>a+n(x.ciro2025),0)))}
+      ${tile('2026 YTD',eur(S.reduce((a,x)=>a+n(x.sales2026),0)))}
+      ${tile('Tempo',gTxt(pb?sb/(pb*YF)-1:null))}
+      ${tile(`Bu ay net ciro${MON&&MON.month?` (${MONTHS_LONG[+MON.month.slice(5,7)-1]})`:''}`,eur(S.reduce((a,x)=>a+monAmt(x),0)))}
+      ${tile('İade oranı',rp==null?'–':`<span class="${rp>=RET_WARN?'warn':''}">%${pct1(rp)}</span>`)}
+      ${tile('Kayıp riski',rk.length?`<span class="warn">${rk.length} mağaza</span>`:'yok')}
+    </dl>
+    <div class="chtab"><table id="chainT"><thead><tr><th>Mağaza</th>${reps.length>1?'<th>Temsilci</th>':''}<th>2026 YTD</th><th>Tempo</th><th>Bu ay</th><th>Son fatura</th></tr></thead><tbody>
+      ${rows.map(x=>`<tr${x.id===c.id?' class="cur" aria-current="true"':''}><td class="chn">${x.id===c.id?`<b${x.status==='Pasif'?' class="pas"':''}>${esc(x.name)}</b>`:`<button type="button" class="lnk${x.status==='Pasif'?' pas':''}" data-id="${esc(x.id)}">${esc(x.name)}</button>`}${x.status==='Pasif'?' <em class="rtag" title="Pasif müşteri">pasif</em>':''}${RK[x.id]?' <em class="rtag" title="Kayıp riski">risk</em>':''}<small>${esc(x.city||'')}</small></td>${reps.length>1?`<td>${esc(x.rep||'')}</td>`:''}<td>${typeof x.sales2026==='number'?eur(x.sales2026):'–'}</td><td>${gTxt(tempo(x))}</td><td>${monAmt(x)?eur(monAmt(x)):'–'}</td><td>${last(x)}</td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="sm">Tempo: 2026 YTD satış, 2025 cirosunun aynı dönemine göre. Mağaza adına tıklayınca o mağazanın kartı açılır.</p>
+  </section>`}
 function renderTasks(){
   const cm=Object.fromEntries(C.map(c=>[c.id,c]));
   const t=A.filter(a=>a.nextDate&&!a.done&&cm[a.customerId]&&(!st.rep||(a.rep||cm[a.customerId].rep)===st.rep)).sort((a,b)=>a.nextDate.localeCompare(b.nextDate));
@@ -429,7 +468,9 @@ function renderTasks(){
 }
 function render(){
   derive();
-  {const segs=allSegs();if(st.seg&&st.seg!=='__bos'&&!segs.includes(st.seg))st.seg='';const html='<option value="">Segment: tümü</option>'+segs.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__bos">Segment: boş</option>';if($('#fseg').innerHTML!==html)$('#fseg').innerHTML=html}
+  {const segs=allSegs();if(st.seg&&st.seg!=='__bos'&&!segs.includes(st.seg))st.seg='';const html='<option value="">Sgmt. Tümü</option>'+segs.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('')+'<option value="__bos">Segment: boş</option>';if($('#fseg').innerHTML!==html)$('#fseg').innerHTML=html}
+  {const chs=[...new Set(C.map(chainOf).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));if(st.chain&&st.chain!=='__any'&&!chs.includes(st.chain))st.chain='';
+   const html='<option value="">Zincir Tümü</option><option value="__any">Yalnız zincirler</option>'+chs.map(v=>`<option value="${esc(v)}">${esc(v)} (${chainStores(v).length})</option>`).join('');if($('#fchain').innerHTML!==html)$('#fchain').innerHTML=html;$('#fchain').value=st.chain||''}
   $('#fseg').value=st.seg;$('#fstat').value=st.status;$('#fsort').value=st.sort;
   if(st.view==='board'&&window.CRM_IS_ADMIN===false)st.view='list';
   if(st.view==='tasks'&&!VISIT_LOG)st.view='list';
@@ -675,6 +716,7 @@ document.addEventListener('click',async e=>{
   if(t.matches('[data-close]')){closeModals();return}
   if(t.id==='ordBtn'){st.ord=!st.ord;if(st.ord)st.quick='';render();return}
   if(t.dataset.qp!==undefined){if(st.qedit&&st.qdirty&&!confirm('Kaydedilmemiş değişiklikler silinsin mi?'))return;st.qp=t.dataset.qp;st.qedit=false;st.qdirty=false;render();return}
+  if(t.dataset.chainf!==undefined){st.chain=t.dataset.chainf;st.quick='';st.view='list';if(innerWidth<=900)st.sel=null;render();$('#list').scrollIntoView({block:'start'});return}
   if(t.dataset.qv){st.qv=t.dataset.qv;saveUi();render();return}
   if(t.dataset.rf){st.rf=t.dataset.rf;saveUi();render();return}
   if(t.id==='qEdit'){st.qedit=true;st.qdirty=false;render();const i=$('#qform input');if(i)i.focus();return}
@@ -707,6 +749,7 @@ document.addEventListener('change',async e=>{
   if(t.name==='ch'&&t.closest('#aform')){st.type=t.value;return}
   if(t.name==='out'&&t.closest('#aform')){syncOutcome(t.closest('form'),true);return}
   if(t.id==='fseg'){st.seg=t.value;render()}
+  if(t.id==='fchain'){st.chain=t.value;render()}
   if(t.id==='fstat'){st.status=t.value;render()}
   if(t.id==='fsort'){st.sort=t.value;saveUi();render()}
   if(t.id==='ximp')umOpen(false);
