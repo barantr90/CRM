@@ -86,6 +86,7 @@ node tests/e2e.js
 ## Çalışma şekli
 
 - Değişiklik PR ile `main`'e birleştirilir. PR açıklaması özet ve test sonucunu içerir.
+- Tüm testler geçince PR, kullanıcıdan onay beklenmeden GitHub'da `main`'e birleştirilir (kullanıcının kalıcı talimatı).
 - Her işin sonunda kullanıcıya kısa bir Türkçe özet verilir:
   - ne değişti ve canlıda nasıl görünür;
   - PR bağlantısı ve test sayısı;
