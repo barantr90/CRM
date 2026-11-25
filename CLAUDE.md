@@ -76,6 +76,7 @@ node tests/e2e.js
 
 - Playwright; bellek içi `tests/mockdb.js` + `tests/fixture.js`.
 - Excel testi için `XLSX_LIB=<yol>` verilir.
+- Her PR'da ve `main`'e her push'ta GitHub Actions (`.github/workflows/e2e.yml`) aynı testleri Excel testiyle birlikte çalıştırır; ekran görüntüleri iş akışının çıktısı olarak indirilir.
 - Yardımcılar: `open(browser, {admin, role, user, seed})`, `goAdm`, `goList`, `doc`.
 - Her yeni davranışa test eklenir.
 - Hata düzeltilirken önce eski kodda başarısız olan test yazılır.
