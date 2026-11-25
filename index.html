@@ -27,6 +27,7 @@
     <button class="tab" data-view="tasks" role="tab" id="tabT">Takipler</button>
     <button class="tab" data-view="targets" role="tab" id="tabH">Hedefler</button>
     <button class="tab" data-view="board" role="tab" id="tabB" hidden>Karne</button>
+    <button class="tab" data-view="overdue" role="tab" id="tabV" hidden>Vadesi Geçen</button>
   </nav>
   <main class="grid" id="listView">
     <section>
@@ -35,7 +36,6 @@
         <select id="fseg" aria-label="Segment"><option value="">Sgmt. Tümü</option></select>
         <select id="fchain" aria-label="Zincir"><option value="">Zincir Tümü</option></select>
         <select id="fstat" aria-label="Durum"><option value="">Tümü</option><option>Aktif</option><option>Pasif</option></select>
-        <select id="fsort" aria-label="Sırala"><option value="name">Ada göre</option><option value="last">En eski temas önce</option></select>
       </div>
       <div class="meta"><span id="count"></span><span><i class="dot"></i> 30+ gün temas yok <span id="dueLeg">· <em class="tk-tag">takip</em> takip zamanı gelmiş</span> <span id="qf"></span></span></div>
       <ul class="list" id="list"></ul>
@@ -45,6 +45,7 @@
   <section class="tasks" id="tasksView" hidden><div id="tasks"></div></section>
   <section class="board" id="targetsView" hidden><div id="targets"></div></section>
   <section class="board" id="boardView" hidden><div id="board"></div></section>
+  <section class="board" id="overdueView" hidden><div id="overdue"></div></section>
 </div>
 
 <div class="modal" id="modal" hidden>

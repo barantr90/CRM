@@ -259,6 +259,34 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await sel(page,'Sessiz Market');
    ok(/açık fatura yok/.test(await txt(page,'#oi')),'açık faturası olmayan müşteride "açık fatura yok"');}
 
+  step('3e. Sıralama kutusu yok, Vadesi Geçen sekmesi, ARAG');
+  {ok(!(await page.$('#fsort')),'"Ada göre" sıralama kutusu kaldırıldı');
+   const names=await rows(page);ok(JSON.stringify(names)===JSON.stringify([...names].sort((a,b)=>a.localeCompare(b,'tr'))),'liste ada göre sıralı kalıyor');
+   ok(await txt(page,'#tabV')==='Vadesi Geçen (1)','sekme: Vadesi Geçen (1)');
+   const tabs=await page.$$eval('.tabs .tab:not([hidden])',b=>b.map(x=>x.textContent.replace(/ \(.*/,'')));
+   ok(JSON.stringify(tabs)==='["Müşteriler","Hedefler","Karne","Vadesi Geçen"]','sekme sırası: '+tabs.join(' · '));
+   await page.click('#tabV');
+   const r=await page.$$eval('#odT tbody tr',tr=>tr.map(t=>[...t.cells].map(c=>c.textContent.replace(/ /g,' '))));
+   ok(r.length===1&&r[0][1]==='Düşüş Market'&&r[0][3]==='€ 1.201'&&r[0][5]==='40 gün','tabloda yalnız vadesi geçen: '+JSON.stringify(r));
+   await page.click('[data-ovf=arag]');ok(/Bu süzgeçte müşteri yok/.test(await txt(page,'#overdue')),'ARAG süzgeci başta boş');
+   await page.click('[data-ovf=all]');
+   await page.screenshot({path:path.join(SHOTS,'3e-vadesi-gecen.png'),clip:{x:0,y:440,width:1400,height:300}});
+   await page.click('#odT .lnk');await page.waitForSelector('#detail h2');
+   ok(await txt(page,'#detail h2')==='Düşüş Market'&&!(await page.isHidden('#listView')),'satıra tıklayınca müşteri kartı açılıyor');
+   ok(/40 gün/.test(await txt(page,'#aragBox'))&&!!(await page.$('#aragOn')),'40 gün gecikmede ARAG süreci butonu var');
+   await page.click('#aragOn');await page.waitForTimeout(150);
+   const T0=await page.evaluate(()=>window.__FIX.TODAY);
+   const ad=await doc(page,'arag/c1');ok(ad&&ad.active===true&&ad.at===T0&&ad.odMax===40,'ARAG kaydı yazıldı (arag/c1)');
+   ok(/ARAG süreci aktif/.test(await txt(page,'#aragBox'))&&await page.$eval('#aragBox',e=>e.classList.contains('on')),'kartta: ARAG süreci aktif');
+   ok(await txt(page,'#list .row[data-id="c1"] .rtag.ar')==='ARAG','listede ARAG etiketi');
+   await page.screenshot({path:path.join(SHOTS,'3e-arag-kart.png'),clip:{x:560,y:180,width:840,height:330}});
+   await page.click('#tabV');await page.click('[data-ovf=arag]');
+   ok((await page.$$('#odT tbody tr')).length===1&&/ARAG/.test(await txt(page,'#odT tbody tr td:last-child')),'ARAG süzgecinde görünüyor');
+   await page.click('[data-ovf=all]');await page.click('.tab[data-view=list]');
+   await sel(page,'Sağlıklı Market');ok(!(await page.$('#aragBox')),'30 günü aşmayan müşteride ARAG butonu yok');
+   await sel(page,'Düşüş Market');page.once('dialog',d=>d.accept());await page.click('#aragOff');await page.waitForTimeout(150);
+   ok(!(await doc(page,'arag/c1'))&&!!(await page.$('#aragOn')),'süreç kapatılınca kayıt silindi, buton geri geldi');}
+
   step('5. İade uyarısı');
   const tags=await page.$$eval('#list .row',rs=>rs.map(r=>[r.querySelector('b').textContent,(r.querySelector('.rtag[title^="İade"]')||{}).textContent||'']));
   ok(tags.find(t=>t[0]==='İadeci Market')[1]==='iade %12,0','İadeci Market listede "iade %12,0" etiketi taşıyor');
@@ -458,6 +486,10 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await sel(page,'Sessiz Market');
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
   ok(!(await page.$('#stSel')),'temsilci durumu değiştiremiyor (seçim yok)');
+  ok(!(await page.$('#aragOn')),'temsilci ARAG butonunu görmüyor');
+  ok(await page.isVisible('#tabV'),'temsilci Vadesi Geçen sekmesini görüyor');
+  await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('arag').doc('c2').set({active:true,at:'2026-11-20'})));await page.waitForTimeout(150);
+  ok(/ARAG süreci aktif · 20\.11\.2026/.test(await txt(page,'#aragBox'))&&!(await page.$('#aragOff')),'temsilci aktif ARAG durumunu görüyor, kapatamıyor');
   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('statusov').doc('c2').set({status:'Pasif'})));await page.waitForTimeout(150);
   ok(/Pasif · elle/.test(await txt(page,'#detail .tags')),'temsilci elle belirlenen durumu görüyor: Pasif · elle');
   ok(await page.isVisible('#tabH'),'temsilci Hedefler sekmesini görüyor');
