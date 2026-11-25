@@ -29,9 +29,9 @@
       returns:{from:y+'-01',to:T.slice(0,7),map:{'1':[15000,-300,2,0,0,10],'3':[40000,-400,1,0,0,30],'6':[20000,-2400,5,-100,1,20],'8':[5000,-150,1,0,0,4]}}
     }
   };
-  const QK=`${y}-Q${Math.floor((+T.slice(5,7)-1)/3)+1}`;
+  const QK=T.slice(0,7); // hedefler aylık girilir
   const cat=(p,t,a)=>({p,t,a});
-  window.__SEED.qtargets={[QK]:{period:QK,reps:{
+  window.__SEED.qtargets={[QK]:{period:QK,asOf:QK+'-20',reps:{
     'Özgür Firat':{c:{atis:cat(154917,180000,122499),icecek:cat(81418,95000,117932),mutfak:cat(40832,50000,37196),nonfood:cat(119,1000,60),temel:cat(10029,13000,6879)},f:{tahsilat:{t:390747},fkns:{t:0},iade:{t:5085}}},
     'Lütfi Kaplan':{c:{atis:cat(33942,40000,23614),icecek:cat(4910,3500,1101),mutfak:cat(3834,5500,3201),nonfood:cat(240,500,0),temel:cat(719,500,281)},f:{tahsilat:{t:39994},iade:{t:750}}}}}};
   window.__SEED.targets={[T.slice(0,7)]:{month:T.slice(0,7),reps:{'Lütfi Kaplan':4000,'Mehmet Halici':10000}}};
