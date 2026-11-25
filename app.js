@@ -99,7 +99,19 @@ const segCls=v=>{if(v==='A')return ' sA';if(v==='B')return ' sB';const n=String(
 const allSegs=()=>[...new Set(C.map(c=>c.segment).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'tr'));
 const allReps=()=>[...new Set([...REPS,...C.map(c=>c.rep).filter(Boolean)])];
 
+/* Elle durum: 'statusov' koleksiyonunda müşteri başına {status}. Öncelik: sitede elle > Excel 'Durum (elle)' > otomatik. */
+let SO={};
+function applyStatus(){for(const c of C){if(!c._st0)c._st0={status:c.status||'',manual:c.statusManual||''};const ov=(SO[c.id]||{}).status||'';
+  c.statusOv=ov;c.statusManual=ov||c._st0.manual;c.status=ov||c._st0.manual||c._st0.status}}
+const statusAuto=c=>(c._st0&&(c._st0.manual||c._st0.status))||'';
+function statusHtml(c){
+  const adm=window.CRM_IS_ADMIN===true&&canWrite;
+  if(!adm)return c.status?`<span class="tag"${c.statusOv?' title="Durum elle belirlendi"':''}>${esc(c.status)}${c.statusOv?' · elle':''}</span>`:'';
+  const a=statusAuto(c);
+  return `<label class="tag stsel${c.statusOv?' ov':''}${c.status==='Pasif'?' pas':''}" title="Müşteri durumu"><span class="sr">Durum</span><select id="stSel" data-cid="${esc(c.id)}" aria-label="Müşteri durumu">`+
+    `<option value=""${c.statusOv?'':' selected'}>${esc(a||'–')} · ${c._st0&&c._st0.manual?'Excel':'otomatik'}</option><option value="Aktif"${c.statusOv==='Aktif'?' selected':''}>Aktif · elle</option><option value="Pasif"${c.statusOv==='Pasif'?' selected':''}>Pasif · elle</option></select></label>`}
 function derive(){
+  applyStatus();
   const last={},open={};
   for(const c of C){const v=inv(c);if(v&&v.last)last[c.id]=v.last}
   for(const a of A){if(!a.customerId)continue;
@@ -195,7 +207,7 @@ function renderDetail(){
   const lastD=D.last[c.id],iv=inv(c),ct=ctOf(c),rk=RK[c.id],rt=retOf(c);
   const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',ct.contact],['Telefon',ct.phone],['Temsilci',c.rep],['Rut günü',c.visitDay],['Ziyaret',[c.freq,c.weeks?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],['2026 net satış',iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
   el.innerHTML=`<button class="back" id="back" type="button">← Listeye dön</button>
-  <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${c.status?`<span class="tag">${esc(c.status)}</span>`:''}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
+  <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${statusHtml(c)}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
 </div>
   ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
   ${ctaHtml(c,ct)}
@@ -750,6 +762,9 @@ document.addEventListener('change',async e=>{
   if(t.name==='out'&&t.closest('#aform')){syncOutcome(t.closest('form'),true);return}
   if(t.id==='fseg'){st.seg=t.value;render()}
   if(t.id==='fchain'){st.chain=t.value;render()}
+  if(t.id==='stSel'){if(window.CRM_IS_ADMIN!==true){render();return}const id=t.dataset.cid,v=t.value,c=C.find(x=>x.id===id);if(!c)return;
+    const ok=await w(()=>v?db.collection('statusov').doc(id).set({status:v,customer:c.name,updatedAt:Date.now(),by:window.CRM_USER||''}):db.collection('statusov').doc(id).delete());
+    if(ok)toast(v?`${c.name}: ${v} olarak işaretlendi`:`${c.name}: durum yeniden otomatik (${statusAuto(c)||'–'})`);else render();return}
   if(t.id==='fstat'){st.status=t.value;render()}
   if(t.id==='fsort'){st.sort=t.value;saveUi();render()}
   if(t.id==='ximp')umOpen(false);
@@ -817,6 +832,7 @@ render();
     if(st.sel&&!C.some(c=>c.id===st.sel))st.sel=null;
     render()},err=>{clearTimeout(timer);loaded=true;st.err=true;render()});
   db.doc('sync/month').onSnapshot(d=>{MON=d.exists?d.data():null;render()},()=>{});
+  db.collection('statusov').onSnapshot(s=>{SO=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('contacts').onSnapshot(s=>{K=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('qtargets').onSnapshot(s=>{QTS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});
   db.collection('targets').onSnapshot(s=>{TGS=Object.fromEntries(s.docs.map(d=>[d.id,d.data()]));render()},()=>{});

@@ -196,3 +196,7 @@ dd a{color:var(--accInk);font-weight:600}
 .chtab tr.cur td{background:var(--soft)}.chainbox>.sm{margin:8px 0 0}
 @media(max-width:600px){.ch-h h3{font-size:19px}.chtab table{font-size:13px}}
 .chainbox .up,.chainbox .down{margin-left:0}
+/* elle durum seçimi */
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.tag.stsel{padding:0;display:inline-flex}.tag.stsel select{color:inherit;field-sizing:content;min-height:0;height:26px;width:auto;padding:0 26px 0 10px;border:0;border-radius:99px;background-color:transparent;font-size:13px;cursor:pointer}
+.tag.stsel.ov select{font-weight:600}
