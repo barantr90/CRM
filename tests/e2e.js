@@ -740,8 +740,34 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(await page.isVisible('#listView'),'kaydedilmemiş izinle sayfadan çıkarken soruyor');}
   await ctx.close();
 
+  step('14. Satış temsilcisi yalnız kendi müşterileri; ayar sayfalarında üst kutular gizli');
+  ({ctx,page}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'}));
+  {ok(JSON.stringify(await rows(page))==='["Düşüş Market","Sessiz Market"]','varsayılan: temsilci yalnız kendi 2 müşterisini görüyor');
+   ok(JSON.stringify(await page.$$eval('#reps .chip',c=>c.map(x=>x.textContent)))==='["Lütfi Kaplan"]','temsilci seçimi kilitli');
+   await page.fill('#q','Sağlıklı');await page.dispatchEvent('#q','input');ok((await rows(page)).length===0,'aramada başka temsilcinin müşterisi çıkmıyor');await page.fill('#q','');await page.dispatchEvent('#q','input');
+   await page.click('#tabH');
+   ok(await txt(page,'[data-qcard="Özgür Firat"] .qbig')==='%84'&&await txt(page,'[data-qcard="Lütfi Kaplan"] .qbig')==='%56'&&!!(await page.$('#targets .qgrid .qcard')),'Hedefler sekmesi kısıtlamanın dışında: tüm ekip görünüyor');
+   await page.click('.tab[data-view=list]');await page.click('#ordBtn');
+   ok(JSON.stringify(await page.$$eval('#ordp tbody tr td:first-child',t=>t.map(x=>x.textContent.trim())))==='["Lütfi Kaplan"]','aylık net ciro dağılımında yalnız kendisi');
+   await page.click('#ordBtn');}
+  await ctx.close();
+  {const {ctx:c2,page:p2}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl',seed:{settings:{perms:{satis:{v_board:true,v_targets:true}}}}});
+   await p2.click('#tabB');
+   ok(JSON.stringify(await p2.$$eval('#boardT tbody td:first-child',t=>t.map(x=>x.textContent.trim())))==='["Lütfi Kaplan"]','Karne izni olsa da yalnız kendi satırı');
+   await c2.close();}
+  ({ctx,page}=await open(browser));
+  {ok(await page.isVisible('#stats')&&await page.isVisible('#reps'),'ana sayfada üst kutular görünüyor');
+   await goAdm(page);
+   ok(await page.isHidden('#stats')&&await page.isHidden('#reps')&&await page.isVisible('#homeA'),'Yönetici ayarlarında üst kutular ve temsilci seçimi gizli; "Ana sayfaya dön" var');
+   await page.click('#homeA');ok(await page.isVisible('#listView')&&await page.isVisible('#stats'),'"Ana sayfaya dön" müşteri listesine döndürüyor');
+   await page.click('#avBtn');await page.click('#umPerms');
+   ok(await page.isHidden('#stats')&&await page.isVisible('#homeP'),'Kullanıcı izinlerinde de üst kutular gizli');
+   await page.screenshot({path:path.join(SHOTS,'14-izinler-ust.png'),clip:{x:0,y:0,width:1400,height:420}});
+   await page.click('#homeP');ok(await page.isVisible('#stats'),'izinlerden ana sayfaya dönüş');}
+  await ctx.close();
+
   step('0c. Raci Öner');
-  ({ctx,page}=await open(browser,{admin:false,user:'Raci.Oener@akar-gmbh.de'}));
+  ({ctx,page}=await open(browser,{admin:false,role:'muhasebe',user:'Raci.Oener@akar-gmbh.de'}));
   ok(await txt(page,'#avBtn')==='RÖ','baş harfler: RÖ');
   await page.click('#avBtn');ok(await txt(page,'#umName')==='Raci Öner','menüde ad: Raci Öner');
   ok(!(await page.$('.chip[data-rep="Raci Öner"]')),'temsilci butonlarına eklenmedi');
