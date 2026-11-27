@@ -135,6 +135,16 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.screenshot({path:path.join(SHOTS,'1-risk.png')});
   await page.click('[data-quick=risk]');await page.click('.chip[data-rep=""]');
 
+  step('1m. Kartta Merch ve Dizim hizmeti');
+  {await sel(page,'Sağlıklı Market');
+   const dd=await page.$$eval('#detail .info div',d=>Object.fromEntries(d.filter(x=>x.querySelector(':scope>dt')).map(x=>[x.querySelector(':scope>dt').textContent,x.querySelector(':scope>dd').textContent])));
+   ok(dd['Merch']==='Var'&&dd['Dizim']==='Yok','Sağlıklı Market: Merch Var, Dizim Yok ('+dd['Merch']+' / '+dd['Dizim']+')');
+   const ks=Object.keys(dd);ok(ks.indexOf('Merch')===ks.indexOf('Ödeme vadesi')+1&&ks.indexOf('Dizim')===ks.indexOf('Merch')+1,'Ödeme vadesinin hemen altında');
+   ok(await txt(page,'#detail .info dd.yes')==='Var'&&await txt(page,'#detail .info dd.no')==='Yok','Var ve Yok ayrı renkte');
+   await sel(page,'Düşüş Market');
+   const d2=await page.$$eval('#detail .info div',d=>Object.fromEntries(d.filter(x=>x.querySelector(':scope>dt')).map(x=>[x.querySelector(':scope>dt').textContent,x.querySelector(':scope>dd').textContent])));
+   ok(d2['Merch']==='–'&&d2['Dizim']==='–','bilgi girilmemiş müşteride "–"');}
+
   step('2. Ziyaret kaydı ve Geçmiş kapalı');
   await sel(page,'Sessiz Market');
   ok(!(await page.$('#aform')),'ziyaret kaydı formu görünmüyor');
@@ -665,6 +675,18 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
        const f=new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],'oi.xlsx');const dt=new DataTransfer();dt.items.add(f);
        const i=document.getElementById('oimp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))})});
    ok(/2 müşteri kodu CRM'de yok/.test(msg)&&/77001 \(€ 7\.418,28\)/.test(msg)&&/77002 \(−€ 13,90\)/.test(msg)&&/Vadesi Geçen/.test(msg),'onayda CRM\'de olmayan kodlar ve tutarları: '+msg.replace(/\n/g,' / '));
+   // Merch / Dizim: dışa aktarmada sütun, içe aktarmada VAR/YOK okunur
+   if(got){const m=await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets['Müşteriler']);const s=rows.find(x=>x['Müşteri']==='Sağlıklı Market');return {h:Object.keys(rows[0]),m:s['Merch'],d:s['Dizim']}});
+     ok(m.h.indexOf('Merch')===m.h.indexOf('Ödeme vadesi')+1&&m.h.indexOf('Dizim')===m.h.indexOf('Merch')+1&&m.m==='Var'&&m.d==='Yok','Excel\'de Merch ve Dizim sütunları: '+JSON.stringify(m));
+     await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array',cellFormula:true});const ws=wb.Sheets['Müşteriler'],R=XLSX.utils.decode_range(ws['!ref']);
+       const H=[];for(let c=0;c<=R.e.c;c++)H.push((ws[XLSX.utils.encode_cell({r:0,c})]||{}).v);const cm=H.indexOf('Merch'),cd=H.indexOf('Dizim'),cn=H.indexOf('Müşteri');
+       for(let r=1;r<=R.e.r;r++){const n=(ws[XLSX.utils.encode_cell({r,c:cn})]||{}).v;if(n==='Düşüş Market'){ws[XLSX.utils.encode_cell({r,c:cm})]={t:'s',v:'VAR'};ws[XLSX.utils.encode_cell({r,c:cd})]={t:'s',v:' yok '}}if(n==='Sağlıklı Market')ws[XLSX.utils.encode_cell({r,c:cm})]={t:'s',v:''}}
+       const f=new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],'m.xlsx');const dt=new DataTransfer();dt.items.add(f);const i=document.getElementById('ximp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))});
+     await p2.waitForSelector('#imodal:not([hidden])');
+     ok(/2<\/b> güncellenecek/.test(await p2.$eval('#iprev',e=>e.innerHTML))&&/Merch, Dizim/.test(await txt(p2,'#iprev')),'önizleme: 2 müşteri güncellenecek, Merch ve Dizim okunuyor ('+await txt(p2,'#iprev')+')');
+     await p2.click('#irun');await p2.waitForTimeout(300);
+     const c1=await doc(p2,'customers/c1'),c3=await doc(p2,'customers/c3');
+     ok(c1.merch==='Var'&&c1.dizim==='Yok'&&c3.merch===''&&c3.dizim==='Yok','içe aktarma: VAR → Var, " yok " → Yok, boş → boş');}
    await c2.close();}}
 
 

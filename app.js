@@ -448,14 +448,14 @@ function renderDetail(){
   const acts=A.filter(a=>a.customerId===c.id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt||0)-(a.createdAt||0));
   const reps=allReps();if(c.rep&&!reps.includes(c.rep))reps.push(c.rep);
   const lastD=D.last[c.id],iv=inv(c),ct=ctOf(c),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
-  const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',ct.contact],['Telefon',ct.phone],['Temsilci',c.rep],['Rut günü',c.visitDay],['Ziyaret',[c.freq,c.weeks?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],[`${CY} net satış`,iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
+  const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',ct.contact],['Telefon',ct.phone],['Temsilci',c.rep],['Rut günü',c.visitDay],['Ziyaret',[c.freq,c.weeks?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Ödeme vadesi',c.pay],['Merch',c.merch],['Dizim',c.dizim],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],[`${CY} net satış`,iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
   el.innerHTML=`<button class="back" id="back" type="button">← Listeye dön</button>
   <div class="dh"><div><h2${c.status==='Pasif'?' class="pas"':''}>${esc(c.name)}</h2><p class="tags">${c.segment?`<span class="seg${segCls(c.segment)}">${esc(c.segment)}</span>`:''}${statusHtml(c)}${c.chain?`<span class="tag">${esc(c.chain)}</span>`:''}</p></div>
 </div>
   ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${oi&&oi.od>0?`<p class="alert" id="odAlert">Vadesi geçmiş açık fatura: ${eur(oi.od)} · ${oi.odn} fatura, en eski ${oi.odMax} gün</p>`:''}${aragHtml(c,oi)}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
   ${ctaHtml(c,ct)}
   ${chainHtml(c)}
-  <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
+  <dl class="info">${info.map(([k,v])=>`<div><dt>${k}</dt><dd${(k==='Merch'||k==='Dizim')&&v?` class="${v==='Var'?'yes':'no'}"`:''}>${k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–')}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
   ${oiHtml(c)}
   ${VISIT_LOG&&canNote()?visitForm(c):''}
   ${VISIT_LOG?`<h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`:''}`;
@@ -801,7 +801,7 @@ const TYPE_DEFAULT='Satis Faturasi';
 // [header, field, type, isFormula]
 const COLS=[['Kod','code','t'],['Müşteri','name','t'],['Zincir','chain','t'],
  ['Segment','segment','seg'],['Durum','status','st',1],['Durum (elle)','statusManual','st0'],
- ['Temsilci','rep','t'],['Rut günü','visitDay','day'],['Ziyaret sıklığı','freq','t'],['Ziyaret haftaları','weeks','t'],['Ödeme vadesi','pay','t'],
+ ['Temsilci','rep','t'],['Rut günü','visitDay','day'],['Ziyaret sıklığı','freq','t'],['Ziyaret haftaları','weeks','t'],['Ödeme vadesi','pay','t'],['Merch','merch','vy'],['Dizim','dizim','vy'],
  ['Yetkili','contact','t'],['Telefon','phone','t'],['Adres','address','t'],['Posta kodu','postcode','t'],['Şehir','city','t'],
  ['Son fatura tarihi','lastInvoice','d',1],['Son fatura no','lastInvoiceNo','t',1],['2026 net satış (€)','sales2026','n',1],['2026 fatura sayısı','invoices2026','n',1],
  ['Ciro 2025 (€)','ciro2025','n'],['Tempo % (aynı dönem)','_growth','f',1]];
@@ -823,6 +823,7 @@ function cellVal(x,t){
   if(t==='seg')return s;
   if(t==='st')return ['Aktif','Pasif'].find(v=>low(v)===low(s))||'';
   if(t==='st0')return ['Aktif','Pasif'].find(v=>low(v)===low(s))||'';
+  if(t==='vy')return /^(var|evet|yes|ja|x|1)$/i.test(s)?'Var':/^(yok|hay[ıi]r|no|nee|0)$/i.test(s)?'Yok':'';
   if(t==='day'){const d=s&&DAYS.find(dn=>low(dn).startsWith(low(s).slice(0,3)));return d||''}
   return s;
 }
