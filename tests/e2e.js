@@ -195,28 +195,72 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   step('1y. Yetkili kişi: odak, silme');
   {await sel(page,'Sağlıklı Market');
-   await page.click('#ctEdit');ok(await page.evaluate(()=>document.activeElement&&document.activeElement.name)==='contact','"İletişimi düzenle": odak önce yetkili kişide');
+   const Y=async k=>((await INFO(page)).find(x=>x[0]===k)||[])[1];
+   await page.click('#ctEdit');ok(await page.evaluate(()=>document.activeElement&&document.activeElement.name)==='contact0','"İletişimi düzenle": odak önce yetkili kişide');
    await page.click('#ctCancel');
    ok(!!(await page.$('#ctform'))===false,'vazgeç formu kapatır');
-   const ct0=(await INFO(page)).find(x=>x[0]==='Yetkili')[1];ok(ct0&&ct0!=='–','başta yetkili var: '+ct0);
-   await page.click('#ctEdit');ok(!!(await page.$('#ctDel')),'"Yetkiliyi sil" butonu var');
-   page.once('dialog',d=>d.dismiss());await page.click('#ctDel');await page.waitForTimeout(100);
-   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]===ct0,'onay verilmezse silinmez');
-   page.once('dialog',d=>{ok(/silinsin mi/.test(d.message()),'onay soruluyor: '+d.message());d.accept()});await page.click('#ctDel');await page.waitForTimeout(150);
-   const k3=await doc(page,'contacts/c3');ok(k3&&k3.contact===''&&k3.phone==='06 12345678','yetkili silindi, telefon korundu');
-   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]==='–'&&!!(await page.$('#ctCall')),'kartta yetkili "–", Ara butonu duruyor');
-   ok(!(await page.$('#ctform')),'silince form kapanır');
+   const ct0=await Y('Yetkili');ok(ct0&&ct0!=='–','başta yetkili var: '+ct0);
+   await page.click('#ctEdit');ok(!!(await page.$('#ctform [data-ctdel="0"]')),'yetkilinin yanında "Sil" butonu var');
+   page.once('dialog',d=>d.dismiss());await page.click('#ctform [data-ctdel="0"]');await page.waitForTimeout(100);
+   ok(await Y('Yetkili')===ct0,'onay verilmezse silinmez');
+   page.once('dialog',d=>{ok(/silinsin mi/.test(d.message()),'onay soruluyor: '+d.message());d.accept()});await page.click('#ctform [data-ctdel="0"]');await page.waitForTimeout(150);
+   const k3=await doc(page,'contacts/c3');ok(k3&&k3.contact===''&&k3.phone==='','yetkili adı ve telefonuyla birlikte silindi: '+JSON.stringify(k3));
+   ok(await Y('Yetkili')==='–'&&await Y('Telefon')==='–'&&!(await page.$('#ctCall')),'kartta yetkili ve telefon "–"');
    // satış içe aktarması müşteri kaydını güncellese de silinen yetkili geri gelmez
    await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').update({updatedAt:Date.now()+60000})));await page.waitForTimeout(150);
-   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]==='–','müşteri kaydı sonradan güncellenince silinen yetkili geri gelmiyor');
+   ok(await Y('Yetkili')==='–','müşteri kaydı sonradan güncellenince silinen yetkili geri gelmiyor');
    // Excel'den yeni yetkili gelirse (ctAt daha yeni) o gösterilir
    await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').update({contact:'Yeni Yetkili',ctAt:Date.now()+60000})));await page.waitForTimeout(150);
-   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]==='Yeni Yetkili','Excel\'den sonradan gelen yeni yetkili gösterilir');
-   await page.click('#ctEdit');ok(await page.$eval('#ctform [name=contact]',e=>e.value)==='Yeni Yetkili','form yeni yetkiliyle açılır');await page.click('#ctCancel');
+   ok(await Y('Yetkili')==='Yeni Yetkili','Excel\'den sonradan gelen yeni yetkili gösterilir');
+   await page.click('#ctEdit');ok(await page.$eval('#ctform [name=contact0]',e=>e.value)==='Yeni Yetkili','form yeni yetkiliyle açılır');await page.click('#ctCancel');
    await page.evaluate(n=>window.claude.use('db').then(db=>Promise.all([db.collection('customers').doc('c3').update({contact:n,ctAt:0}),db.collection('contacts').doc('c3').delete()])),ct0);await page.waitForTimeout(150);
-   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]===ct0,'eski hâline döndü');
-   await sel(page,'Sessiz Market');await page.click('#ctEdit');ok(!(await page.$('#ctDel')),'yetkilisi olmayan müşteride sil butonu yok');
-   ok(await page.evaluate(()=>document.activeElement&&document.activeElement.name)==='contact','"Telefon / yetkili ekle": odak yetkili kişide');await page.click('#ctCancel');}
+   ok(await Y('Yetkili')===ct0&&await Y('Telefon')==='06 12345678','eski hâline döndü');
+   await sel(page,'Sessiz Market');await page.click('#ctEdit');ok(!(await page.$('#ctform [data-ctdel]')),'yetkilisi olmayan müşteride sil butonu yok');
+   ok(await page.evaluate(()=>document.activeElement&&document.activeElement.name)==='contact0','"Telefon / yetkili ekle": odak yetkili kişide');await page.click('#ctCancel');}
+
+  step('1w. En fazla 3 yetkili');
+  {await sel(page,'Sağlıklı Market');const ct0=((await INFO(page)).find(x=>x[0]==='Yetkili')||[])[1];
+   const Y=async()=>(await INFO(page)).filter(x=>/^(Yetkili|Telefon)/.test(x[0])).map(x=>x[0]+'='+x[1]);
+   await page.click('#ctEdit');
+   ok((await page.$$('#ctform .ctr')).length===1&&!!(await page.$('#ctAdd')),'başta 1 satır ve "+ Yetkili ekle"');
+   await page.click('#ctAdd');ok((await page.$$('#ctform .ctr')).length===2&&await page.evaluate(()=>document.activeElement.name)==='contact1','ikinci satır eklendi, odak yeni yetkilide');
+   await page.fill('#ctform [name=contact1]','Ayşe Hanım');await page.fill('#ctform [name=phone1]','06 22233344');
+   await page.click('#ctAdd');await page.fill('#ctform [name=contact2]','Ali Bey');await page.fill('#ctform [name=phone2]','12');
+   ok((await page.$$('#ctform .ctr')).length===3&&!(await page.$('#ctAdd'))&&/En fazla 3 yetkili/.test(await txt(page,'#ctform')),'3 satırda ekle butonu kalkar: "En fazla 3 yetkili"');
+   ok(await page.$eval('#ctform [name=contact1]',e=>e.value)==='Ayşe Hanım','satır eklenince girilenler korunur');
+   await page.click('#ctform button[type=submit]');ok(/3\. yetkilinin telefonu çok kısa/.test(await txt(page,'#toast')),'kısa telefon satır numarasıyla reddedildi: '+await txt(page,'#toast'));
+   await page.fill('#ctform [name=phone2]','');await page.click('#ctform button[type=submit]');await page.waitForTimeout(150);
+   const k=await doc(page,'contacts/c3');
+   ok(k&&k.contact===ct0&&k.phone==='06 12345678'&&JSON.stringify(k.more)===JSON.stringify([{contact:'Ayşe Hanım',phone:'06 22233344'},{contact:'Ali Bey',phone:''}]),'kaydedildi: ilk yetkili + 2 ek: '+JSON.stringify(k));
+   ok(JSON.stringify(await Y())===JSON.stringify(['Yetkili='+ct0,'Telefon=06 12345678','Yetkili 2=Ayşe Hanım','Telefon 2=06 22233344','Yetkili 3=Ali Bey','Telefon 3=–']),'kartta 3 yetkili: '+(await Y()).join(' · '));
+   ok(await page.$eval('#detail .info a[href="tel:0622233344"]',e=>e.textContent)==='06 22233344','2. yetkilinin telefonu aranabilir bağlantı');
+   const L=await INFO(page),at=x=>L.find(y=>y[0]===x);ok(at('Yetkili 2')[2]===at('Telefon 2')[2]&&at('Yetkili 2')[2]>at('Yetkili')[2]&&at('Rut günü')[2]>at('Yetkili 3')[2],'ek yetkililer Yetkili/Telefon çiftleri olarak, Rut gününden önce');
+   await page.fill('#q','ayşe');ok(JSON.stringify(await rows(page))==='["Sağlıklı Market"]','2. yetkilinin adıyla arama çalışıyor');await page.fill('#q','');await page.dispatchEvent('#q','input');
+   await sel(page,'Sağlıklı Market');
+   // ortadaki yetkiliyi sil: alttaki yukarı kayar
+   await page.click('#ctEdit');ok((await page.$$('#ctform .ctr')).length===3&&!(await page.$('#ctAdd')),'form 3 kayıtlı yetkiliyle açılır, ekle butonu yok');
+   page.once('dialog',d=>{ok(/Ayşe Hanım silinsin mi/.test(d.message()),'onay: '+d.message());d.accept()});await page.click('#ctform [data-ctdel="1"]');await page.waitForTimeout(150);
+   const k2=await doc(page,'contacts/c3');ok(k2.contact===ct0&&JSON.stringify(k2.more)===JSON.stringify([{contact:'Ali Bey',phone:''}]),'2. yetkili silindi, 3. yukarı kaydı: '+JSON.stringify(k2.more));
+   ok(JSON.stringify((await Y()).slice(2))===JSON.stringify(['Yetkili 2=Ali Bey','Telefon 2=–']),'kartta 2 yetkili kaldı');
+   // ilk yetkili silinirse ikincisi birinci olur
+   await page.click('#ctEdit');page.once('dialog',d=>d.accept());await page.click('#ctform [data-ctdel="0"]');await page.waitForTimeout(150);
+   const k1=await doc(page,'contacts/c3');ok(k1.contact==='Ali Bey'&&k1.phone===''&&JSON.stringify(k1.more)==='[]','ilk yetkili silinince ikinci birinci oldu: '+JSON.stringify(k1));
+   ok(JSON.stringify(await Y())===JSON.stringify(['Yetkili=Ali Bey','Telefon=–']),'kartta tek yetkili: '+(await Y()).join(' · '));
+   // kaydedilmemiş yeni satırı silmek yalnız satırı kaldırır
+   await page.click('#ctEdit');await page.click('#ctAdd');await page.fill('#ctform [name=contact1]','Geçici');await page.click('#ctAdd');await page.fill('#ctform [name=contact2]','Son');
+   await page.click('#ctform [data-ctdel="1"]');await page.waitForTimeout(100);
+   ok((await page.$$('#ctform .ctr')).length===2&&await page.$eval('#ctform [name=contact1]',e=>e.value)==='Son'&&JSON.stringify((await doc(page,'contacts/c3')).more)==='[]','kaydedilmemiş satır sorusuz kaldırıldı, alttaki yukarı kaydı, kayıt değişmedi');
+   await page.click('#ctCancel');
+   // en fazla 3: veritabanı da 3'ten fazlasını reddeder
+   const r=await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('contacts').doc('c3').set({contact:'a',phone:'',more:[{contact:'b'},{contact:'c'},{contact:'d'}],updatedAt:Date.now()})).then(()=>'kabul',e=>'red'));
+   ok(r==='red','3\'ten fazla yetkili veritabanında reddedilir');
+   // eski hâline döndür
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('contacts').doc('c3').delete()));await page.waitForTimeout(150);
+   ok(((await INFO(page)).find(x=>x[0]==='Yetkili')||[])[1]===ct0,'eski hâline döndü');
+   const {ctx:cm,page:pm}=await open(browser,{viewport:{width:390,height:844}});await sel(pm,'Sağlıklı Market');await pm.click('#ctEdit');await pm.click('#ctAdd');await pm.click('#ctAdd');
+   ok(await pm.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await pm.$$eval('#ctform input',a=>a.every(e=>e.getBoundingClientRect().right<=innerWidth)),'390 px: 3 satırlı form taşmıyor');
+   await pm.screenshot({path:path.join(SHOTS,'1w-yetkili-390.png'),fullPage:true});await cm.close();
+   await page.click('#ctEdit');await page.click('#ctAdd');await page.click('#ctAdd');await page.screenshot({path:path.join(SHOTS,'1w-yetkili.png')});await page.click('#ctCancel');}
 
   step('1z. Kart: yetkisiz kullanıcı ve telefon görünümü');
   {const {ctx:cx,page:pp}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'});
@@ -253,9 +297,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(!(await page.$('#ctCall'))&&!!(await page.$('#ctMap')),'telefonu yoksa yalnız yol tarifi; adres yoksa ada göre arar');
   ok(decodeURIComponent(await page.getAttribute('#ctMap','href')).includes('Sessiz Market'),'adres yoksa market adı kullanılıyor');
   await page.click('#ctEdit');
-  await page.fill('#ctform [name=phone]','123');await page.click('#ctform button[type=submit]');
+  await page.fill('#ctform [name=phone0]','123');await page.click('#ctform button[type=submit]');
   ok(/çok kısa/.test(await txt(page,'#toast')),'kısa numara reddedildi');
-  await page.fill('#ctform [name=phone]','06 11122233');await page.fill('#ctform [name=contact]','Mehmet Usta');
+  await page.fill('#ctform [name=phone0]','06 11122233');await page.fill('#ctform [name=contact0]','Mehmet Usta');
   await page.click('#ctform button[type=submit]');await page.waitForTimeout(100);
   const k=await doc(page,'contacts/c2');
   ok(k&&k.phone==='06 11122233'&&k.contact==='Mehmet Usta','iletişim bilgisi "contacts" koleksiyonuna kaydedildi');
