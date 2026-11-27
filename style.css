@@ -287,8 +287,10 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .stat b .stnum{font-style:normal}.stat b .stunit{font:600 14px "Instrument Sans",system-ui,sans-serif;margin-left:6px;vertical-align:baseline;white-space:nowrap}
 
 /* Vade Takibi: iki tablo aynı sütun genişlikleriyle (dikeyde hizalı) */
-@media(min-width:601px){.vt{table-layout:fixed}.vt th:nth-child(1){width:44px}.vt th:nth-child(2){width:28%}.vt th:nth-child(3){width:17%}.vt th:nth-child(4){width:13%}.vt th:nth-child(5){width:9%}.vt th:nth-child(6){width:19%}.vt td,.vt th{overflow:hidden;text-overflow:ellipsis}#duT td:nth-child(6),#duT th:nth-child(6){text-align:right}}
+@media(min-width:601px){.vt{table-layout:fixed}.vt th:nth-child(1){width:44px}.vt th:nth-child(2){width:28%}.vt th:nth-child(3){width:17%}.vt th:nth-child(4){width:13%}.vt th:nth-child(5){width:9%}.vt th:nth-child(6){width:19%}.vt td,.vt th{overflow:hidden;text-overflow:ellipsis}}
 @media(max-width:600px){#duT th:nth-child(7),#duT td:nth-child(7){display:none}}
+
+#duT td:nth-child(6),#duT th:nth-child(6){text-align:left}
 
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){

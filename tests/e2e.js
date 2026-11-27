@@ -325,7 +325,10 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
     // iki tablonun sütunları dikeyde aynı hizada (masaüstü)
     const X=q=>page.$$eval(q+' thead th',t=>t.slice(0,6).map(x=>{const r=x.getBoundingClientRect();return [Math.round(r.left),Math.round(r.right)]}));
     const a=await X('#odT'),b=await X('#duT');ok(a.every((v,i)=>Math.abs(v[0]-b[i][0])<=1&&Math.abs(v[1]-b[i][1])<=1),'iki tablonun sütunları aynı hizada: '+JSON.stringify([a,b]));
-    const R=q=>page.$eval(q,e=>Math.round(e.getBoundingClientRect().right));ok(Math.abs(await R('#odT')-await R('#duT'))<=1,'tablo genişlikleri aynı');}
+    const R=q=>page.$eval(q,e=>Math.round(e.getBoundingClientRect().right));ok(Math.abs(await R('#odT')-await R('#duT'))<=1,'tablo genişlikleri aynı');
+    // Vade Tarihi sütunu soldan hizalı: başlık ve her satırdaki tarih aynı sol kenarda başlar
+    const L=await page.$$eval('#duT tr > :nth-child(6)',t=>t.slice(0,-1).map(x=>{const r=document.createRange();r.setStart(x,0);r.setEnd(x,Math.min(1,x.childNodes.length));const b=(x.querySelector('.ddt')||x).getBoundingClientRect();return [getComputedStyle(x).textAlign,Math.round(x.querySelector('.ddt')?b.left:r.getBoundingClientRect().left)]}));
+    ok(L.length>=2&&L.every(([a,x])=>a==='left'&&Math.abs(x-L[0][1])<=1),'Vade Tarihi sütunu soldan hizalı: '+JSON.stringify(L));}
    await page.click('[data-ovf=arag]');ok(/Bu süzgeçte müşteri yok/.test(await txt(page,'#overdue')),'ARAG süzgeci başta boş');
    await page.click('[data-ovf=all]');
    // açık fatura dosyasında olup CRM'de olmayan kodlar ayrı bölümde
