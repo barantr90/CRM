@@ -110,7 +110,15 @@ let CALL=[],C=[],A=[],D={last:{},open:{}},RET=null,OI=null,AR={},MON=null,K={},R
    Excel tarafının zamanı ctAt: yalnız Excel'den yetkili/telefon değişince yazılır (satış içe aktarması dokunmaz).
    Temsilcinin boşalttığı alan (ör. yetkiliyi sil) Excel'de daha yeni bir değer gelene kadar boş kalır. */
 const pick=(a,ta,b,tb)=>typeof a==='string'&&ta>=tb?a:(b||a||'');
-const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.ctAt||0;return {phone:pick(k.phone,tk,c.phone,tc),contact:pick(k.contact,tk,c.contact,tc)}};
+/* Bir müşteride en fazla MAXCT yetkili: ilki Excel'deki Yetkili/Telefon ile eşleşir, diğerleri yalnız contacts.more'da tutulur. */
+const MAXCT=3;
+const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.ctAt||0,phone=pick(k.phone,tk,c.phone,tc),contact=pick(k.contact,tk,c.contact,tc);
+  const more=(Array.isArray(k.more)?k.more:[]).map(x=>({contact:String((x&&x.contact)||''),phone:String((x&&x.phone)||'')})).filter(x=>x.contact||x.phone).slice(0,MAXCT-1);
+  const list=[...(contact||phone?[{contact,phone}]:[]),...more];
+  return {phone,contact,more,list,call:(list.find(x=>x.phone)||{}).phone||''}};
+// iletişim listesini contacts kaydına çevirir: boş satırlar atılır, ilk satır ana yetkili olur
+const ctDoc=rows=>{const L=rows.map(x=>({contact:String(x.contact||'').trim(),phone:String(x.phone||'').trim()})).filter(x=>x.contact||x.phone).slice(0,MAXCT);
+  return {contact:(L[0]||{}).contact||'',phone:(L[0]||{}).phone||'',more:L.slice(1),updatedAt:Date.now(),by:window.CRM_USER||''}};
 const waNum=p=>{let s=String(p||'').replace(/[^\d+]/g,'');if(s.startsWith('+'))s=s.slice(1);else if(s.startsWith('00'))s=s.slice(2);else if(s.startsWith('0'))s='31'+s.slice(1);else if(/^6\d{8}$/.test(s))s='31'+s;return s.replace(/\D/g,'')};
 const telHref=p=>'tel:'+String(p||'').replace(/[^+\d]/g,'');
 const mapsHref=c=>'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent([c.address||c.name,c.postcode,c.city,'Nederland'].filter(Boolean).join(', '));
@@ -387,7 +395,7 @@ const isDue=c=>(D.open[c.id]||[]).some(a=>a.nextDate<=TODAY);
 
 function visible(){
   const q=low(st.q);
-  let r=C.filter(c=>(!st.rep||c.rep===st.rep)&&(!st.seg||(st.seg==='__bos'?!c.segment:c.segment===st.seg))&&(!st.status||(c.status||'')===st.status)&&(!st.chain||(st.chain==='__any'?!!chainOf(c):chainOf(c)===st.chain))&&(!q||low([c.name,c.chain,c.city,c.postcode,ctOf(c).contact,c.address].join(' ')).includes(q)));
+  let r=C.filter(c=>(!st.rep||c.rep===st.rep)&&(!st.seg||(st.seg==='__bos'?!c.segment:c.segment===st.seg))&&(!st.status||(c.status||'')===st.status)&&(!st.chain||(st.chain==='__any'?!!chainOf(c):chainOf(c)===st.chain))&&(!q||low([c.name,c.chain,c.city,c.postcode,...ctOf(c).list.map(x=>x.contact),c.address].join(' ')).includes(q)));
   if(st.quick==='route')r=r.filter(c=>TODAYNAME&&c.visitDay===TODAYNAME);
   if(st.quick==='due')r=r.filter(isDue);
   if(st.quick==='cold')r=r.filter(isCold);
@@ -477,7 +485,7 @@ function renderDetail(){
   const acts=A.filter(a=>a.customerId===c.id).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||(b.createdAt||0)-(a.createdAt||0));
   const reps=allReps();if(c.rep&&!reps.includes(c.rep))reps.push(c.rep);
   const lastD=D.last[c.id],iv=inv(c),ct=ctOf(c),rk=RK[c.id],rt=retOf(c),oi=oiOf(c);
-  const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],['Yetkili',ct.contact],['Telefon',ct.phone],['Rut günü',c.visitDay],['Ziyaret sıklığı',[c.freq,c.weeks&&c.freq!=='Haftalık'?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Merch',c.merch],['Dizim',c.dizim],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],[`${CY} net satış`,iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
+  const info=[['Adres',[c.address,c.postcode,c.city].filter(Boolean).join(', ')],...(ct.list.length?ct.list:[{contact:'',phone:''}]).flatMap((x,i)=>[['Yetkili'+(i?' '+(i+1):''),x.contact],['Telefon'+(i?' '+(i+1):''),x.phone]]),['Rut günü',c.visitDay],['Ziyaret sıklığı',[c.freq,c.weeks&&c.freq!=='Haftalık'?'hafta '+c.weeks:''].filter(Boolean).join(' · ')],['Merch',c.merch],['Dizim',c.dizim],['Ödeme vadesi',c.pay],['Son temas',lastD?`${fmt(lastD)} (${ago(lastD)===0?'bugün':ago(lastD)+' gün önce'})`:''],['Son fatura',iv&&iv.last?`${fmt(iv.last)} (${ago(iv.last)} gün önce)${iv.no?' · '+iv.no:''}`:''],[`${CY} net satış`,iv?[iv.sales!=null&&iv.sales!==''?eur(iv.sales):'',iv.n!=null&&iv.n!==''?iv.n+' fatura':''].filter(Boolean).join(' · '):'']];
   const ve=canVisit(),vs=(k,opts,v,lab)=>`<select class="vsel" data-vk="${k}" data-cid="${esc(c.id)}" aria-label="${lab}">${k==='weeks'&&opts.includes(v)?'':`<option value="">${k==='weeks'?'hafta –':'–'}</option>`}${opts.map(o=>`<option value="${esc(o)}"${o===(v||'')?' selected':''}>${k==='weeks'?'hafta ':''}${esc(o)}</option>`).join('')}</select>`;
   const wk=WEEKS_OF[c.freq]||[];
   const ddv=(k,v)=>!ve?null:k==='Rut günü'?vs('visitDay',DAYS,c.visitDay,'Rut günü'):k==='Ziyaret sıklığı'?vs('freq',FREQS,c.freq,'Ziyaret sıklığı')+(wk.length>1?vs('weeks',wk,c.weeks,'Ziyaret haftaları'):''):k==='Merch'?vs('merch',VY,c.merch,'Merch'):k==='Dizim'?vs('dizim',VY,c.dizim,'Dizim'):null;
@@ -487,15 +495,17 @@ function renderDetail(){
   ${rk?`<p class="alert" id="riskAlert">Kayıp riski: ${esc(riskText(rk))}</p>`:''}${oi&&oi.od>0?`<p class="alert" id="odAlert">Vadesi geçmiş açık fatura: ${eur(oi.od)} · ${oi.odn} fatura, en eski ${oi.odMax} gün</p>`:''}${aragHtml(c,oi)}${rt&&rt.warn?`<p class="alert" id="retAlert">Yüksek iade: satışın %${pct1(rt.p)}${pctEk(pct1(rt.p))} iade (${eur(Math.abs(rt.iade))} / ${eur(rt.sales)})</p>`:''}
   ${ctaHtml(c,ct)}
   ${chainHtml(c)}
-  <dl class="info">${info.map(([k,v])=>`<div${k==='Adres'?' class="full"':''}><dt>${k}</dt><dd${(k==='Merch'||k==='Dizim')&&v?` class="${v==='Var'?'yes':'no'}"`:''}>${ddv(k,v)??(k==='Telefon'&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–'))}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
+  <dl class="info">${info.map(([k,v])=>`<div${k==='Adres'?' class="full"':''}><dt>${k}</dt><dd${(k==='Merch'||k==='Dizim')&&v?` class="${v==='Var'?'yes':'no'}"`:''}>${ddv(k,v)??(/^Telefon/.test(k)&&v?`<a href="${esc(telHref(v))}">${esc(v)}</a>`:esc(v||'–'))}</dd></div>`).join('')}${cmpRow(c)}${retRows(c)}</dl>
   ${oiHtml(c)}
   ${VISIT_LOG&&canNote()?visitForm(c):''}
   ${VISIT_LOG?`<h3>Geçmiş</h3><ol class="tl">${acts.length?acts.map(actRow).join(''):'<li class="empty">Henüz kayıt yok.</li>'}</ol>`:''}`;
 }
 function ctaHtml(c,ct){
-  const edit=st.ctEdit===c.id;
-  return `<div class="cta">${ct.phone?`<a class="call" id="ctCall" href="${esc(telHref(ct.phone))}">Ara</a><a id="ctWa" href="https://wa.me/${esc(waNum(ct.phone))}" target="_blank" rel="noopener">WhatsApp</a>`:''}<a id="ctMap" href="${esc(mapsHref(c))}" target="_blank" rel="noopener">Yol tarifi</a>${canWrite&&can('e_notes')&&!edit?`<button type="button" id="ctEdit">${ct.phone||ct.contact?'İletişimi düzenle':'Telefon / yetkili ekle'}</button>`:''}</div>
-  ${edit?`<form class="ctf" id="ctform" autocomplete="off"><label>Yetkili kişi<input name="contact" value="${esc(ct.contact)}"></label><label>Telefon<input name="phone" type="tel" inputmode="tel" placeholder="06 12345678" value="${esc(ct.phone)}"></label><button class="primary" type="submit">Kaydet</button><button class="ghost" type="button" id="ctCancel">Vazgeç</button>${ct.contact?'<button class="ghost danger" type="button" id="ctDel">Yetkiliyi sil</button>':''}</form>`:''}`;
+  const edit=st.ctEdit===c.id,n=Math.min(MAXCT,Math.max(1,st.ctN||ct.list.length));
+  const row=i=>{const x=ct.list[i]||{contact:'',phone:''},no=i?' '+(i+1):'';
+    return `<div class="ctr"><label>Yetkili kişi${no}<input name="contact${i}" value="${esc(x.contact)}"></label><label>Telefon${no}<input name="phone${i}" type="tel" inputmode="tel" placeholder="06 12345678" value="${esc(x.phone)}"></label>${i<ct.list.length||i>0?`<button class="ghost danger" type="button" data-ctdel="${i}" aria-label="Yetkili${no} sil">Sil</button>`:'<span></span>'}</div>`};
+  return `<div class="cta">${ct.call?`<a class="call" id="ctCall" href="${esc(telHref(ct.call))}">Ara</a><a id="ctWa" href="https://wa.me/${esc(waNum(ct.call))}" target="_blank" rel="noopener">WhatsApp</a>`:''}<a id="ctMap" href="${esc(mapsHref(c))}" target="_blank" rel="noopener">Yol tarifi</a>${canWrite&&can('e_notes')&&!edit?`<button type="button" id="ctEdit">${ct.list.length?'İletişimi düzenle':'Telefon / yetkili ekle'}</button>`:''}</div>
+  ${edit?`<form class="ctf" id="ctform" autocomplete="off">${Array.from({length:n},(_,i)=>row(i)).join('')}<div class="ctb">${n<MAXCT?'<button class="ghost" type="button" id="ctAdd">+ Yetkili ekle</button>':`<small class="ctmax">En fazla ${MAXCT} yetkili</small>`}<button class="primary" type="submit">Kaydet</button><button class="ghost" type="button" id="ctCancel">Vazgeç</button></div></form>`:''}`;
 }
 function visitForm(c){
   const due=(D.open[c.id]||[]).filter(a=>a.nextDate<=TODAY);
@@ -536,7 +546,7 @@ function renderBoard(){
       a7:A.filter(a=>repOf(a)===r&&a.date>=d7).length,a30:A.filter(a=>repOf(a)===r&&a.date>=d30).length,
       late:A.filter(a=>repOf(a)===r&&a.nextDate&&!a.done&&a.nextDate<TODAY&&cm[a.customerId]).length,
       rk:cs.filter(c=>RK[c.id]).length,rkv:cs.reduce((a,c)=>a+(RK[c.id]?RK[c.id].val:0),0),
-      np:cs.filter(c=>c.status!=='Pasif'&&!ctOf(c).phone).length};
+      np:cs.filter(c=>c.status!=='Pasif'&&!ctOf(c).call).length};
     return o}).filter(o=>o.n||o.t);
   for(const o of rows)for(const k in T)T[k]+=o[k]||0;
   T.s26b=rows.reduce((a,o)=>a+o.s26b,0);
@@ -1127,13 +1137,17 @@ document.addEventListener('click',async e=>{
   if(t.dataset.view){umOpen(false);if(st.view==='admin'&&t.dataset.view!=='admin'&&st.rdirty){if(!confirm('Kaydedilmemiş ayar değişiklikleri silinsin mi?'))return;st.rdirty=false}
     if(st.view==='perms'&&t.dataset.view!=='perms'&&st.pdirty){if(!confirm('Kaydedilmemiş izin değişiklikleri silinsin mi?'))return;st.pdirty=false}
     if(t.dataset.view==='perms')UL=null;st.view=t.dataset.view;saveUi();render();if(t.closest('#umDrop'))scrollTo({top:$('nav.tabs').offsetTop-8,behavior:'smooth'});return}
-  if(t.id==='ctEdit'){st.ctEdit=st.sel;render();const f=$('#ctform');if(f)f.elements.contact.focus();return}
-  if(t.id==='ctDel'){if(!canNote()){toast('İletişim bilgisi düzenleme izniniz yok.',1);return}
-    const c=C.find(x=>x.id===st.sel);if(!c)return;const ct=ctOf(c);if(!ct.contact)return;
-    if(!confirm(`${ct.contact} yetkili kişi olarak silinsin mi? Telefon numarası korunur.`))return;
-    if(await w(()=>db.collection('contacts').doc(c.id).set({phone:ct.phone,contact:'',updatedAt:Date.now(),by:window.CRM_USER||''}))){st.ctEdit=null;st.formFor=null;toast('Yetkili kişi silindi');render()}
+  if(t.id==='ctEdit'){const c=C.find(x=>x.id===st.sel);st.ctEdit=st.sel;st.ctN=c?Math.max(1,ctOf(c).list.length):1;st.formFor=null;render();const f=$('#ctform');if(f)f.elements.contact0.focus();return}
+  if(t.id==='ctAdd'){const f=$('#ctform');if(!f)return;const n=f.querySelectorAll('.ctr').length;if(n>=MAXCT)return;st.ctN=n+1;render();const g=$('#ctform');if(g&&g.elements['contact'+n])g.elements['contact'+n].focus();return}
+  if(t.dataset.ctdel!==undefined){if(!canNote()){toast('İletişim bilgisi düzenleme izniniz yok.',1);return}
+    const c=C.find(x=>x.id===st.sel),f=$('#ctform');if(!c||!f)return;const i=+t.dataset.ctdel,ct=ctOf(c);
+    if(i>=ct.list.length){// kaydedilmemiş satır: yalnız formdan kaldır, alttakiler yukarı kayar
+      const n=f.querySelectorAll('.ctr').length;for(let j=i;j<n-1;j++)for(const k of ['contact','phone'])f.elements[k+j].value=f.elements[k+(j+1)].value;
+      st.ctN=Math.max(1,n-1);render();return}
+    const x=ct.list[i];if(!confirm(`${x.contact||x.phone} silinsin mi? Yetkilinin adı ve telefonu birlikte silinir.`))return;
+    if(await w(()=>db.collection('contacts').doc(c.id).set(ctDoc(ct.list.filter((_,j)=>j!==i))))){st.ctEdit=null;st.ctN=0;st.formFor=null;toast('Yetkili silindi');render()}
     return}
-  if(t.id==='ctCancel'){st.ctEdit=null;render();return}
+  if(t.id==='ctCancel'){st.ctEdit=null;st.ctN=0;render();return}
   if(t.dataset.nd!==undefined){const f=t.closest('form');const n=+t.dataset.nd;f.elements.nextDate.value=n?addDays(n):'';f.elements.nextDate.dataset.touched='1';if(!n){f.elements.nextAction.value='';f.elements.nextAction.dataset.touched='1'}else if(!f.elements.nextAction.value)f.elements.nextAction.value='Takip';return}
   if(t.dataset.brep!==undefined){st.rep=t.dataset.brep;st.view='list';st.quick='';st.ord=false;saveUi();render();return}
   if(t.dataset.brisk!==undefined){st.rep=t.dataset.brisk;st.view='list';st.quick='risk';st.ord=false;saveUi();render();return}
@@ -1230,9 +1244,10 @@ document.addEventListener('submit',async e=>{
   if(f.id==='ctform'){
     if(!can('e_notes')){toast('İletişim bilgisi düzenleme izniniz yok.',1);return}
     const c=C.find(x=>x.id===st.sel);if(!c)return;
-    const phone=String(f.elements.phone.value||'').trim(),contact=String(f.elements.contact.value||'').trim();
-    if(phone&&String(phone).replace(/\D/g,'').length<8){toast('Telefon numarası çok kısa görünüyor.',1);return}
-    if(await w(()=>db.collection('contacts').doc(c.id).set({phone,contact,updatedAt:Date.now(),by:window.CRM_USER||''}))){st.ctEdit=null;st.formFor=null;toast('İletişim bilgisi kaydedildi');render()}
+    const rows=[...f.querySelectorAll('.ctr')].map((_,i)=>({contact:String(f.elements['contact'+i].value||'').trim(),phone:String(f.elements['phone'+i].value||'').trim()}));
+    const bad=rows.findIndex(x=>x.phone&&x.phone.replace(/\D/g,'').length<8);
+    if(bad>=0){toast(`${bad+1}. yetkilinin telefonu çok kısa görünüyor.`,1);f.elements['phone'+bad].focus();return}
+    if(await w(()=>db.collection('contacts').doc(c.id).set(ctDoc(rows)))){st.ctEdit=null;st.ctN=0;st.formFor=null;toast('İletişim bilgisi kaydedildi');render()}
     return}
   if(f.id==='qform'){
     if(!can('e_targets')){toast('Hedef girme izniniz yok.',1);return}

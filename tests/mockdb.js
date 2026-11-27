@@ -12,7 +12,7 @@
     const key=col+'/'+id;
     return {id,
       async get(){const d=store.get(key);return {id,exists:d!==undefined,data:()=>clone(d)}},
-      async set(d){if(window.__failWrites)throw Object.assign(new Error('fail'),{code:'x'});store.set(key,clone(d));window.__writes.push(['set',key,clone(d)]);emit(col)},
+      async set(d){if(window.__failWrites)throw Object.assign(new Error('fail'),{code:'x'});if(col==='contacts'&&d.more!=null&&!(Array.isArray(d.more)&&d.more.length<=2))throw new Error('contacts_more_max');store.set(key,clone(d));window.__writes.push(['set',key,clone(d)]);emit(col)},
       async update(p){if(!store.has(key))throw new Error('not found');store.set(key,{...store.get(key),...clone(p)});window.__writes.push(['update',key,clone(p)]);emit(col)},
       async delete(){store.delete(key);window.__writes.push(['delete',key]);emit(col)},
       onSnapshot(cb){const f=c=>{if(c===col)this.get().then(cb)};this.get().then(cb);listeners.add(f);return()=>listeners.delete(f)}

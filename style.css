@@ -299,7 +299,13 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .info .vsel{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;min-height:34px;padding:0 6px;width:auto;max-width:100%;margin:2px 0}.info dd:has(.vsel){display:flex;flex-wrap:wrap;gap:4px 6px}
 .info dd.yes .vsel{color:light-dark(#2e7d32,#7cc47f);font-weight:700}.info dd.no .vsel{color:var(--mut)}
 .ctf .danger{color:var(--bad);border-color:var(--bad)}
-@media(min-width:601px){.ctf:has(#ctDel){grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto auto}}
+
+/* iletişim formu: en fazla 3 yetkili satırı (ad, telefon, sil) ve altta butonlar */
+.ctf{grid-template-columns:minmax(0,1fr)}
+.ctf .ctr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}
+.ctf .ctr>span{width:54px}
+.ctf .ctb{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ctf .ctb .primary{margin-left:auto}.ctf .ctmax{color:var(--mut);font-size:13px}
+@media(max-width:600px){.ctf .ctr{grid-template-columns:minmax(0,1fr) auto}.ctf .ctr label:first-child{grid-column:1/-1}.ctf .ctr>span{display:none}.ctf .ctr+.ctr{border-top:1px solid var(--line);padding-top:8px}.ctf .ctb .primary{margin-left:0}}
 
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){
@@ -405,5 +411,6 @@ dd{font-size:12px}
 #duT{font-size:11px}
 .stat b .stunit{font-size:12px}
 .dh .drep{font-size:12px}
+.ctf .ctmax{font-size:11px}
 }
 /* /TELEFON PUNTOSU */
