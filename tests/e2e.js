@@ -260,6 +260,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   {await page.fill('#q','');await page.dispatchEvent('#q','input');
    const od=await page.$('[data-quick=od]');ok(!!od,'"Vadesi geçen" kutusu var');
    ok(+(await txt(page,'[data-quick=od] b'))===1&&/€ 1\.201/.test(await txt(page,'[data-quick=od] span')),'kutu: 1 müşteri · '+await txt(page,'[data-quick=od] span'));
+   {const T0=await page.evaluate(()=>window.__FIX.TODAY),in5=(await page.evaluate(()=>window.__FIX.day(5))).slice(0,7)===T0.slice(0,7);
+    ok(await txt(page,'[data-quick=od] #odDue')===`Bu ay vadesi gelecek: € ${in5?'1.350':'450'}`,'kutuda bu ay vadesi gelecek tutar: '+await txt(page,'#odDue'));
+    await page.click('.chip[data-rep="Lütfi Kaplan"]');ok(await txt(page,'#odDue')===`Bu ay vadesi gelecek: € ${in5?'900':'0'}`,'kutudaki tutar temsilci seçimine uyuyor: '+await txt(page,'#odDue'));await page.click('.chip[data-rep=""]');}
    ok(/vade 40 gün/.test(await txt(page,'#list .row[data-id="c1"] .lc')),'listede etiket: vade 40 gün');
    await page.click('[data-quick=od]');ok(JSON.stringify(await rows(page))===JSON.stringify(['Düşüş Market']),'filtre yalnız vadesi geçeni gösteriyor');
    ok(/1\.201 vadesi geçmiş · en eski 40 gün/.test(await txt(page,'#list .row small')),'filtrede alt satır tutar ve gün');
@@ -302,6 +305,13 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
     await page.click('.chip[data-rep="Mehmet Halici"]');await page.click('#tabV');
     ok(JSON.stringify(await page.$$eval('#duT tbody tr td:nth-child(2)',t=>t.map(x=>x.textContent)))==='["Sağlıklı Market"]','temsilci seçimine uyuyor');
     await page.click('.chip[data-rep=""]');await page.click('#tabV');}
+   {const ft=async q=>page.$$eval(q+' tfoot td',t=>t.map(x=>x.textContent.replace(/\u00a0/g,' ').trim()));
+    const T0=await page.evaluate(()=>window.__FIX.TODAY),in5=(await page.evaluate(()=>window.__FIX.day(5))).slice(0,7)===T0.slice(0,7);
+    ok(JSON.stringify(await ft('#odT'))==='["","Toplam","","€ 1.201","1","",""]','Vadesi geçen tablosunda toplam: '+JSON.stringify(await ft('#odT')));
+    ok(JSON.stringify(await ft('#duT'))===JSON.stringify(['','Toplam','',in5?'€ 1.350':'€ 450',in5?'2':'1','']),'Bu ay vadesi gelecek tablosunda toplam: '+JSON.stringify(await ft('#duT')));
+    ok(JSON.stringify(await ft('#odOrph'))==='["Toplam","−€ 30,00","€ 10,00","2",""]','CRM\'de olmayan kodlar tablosunda toplam: '+JSON.stringify(await ft('#odOrph')));
+    const bb=q=>page.$eval(q+' tbody tr:last-child td',e=>getComputedStyle(e).borderBottomWidth);
+    ok(await bb('#odT')==='0px'&&await bb('#duT')==='0px'&&await bb('#odOrph')==='0px','tablolarda son satırın altında çizgi yok');}
    await page.click('[data-ovf=arag]');ok(/Bu süzgeçte müşteri yok/.test(await txt(page,'#overdue')),'ARAG süzgeci başta boş');
    await page.click('[data-ovf=all]');
    // açık fatura dosyasında olup CRM'de olmayan kodlar ayrı bölümde
@@ -803,7 +813,11 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(/Aylık ortalama satış €\s[\d.]+ × \(vade 30 \+ 15 gün\) ÷ 30 × 50%/.test(await page.getAttribute('#crT tbody tr td:nth-child(9)','title')),'hesap ipucunda gösteriliyor: '+await page.getAttribute('#crT tbody tr td:nth-child(9)','title'));
    await page.click('[data-crf=nolim]');
    ok(JSON.stringify(await page.$$eval('#crT tbody tr td:nth-child(2)',t=>t.map(x=>x.textContent.trim())))==='["Sağlıklı Market"]','Limit tanımsız: Sağlıklı Market (bakiye € 450)');
-   await page.click('[data-crf=all]');ok((await page.$$('#crT tbody tr')).length===2,'Tümü: açık bakiyesi olan 2 müşteri');
+   await page.click('[data-crf=all]');
+   {const f=await page.$$eval('#crT tfoot td',t=>t.map(x=>x.textContent.replace(/\u00a0/g,' ').trim()));
+    ok(f[1]==='Toplam'&&f[4]==='€ 2.000'&&f[5]==='€ 2.470'&&f[6]==='€ 20'&&f[7]==='€ 1.201','Kredi Limiti toplamı (Tümü: 2 müşteri): '+JSON.stringify(f));
+    ok(await page.$eval('#crT tbody tr:last-child td',e=>getComputedStyle(e).borderBottomWidth)==='0px','Kredi Limiti: son satırın altında çizgi yok');}
+   ok((await page.$$('#crT tbody tr')).length===2,'Tümü: açık bakiyesi olan 2 müşteri');
    await page.screenshot({path:path.join(SHOTS,'12-kredi.png'),fullPage:true});
    await page.click('[data-crf=over]');
    // ayardan ek gün ve kesinti
