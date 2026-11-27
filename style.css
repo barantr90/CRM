@@ -280,11 +280,15 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 @media(max-width:600px){#sT th,#sT td{padding-left:4px;padding-right:4px}#smodal .ordp{padding:8px}}
 
 #duT td.rk,#duT th:first-child{width:36px;color:var(--mut)!important;font-weight:400;text-align:right}#duT td:nth-child(2),#duT th:nth-child(2),#duT td:nth-child(3),#duT th:nth-child(3){text-align:left}#duT td{font-variant-numeric:tabular-nums}#duT .ddl{color:var(--mut)}#duT tr.soon .ddl{color:var(--acc);font-weight:700}
-@media(max-width:600px){#duT td:nth-child(2){white-space:normal}#duT th:nth-child(1),#duT td:nth-child(1),#duT th:nth-child(3),#duT td:nth-child(3),#duT th:nth-child(5),#duT td:nth-child(5){display:none}#duT th,#duT td{padding-left:4px;padding-right:4px}#duT th{white-space:normal}#duT td:last-child small{display:block}}
+@media(max-width:600px){#duT td:nth-child(2){white-space:normal}#duT th:nth-child(1),#duT td:nth-child(1),#duT th:nth-child(3),#duT td:nth-child(3),#duT th:nth-child(5),#duT td:nth-child(5){display:none}#duT th,#duT td{padding-left:4px;padding-right:4px}#duT th{white-space:normal}#duT td:nth-child(6) small{display:block}#duT{font-size:13px}}
 
 .ordp tbody tr:last-child td{border-bottom:0}.ordp tfoot td{padding-top:10px}
 
 .stat b .stnum{font-style:normal}.stat b .stunit{font:600 14px "Instrument Sans",system-ui,sans-serif;margin-left:6px;vertical-align:baseline;white-space:nowrap}
+
+/* Vade Takibi: iki tablo aynı sütun genişlikleriyle (dikeyde hizalı) */
+@media(min-width:601px){.vt{table-layout:fixed}.vt th:nth-child(1){width:44px}.vt th:nth-child(2){width:28%}.vt th:nth-child(3){width:17%}.vt th:nth-child(4){width:13%}.vt th:nth-child(5){width:9%}.vt th:nth-child(6){width:19%}.vt td,.vt th{overflow:hidden;text-overflow:ellipsis}#duT td:nth-child(6),#duT th:nth-child(6){text-align:right}}
+@media(max-width:600px){#duT th:nth-child(7),#duT td:nth-child(7){display:none}}
 
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){
@@ -387,6 +391,7 @@ dd{font-size:12px}
 .uadd input, .uadd select{font-size:13px}
 #pT th, #pT td{font-size:11px}
 #odOrph{font-size:11px}
+#duT{font-size:11px}
 .stat b .stunit{font-size:12px}
 }
 /* /TELEFON PUNTOSU */
