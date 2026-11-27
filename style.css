@@ -292,6 +292,15 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 
 #duT td:nth-child(7){text-align:left}
 
+/* müşteri kartı: temsilci adın altında, adres tam satır, rut/ziyaret/merch/dizim seçim kutuları */
+.dh .drep{margin:2px 0 6px;color:var(--mut);font-size:14px}
+.info div.full{grid-column:1/-1}
+@media(max-width:600px){.info{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}.info dd{overflow-wrap:anywhere}}
+.info .vsel{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;min-height:34px;padding:0 6px;width:auto;max-width:100%;margin:2px 0}.info dd:has(.vsel){display:flex;flex-wrap:wrap;gap:4px 6px}
+.info dd.yes .vsel{color:light-dark(#2e7d32,#7cc47f);font-weight:700}.info dd.no .vsel{color:var(--mut)}
+.ctf .danger{color:var(--bad);border-color:var(--bad)}
+@media(min-width:601px){.ctf:has(#ctDel){grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto auto}}
+
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){
 .umd .who small{font-size:11px}
@@ -395,5 +404,6 @@ dd{font-size:12px}
 #odOrph{font-size:11px}
 #duT{font-size:11px}
 .stat b .stunit{font-size:12px}
+.dh .drep{font-size:12px}
 }
 /* /TELEFON PUNTOSU */

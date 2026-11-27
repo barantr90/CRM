@@ -32,7 +32,16 @@
   }
   const db={collection,doc(p){const [c,i]=p.split('/');return docRef(c,i)}};
   // sunucudaki import_sales() fonksiyonunun bellek içi karşılığı (tek işlemde yazar)
-  db.rpc=async(name,{p})=>{
+  // sunucudaki set_visit() karşılığı: yalnız rut günü, ziyaret sıklığı/haftaları, merch ve dizim; değerler listeden
+  const VIS={visitDay:['','Pazartesi','Salı','Çarşamba','Perşembe','Cuma'],freq:['','Haftalık','2 haftada 1','4 haftada 1'],weeks:['','1, 2, 3, 4','1, 3','2, 4','1','2','3','4'],merch:['','Var','Yok'],dizim:['','Var','Yok']};
+  const WOF={'':[''],'Haftalık':['1, 2, 3, 4'],'2 haftada 1':['1, 3','2, 4'],'4 haftada 1':['1','2','3','4']};
+  db.rpc=async(name,args)=>{
+    if(name==='set_visit'){const {cid,p}=args;if(window.__failWrites)throw new Error('fail');
+      const cur=store.get('customers/'+cid);if(!cur)throw new Error('müşteri yok');
+      for(const [k,v] of Object.entries(p))if(!VIS[k]||!VIS[k].includes(v))throw new Error('geçersiz değer: '+k);
+      const x={...cur,...p,visitAt:Date.now()};if(('freq' in p||'weeks' in p)&&!(WOF[x.freq||'']||[]).includes(x.weeks||''))throw new Error('sıklık ve haftalar uyuşmuyor');
+      store.set('customers/'+cid,x);window.__writes.push(['rpc','set_visit',clone(args)]);emit('customers');return {ok:true}}
+    const {p}=args;
     if(name!=='import_sales')throw new Error('rpc yok: '+name);
     if(window.__failWrites)throw new Error('fail');
     const g=k=>store.get(k),m=g('sync/month'),r=g('sync/returns');

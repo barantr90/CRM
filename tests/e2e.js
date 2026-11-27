@@ -38,6 +38,8 @@ async function open(browser,{visitLog=false,admin=true,role='',seed=null,user='b
 const txt=(p,s)=>p.$eval(s,e=>e.textContent.replace(/\u00a0/g,' ').trim()).catch(()=>null);
 const rows=p=>p.$$eval('#list .row b',bs=>bs.map(b=>b.textContent));
 const writes=p=>p.evaluate(()=>window.__writes);
+// müşteri kartı bilgi listesi: [başlık, değer (seçim kutusunda seçili metin), üst, sol, genişlik]
+const INFO=p=>p.$$eval('#detail .info>div',d=>d.filter(x=>x.querySelector(':scope>dt')).map(x=>{const dd=x.querySelector(':scope>dd'),s=[...dd.querySelectorAll('select')],r=x.getBoundingClientRect();return [x.querySelector(':scope>dt').textContent,s.length?s.map(e=>e.options[e.selectedIndex].text).join(' · '):dd.textContent,Math.round(r.top),Math.round(r.left),Math.round(r.width)]}));
 const doc=(p,k)=>p.evaluate(k=>{const d=window.__store.get(k);return d===undefined?null:d},k);
 const goList=async p=>{for(const q of ['#homeA','#homeP','.tab[data-view=list]'])if(await p.isVisible(q)){await p.click(q);return}throw new Error('ana sayfa butonu yok')};
 const goAdm=async p=>{await p.click('#avBtn');await p.click('#umRules')};
@@ -137,13 +139,100 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
   step('1m. Kartta Merch ve Dizim hizmeti');
   {await sel(page,'Sağlıklı Market');
-   const dd=await page.$$eval('#detail .info div',d=>Object.fromEntries(d.filter(x=>x.querySelector(':scope>dt')).map(x=>[x.querySelector(':scope>dt').textContent,x.querySelector(':scope>dd').textContent])));
+   const dd=Object.fromEntries((await INFO(page)).map(x=>[x[0],x[1]]));
    ok(dd['Merch']==='Var'&&dd['Dizim']==='Yok','Sağlıklı Market: Merch Var, Dizim Yok ('+dd['Merch']+' / '+dd['Dizim']+')');
-   const ks=Object.keys(dd);ok(ks.indexOf('Merch')===ks.indexOf('Ödeme vadesi')+1&&ks.indexOf('Dizim')===ks.indexOf('Merch')+1,'Ödeme vadesinin hemen altında');
-   ok(await txt(page,'#detail .info dd.yes')==='Var'&&await txt(page,'#detail .info dd.no')==='Yok','Var ve Yok ayrı renkte');
+   ok(await page.$eval('#detail .info dd.yes [data-vk=merch]',e=>e.value)==='Var'&&await page.$eval('#detail .info dd.no [data-vk=dizim]',e=>e.value)==='Yok','Var ve Yok ayrı renkte');
    await sel(page,'Düşüş Market');
-   const d2=await page.$$eval('#detail .info div',d=>Object.fromEntries(d.filter(x=>x.querySelector(':scope>dt')).map(x=>[x.querySelector(':scope>dt').textContent,x.querySelector(':scope>dd').textContent])));
+   const d2=Object.fromEntries((await INFO(page)).map(x=>[x[0],x[1]]));
    ok(d2['Merch']==='–'&&d2['Dizim']==='–','bilgi girilmemiş müşteride "–"');}
+
+  step('1k. Müşteri kartı düzeni');
+  {await sel(page,'Sağlıklı Market');
+   const L=await INFO(page),ks=L.map(x=>x[0]);
+   ok(JSON.stringify(ks.slice(0,10))===JSON.stringify(['Adres','Yetkili','Telefon','Rut günü','Ziyaret sıklığı','Merch','Dizim','Ödeme vadesi','Son temas','Son fatura']),'sıra: Adres · Yetkili/Telefon · Rut günü/Ziyaret sıklığı · Merch/Dizim · Ödeme vadesi/Son temas · kalan: '+ks.join(' · '));
+   const at=k=>L.find(x=>x[0]===k),dlw=await page.$eval('#detail .info',e=>Math.round(e.getBoundingClientRect().width));
+   ok(Math.abs(at('Adres')[4]-dlw)<=2&&at('Adres')[2]<at('Yetkili')[2],'Adres en üstte, tek başına tam satır ('+at('Adres')[4]+' / '+dlw+' px)');
+   const pairs=[['Yetkili','Telefon'],['Rut günü','Ziyaret sıklığı'],['Merch','Dizim'],['Ödeme vadesi','Son temas']];
+   ok(pairs.every(([x,y])=>at(x)[2]===at(y)[2]&&at(x)[3]<at(y)[3]),'çiftler yan yana aynı satırda: '+pairs.map(([x,y])=>x+'/'+y).join(', '));
+   ok(pairs.every(([x],i)=>!i||at(x)[2]>at(pairs[i-1][0])[2]),'çift satırlar yukarıdan aşağı sırayla');
+   ok(!ks.includes('Temsilci'),'Temsilci bilgi listesinden çıktı');
+   ok(await txt(page,'#dRep')==='Temsilci: Mehmet Halici','temsilci müşteri adının altında: '+await txt(page,'#dRep'));
+   const hb=await page.$eval('#detail .dh h2',e=>e.getBoundingClientRect().bottom),rt=await page.$eval('#dRep',e=>e.getBoundingClientRect().top);
+   ok(rt>=hb-1,'temsilci satırı adın hemen altında');
+   ok(at('Adres')[1]==='Kerkstraat 1, 1017 GA, Amsterdam'&&at('Telefon')[1]==='06 12345678','adres ve telefon değerleri yerinde');}
+
+  step('1v. Rut günü, ziyaret sıklığı, merch ve dizim karttan düzenlenir');
+  {await sel(page,'Sağlıklı Market');
+   const V=k=>page.$eval(`#detail [data-vk=${k}]`,e=>e.value).catch(()=>null);
+   ok(JSON.stringify(await page.$$eval('#detail [data-vk=visitDay] option',o=>o.map(x=>x.textContent)))==='["–","Pazartesi","Salı","Çarşamba","Perşembe","Cuma"]','rut günü seçenekleri');
+   ok(JSON.stringify(await page.$$eval('#detail [data-vk=freq] option',o=>o.map(x=>x.textContent)))==='["–","Haftalık","2 haftada 1","4 haftada 1"]','ziyaret sıklığı seçenekleri');
+   await page.selectOption('#detail [data-vk=visitDay]','Salı');await page.waitForTimeout(150);
+   let c3=await doc(page,'customers/c3');ok(c3.visitDay==='Salı'&&await V('visitDay')==='Salı','rut günü kaydedildi: '+c3.visitDay);
+   ok(/Rut günü: Salı/.test(await txt(page,'#toast')),'bildirim: '+await txt(page,'#toast'));
+   ok((await writes(page)).some(x=>x[0]==='rpc'&&x[1]==='set_visit'),'yazma set_visit ile (yalnız bu alanlar)');
+   await page.selectOption('#detail [data-vk=freq]','2 haftada 1');await page.waitForTimeout(150);
+   c3=await doc(page,'customers/c3');ok(c3.freq==='2 haftada 1'&&c3.weeks==='1, 3','2 haftada 1 seçilince haftalar 1, 3 ('+c3.weeks+')');
+   ok(JSON.stringify(await page.$$eval('#detail [data-vk=weeks] option',o=>o.map(x=>x.value)))==='["1, 3","2, 4"]','hafta seçenekleri 1, 3 / 2, 4');
+   await page.selectOption('#detail [data-vk=weeks]','2, 4');await page.waitForTimeout(150);
+   ok((await doc(page,'customers/c3')).weeks==='2, 4','haftalar 2, 4 olarak kaydedildi');
+   await page.selectOption('#detail [data-vk=freq]','4 haftada 1');await page.waitForTimeout(150);
+   c3=await doc(page,'customers/c3');ok(c3.weeks==='2'&&JSON.stringify(await page.$$eval('#detail [data-vk=weeks] option',o=>o.map(x=>x.value)))==='["1","2","3","4"]','4 haftada 1: tek hafta (2, 4 → 2): '+c3.weeks);
+   await page.selectOption('#detail [data-vk=freq]','Haftalık');await page.waitForTimeout(150);
+   c3=await doc(page,'customers/c3');ok(c3.weeks==='1, 2, 3, 4'&&!(await page.$('#detail [data-vk=weeks]')),'Haftalık: her hafta, hafta seçimi yok');
+   await page.selectOption('#detail [data-vk=freq]','');await page.waitForTimeout(150);
+   c3=await doc(page,'customers/c3');ok(c3.freq===''&&c3.weeks==='','sıklık boşaltılınca haftalar da boş');
+   await page.selectOption('#detail [data-vk=merch]','Yok');await page.selectOption('#detail [data-vk=dizim]','Var');await page.waitForTimeout(150);
+   c3=await doc(page,'customers/c3');ok(c3.merch==='Yok'&&c3.dizim==='Var'&&await page.$eval('#detail [data-vk=dizim]',e=>e.closest('dd').className)==='yes','merch ve dizim kaydedildi, renk güncellendi');
+   ok(c3.name==='Sağlıklı Market'&&c3.rep==='Mehmet Halici'&&c3.contact,'diğer müşteri alanları korunur');
+   await page.selectOption('#detail [data-vk=visitDay]','');await page.waitForTimeout(150);ok((await doc(page,'customers/c3')).visitDay==='','rut günü boşaltılabilir');
+   // canlıdaki eski kayıt gibi: 4 haftada 1 ama hafta boş → diğer alanlar yine düzenlenir, hafta seçilebilir
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').update({freq:'4 haftada 1',weeks:''})));await page.waitForTimeout(150);
+   ok(await page.$eval('#detail [data-vk=weeks]',e=>e.options[e.selectedIndex].text)==='hafta –','hafta boşsa "hafta –" seçili görünür (yanlış hafta gösterilmez)');
+   await page.selectOption('#detail [data-vk=merch]','Var');await page.waitForTimeout(150);ok((await doc(page,'customers/c3')).merch==='Var','hafta boş eski kayıtta merch düzenlenebiliyor');
+   await page.selectOption('#detail [data-vk=weeks]','3');await page.waitForTimeout(150);ok((await doc(page,'customers/c3')).weeks==='3'&&!(await page.$$eval('#detail [data-vk=weeks] option',o=>o.some(x=>x.value===''))),'hafta seçilince kaydedilir, "hafta –" seçeneği kalkar');
+   // eski hâline döndür
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').update({visitDay:'',freq:'',weeks:'',merch:'Var',dizim:'Yok'})));await page.waitForTimeout(150);}
+
+  step('1y. Yetkili kişi: odak, silme');
+  {await sel(page,'Sağlıklı Market');
+   await page.click('#ctEdit');ok(await page.evaluate(()=>document.activeElement&&document.activeElement.name)==='contact','"İletişimi düzenle": odak önce yetkili kişide');
+   await page.click('#ctCancel');
+   ok(!!(await page.$('#ctform'))===false,'vazgeç formu kapatır');
+   const ct0=(await INFO(page)).find(x=>x[0]==='Yetkili')[1];ok(ct0&&ct0!=='–','başta yetkili var: '+ct0);
+   await page.click('#ctEdit');ok(!!(await page.$('#ctDel')),'"Yetkiliyi sil" butonu var');
+   page.once('dialog',d=>d.dismiss());await page.click('#ctDel');await page.waitForTimeout(100);
+   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]===ct0,'onay verilmezse silinmez');
+   page.once('dialog',d=>{ok(/silinsin mi/.test(d.message()),'onay soruluyor: '+d.message());d.accept()});await page.click('#ctDel');await page.waitForTimeout(150);
+   const k3=await doc(page,'contacts/c3');ok(k3&&k3.contact===''&&k3.phone==='06 12345678','yetkili silindi, telefon korundu');
+   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]==='–'&&!!(await page.$('#ctCall')),'kartta yetkili "–", Ara butonu duruyor');
+   ok(!(await page.$('#ctform')),'silince form kapanır');
+   // satış içe aktarması müşteri kaydını güncellese de silinen yetkili geri gelmez
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').update({updatedAt:Date.now()+60000})));await page.waitForTimeout(150);
+   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]==='–','müşteri kaydı sonradan güncellenince silinen yetkili geri gelmiyor');
+   // Excel'den yeni yetkili gelirse (ctAt daha yeni) o gösterilir
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').update({contact:'Yeni Yetkili',ctAt:Date.now()+60000})));await page.waitForTimeout(150);
+   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]==='Yeni Yetkili','Excel\'den sonradan gelen yeni yetkili gösterilir');
+   await page.click('#ctEdit');ok(await page.$eval('#ctform [name=contact]',e=>e.value)==='Yeni Yetkili','form yeni yetkiliyle açılır');await page.click('#ctCancel');
+   await page.evaluate(n=>window.claude.use('db').then(db=>Promise.all([db.collection('customers').doc('c3').update({contact:n,ctAt:0}),db.collection('contacts').doc('c3').delete()])),ct0);await page.waitForTimeout(150);
+   ok((await INFO(page)).find(x=>x[0]==='Yetkili')[1]===ct0,'eski hâline döndü');
+   await sel(page,'Sessiz Market');await page.click('#ctEdit');ok(!(await page.$('#ctDel')),'yetkilisi olmayan müşteride sil butonu yok');
+   ok(await page.evaluate(()=>document.activeElement&&document.activeElement.name)==='contact','"Telefon / yetkili ekle": odak yetkili kişide');await page.click('#ctCancel');}
+
+  step('1z. Kart: yetkisiz kullanıcı ve telefon görünümü');
+  {const {ctx:cx,page:pp}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'});
+   await sel(pp,'Düşüş Market');
+   ok(!(await pp.$('#detail [data-vk]')),'satış temsilcisi (varsayılan): rut/ziyaret/merch/dizim seçimi yok');
+   const d=Object.fromEntries((await INFO(pp)).map(x=>[x[0],x[1]]));ok(d['Rut günü']===(F.TODAYNAME||'–')&&'Ziyaret sıklığı' in d,'değerler yazı olarak görünüyor: '+d['Rut günü']);
+   await cx.close();
+   const {ctx:cy,page:py}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl',seed:{settings:{perms:{satis:{v_targets:true,v_overdue:true,e_notes:true,e_visit:true}}}}});
+   await sel(py,'Düşüş Market');ok((await py.$$('#detail [data-vk]')).length===4,'e_visit izni verilince temsilci de seçebiliyor');await cy.close();
+   for(const scheme of ['light','dark']){const {ctx:cz,page:pz}=await open(browser,{viewport:{width:390,height:844},scheme});
+    await sel(pz,'Sağlıklı Market');await pz.selectOption('#detail [data-vk=freq]','2 haftada 1');await pz.waitForTimeout(150);
+    ok(await pz.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await pz.$$eval('#detail .info dd',d=>d.every(x=>x.scrollWidth<=x.clientWidth+1)),'390 px ('+scheme+'): kart yatay taşmıyor');
+    ok(await pz.$$eval('#detail [data-vk]',s=>s.every(e=>e.getBoundingClientRect().height>=32)),'390 px: seçim kutuları dokunmaya uygun yükseklikte');
+    {const L=await INFO(pz),at=k=>L.find(x=>x[0]===k);ok([['Yetkili','Telefon'],['Rut günü','Ziyaret sıklığı'],['Merch','Dizim'],['Ödeme vadesi','Son temas']].every(([x,y])=>at(x)[2]===at(y)[2]&&at(x)[3]<at(y)[3])&&at('Adres')[2]<at('Yetkili')[2],'390 px: Adres tek satır, çiftler telefonda da yan yana')}
+    await pz.screenshot({path:path.join(SHOTS,'1k-kart-390'+(scheme==='dark'?'-gece':'')+'.png'),fullPage:true});await cz.close()}
+   await page.screenshot({path:path.join(SHOTS,'1k-kart.png')});}
 
   step('2. Ziyaret kaydı ve Geçmiş kapalı');
   await sel(page,'Sessiz Market');
