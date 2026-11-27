@@ -12,7 +12,7 @@
     const key=col+'/'+id;
     return {id,
       async get(){const d=store.get(key);return {id,exists:d!==undefined,data:()=>clone(d)}},
-      async set(d){if(window.__failWrites)throw Object.assign(new Error('fail'),{code:'x'});if(col==='contacts'&&d.more!=null&&!(Array.isArray(d.more)&&d.more.length<=2))throw new Error('contacts_more_max');store.set(key,clone(d));window.__writes.push(['set',key,clone(d)]);emit(col)},
+      async set(d){if(window.__failWrites)throw Object.assign(new Error('fail'),{code:'x'});if(col==='contacts'&&d.more!=null&&!(Array.isArray(d.more)&&d.more.length<=2))throw new Error('contacts_more_max');if(col==='contacts'&&!ctValid(d))throw new Error('contacts_valid');store.set(key,clone(d));window.__writes.push(['set',key,clone(d)]);emit(col)},
       async update(p){if(!store.has(key))throw new Error('not found');store.set(key,{...store.get(key),...clone(p)});window.__writes.push(['update',key,clone(p)]);emit(col)},
       async delete(){store.delete(key);window.__writes.push(['delete',key]);emit(col)},
       onSnapshot(cb){const f=c=>{if(c===col)this.get().then(cb)};this.get().then(cb);listeners.add(f);return()=>listeners.delete(f)}
@@ -30,6 +30,10 @@
         load();const f=c=>{if(c===col)load()};listeners.add(f);return()=>listeners.delete(f)}};
     return q;
   }
+  // sunucudaki contacts_valid() karşılığı: yetkili adı harflerden, telefon geçerli biçimde
+  const nOk=v=>{const t=String(v||'').trim();return !t||(t.length<=60&&/^\p{L}[\p{L}\p{M} .'’-]*$/u.test(t)&&(t.match(/\p{L}/gu)||[]).length>=2)};
+  const pOk=v=>{const t=String(v||'').trim();if(!t)return true;if(!/^\+?[\d\s().\-\/]+$/.test(t))return false;return /^(0[1-9]\d{8}|(\+|00)31[1-9]\d{8}|(\+|00)(?!31)[1-9]\d{7,13}|6\d{8})$/.test(t.replace(/[\s().\-\/]/g,''))};
+  const ctValid=d=>[d,...(Array.isArray(d.more)?d.more:[])].every(x=>x&&nOk(x.contact)&&pOk(x.phone));
   const db={collection,doc(p){const [c,i]=p.split('/');return docRef(c,i)}};
   // sunucudaki import_sales() fonksiyonunun bellek içi karşılığı (tek işlemde yazar)
   // sunucudaki set_visit() karşılığı: yalnız rut günü, ziyaret sıklığı/haftaları, merch ve dizim; değerler listeden

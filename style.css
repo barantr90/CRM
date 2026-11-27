@@ -304,6 +304,7 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .ctf{grid-template-columns:minmax(0,1fr)}
 .ctf .ctr{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:8px;align-items:end}
 .ctf .ctr>span{width:54px}
+.ctf input[aria-invalid=true]{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
 .ctf .ctb{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ctf .ctb .primary{margin-left:auto}.ctf .ctmax{color:var(--mut);font-size:13px}
 @media(max-width:600px){.ctf .ctr{grid-template-columns:minmax(0,1fr) auto}.ctf .ctr label:first-child{grid-column:1/-1}.ctf .ctr>span{display:none}.ctf .ctr+.ctr{border-top:1px solid var(--line);padding-top:8px}.ctf .ctb .primary{margin-left:0}}
 
