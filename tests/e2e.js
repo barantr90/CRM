@@ -259,7 +259,14 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   step('3d. Açık faturalar');
   {await page.fill('#q','');await page.dispatchEvent('#q','input');
    const od=await page.$('[data-quick=od]');ok(!!od,'"Vadesi geçen" kutusu var');
-   ok(+(await txt(page,'[data-quick=od] b'))===1&&/€ 1\.201/.test(await txt(page,'[data-quick=od] span')),'kutu: 1 müşteri · '+await txt(page,'[data-quick=od] span'));
+   ok(await txt(page,'[data-quick=od] b .stnum')==='1'&&await txt(page,'[data-quick=od] b .stunit')==='vadesi geçen fatura'&&/€ 1\.201/.test(await txt(page,'[data-quick=od] span')),'kutu: 1 vadesi geçen fatura · '+await txt(page,'[data-quick=od] span'));
+   {// aynı müşteride ikinci vadesi geçen fatura: kutu fatura sayısını gösterir (müşteri sayısını değil)
+    const oi0=await doc(page,'sync/openinv');
+    await page.evaluate(o=>window.claude.use('db').then(db=>{const m=JSON.parse(JSON.stringify(o));m.map['1'].inv.push(['RE26-X','2026-01-01','F',99,99,'2026-01-31']);return db.doc('sync/openinv').set(m)}),oi0);await page.waitForTimeout(150);
+    ok(await txt(page,'[data-quick=od] .stnum')==='2'&&/€ 1\.300/.test(await txt(page,'[data-quick=od] span')),'1 müşteride 2 vadesi geçen fatura: kutuda 2 ('+await txt(page,'[data-quick=od]')+')');
+    await page.evaluate(o=>window.claude.use('db').then(db=>db.doc('sync/openinv').set(o)),oi0);await page.waitForTimeout(150);
+    const fs1=await page.$eval('[data-quick=od] .stnum',e=>parseFloat(getComputedStyle(e).fontSize)),fs2=await page.$eval('[data-quick=od] .stunit',e=>parseFloat(getComputedStyle(e).fontSize));
+    ok(fs2<fs1/2,'"vadesi geçen fatura" sayıdan küçük puntoyla ('+fs2+' / '+fs1+' px)');}
    {const T0=await page.evaluate(()=>window.__FIX.TODAY),in5=(await page.evaluate(()=>window.__FIX.day(5))).slice(0,7)===T0.slice(0,7);
     ok(await txt(page,'[data-quick=od] #odDue')===`Bu ay vadesi gelecek: € ${in5?'1.350':'450'}`,'kutuda bu ay vadesi gelecek tutar: '+await txt(page,'#odDue'));
     await page.click('.chip[data-rep="Lütfi Kaplan"]');ok(await txt(page,'#odDue')===`Bu ay vadesi gelecek: € ${in5?'900':'0'}`,'kutudaki tutar temsilci seçimine uyuyor: '+await txt(page,'#odDue'));await page.click('.chip[data-rep=""]');}

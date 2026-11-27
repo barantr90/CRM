@@ -284,6 +284,8 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 
 .ordp tbody tr:last-child td{border-bottom:0}.ordp tfoot td{padding-top:10px}
 
+.stat b .stnum{font-style:normal}.stat b .stunit{font:600 14px "Instrument Sans",system-ui,sans-serif;margin-left:6px;vertical-align:baseline;white-space:nowrap}
+
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){
 .umd .who small{font-size:11px}
@@ -385,5 +387,6 @@ dd{font-size:12px}
 .uadd input, .uadd select{font-size:13px}
 #pT th, #pT td{font-size:11px}
 #odOrph{font-size:11px}
+.stat b .stunit{font-size:12px}
 }
 /* /TELEFON PUNTOSU */
