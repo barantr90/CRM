@@ -281,15 +281,27 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await sel(page,'Sessiz Market');
    ok(/açık fatura yok/.test(await txt(page,'#oi')),'açık faturası olmayan müşteride "açık fatura yok"');}
 
-  step('3e. Sıralama kutusu yok, Vadesi Geçen sekmesi, ARAG');
+  step('3e. Sıralama kutusu yok, Vade Takibi sekmesi, ARAG');
   {ok(!(await page.$('#fsort')),'"Ada göre" sıralama kutusu kaldırıldı');
    const names=await rows(page);ok(JSON.stringify(names)===JSON.stringify([...names].sort((a,b)=>a.localeCompare(b,'tr'))),'liste ada göre sıralı kalıyor');
-   ok(await txt(page,'#tabV')==='Vadesi Geçen (1)','sekme: Vadesi Geçen (1)');
+   ok(await txt(page,'#tabV')==='Vade Takibi (1)','sekme: Vade Takibi (1) — vadesi geçen müşteri sayısı');
    const tabs=await page.$$eval('.tabs .tab:not([hidden])',b=>b.map(x=>x.textContent.replace(/ \(.*/,'')));
-   ok(JSON.stringify(tabs)==='["Müşteriler","Hedefler","Karne","Vadesi Geçen","Kredi Limiti"]','sekme sırası: '+tabs.join(' · '));
+   ok(JSON.stringify(tabs)==='["Müşteriler","Hedefler","Karne","Vade Takibi","Kredi Limiti"]','sekme sırası: '+tabs.join(' · '));
    await page.click('#tabV');
    const r=await page.$$eval('#odT tbody tr',tr=>tr.map(t=>[...t.cells].map(c=>c.textContent.replace(/ /g,' '))));
    ok(r.length===1&&r[0][1]==='Düşüş Market'&&r[0][3]==='€ 1.201'&&r[0][5]==='40 gün','tabloda yalnız vadesi geçen: '+JSON.stringify(r));
+   // ikinci bölüm: bu ay vadesi gelecek müşteriler (bugün dahil, ay sonuna kadar; vadesi geçenler ve alacaklar hariç)
+   {ok(/^Vadesi Geçen Müşteriler/.test(await txt(page,'#overdue h3'))&&/Bu Ay Vadesi Gelecek Müşteriler/.test(await txt(page,'#dueHead')),'iki başlık: Vadesi Geçen Müşteriler ve Bu Ay Vadesi Gelecek Müşteriler');
+    const T0=await page.evaluate(()=>window.__FIX.TODAY),d5=await page.evaluate(()=>window.__FIX.day(5)),in5=d5.slice(0,7)===T0.slice(0,7);
+    const u=await page.$$eval('#duT tbody tr',tr=>tr.map(t=>[...t.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim())));
+    const exp=[['1','Sağlıklı Market','Mehmet Halici','€ 450','1','Bugün']].concat(in5?[['2','Düşüş Market','Lütfi Kaplan','€ 900','1','5 gün kaldı']]:[]);
+    ok(JSON.stringify(u.map(r=>[r[0],r[1],r[2],r[3],r[4],r[5].replace(/^\d\d\.\d\d\.\d{4}\s*/,'')]))===JSON.stringify(exp),'bu ay vadesi gelecekler, en yakın vade üstte (5 gün sonrası '+(in5?'bu ayda':'gelecek ayda')+'): '+JSON.stringify(u));
+    ok(new RegExp((in5?2:1)+' müşteri · € '+(in5?'1.350':'450')).test(await txt(page,'#dueHead')),'başlıkta müşteri sayısı ve toplam: '+await txt(page,'#dueHead'));
+    ok(!(await page.$$eval('#duT tbody tr',tr=>tr.some(t=>/9999|8888/.test(t.textContent)))),'CRM\'de olmayan kodlar bu listede yok');
+    await page.click('[data-ovf=arag]');ok((await page.$$('#duT tbody tr')).length===u.length,'üstteki süzgeç yalnız vadesi geçenleri etkiliyor');await page.click('[data-ovf=all]');
+    await page.click('.chip[data-rep="Mehmet Halici"]');await page.click('#tabV');
+    ok(JSON.stringify(await page.$$eval('#duT tbody tr td:nth-child(2)',t=>t.map(x=>x.textContent)))==='["Sağlıklı Market"]','temsilci seçimine uyuyor');
+    await page.click('.chip[data-rep=""]');await page.click('#tabV');}
    await page.click('[data-ovf=arag]');ok(/Bu süzgeçte müşteri yok/.test(await txt(page,'#overdue')),'ARAG süzgeci başta boş');
    await page.click('[data-ovf=all]');
    // açık fatura dosyasında olup CRM'de olmayan kodlar ayrı bölümde
@@ -692,7 +704,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
        const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Export');
        const f=new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],'oi.xlsx');const dt=new DataTransfer();dt.items.add(f);
        const i=document.getElementById('oimp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))})});
-   ok(/2 müşteri kodu CRM'de yok/.test(msg)&&/77001 \(€ 7\.418,28\)/.test(msg)&&/77002 \(−€ 13,90\)/.test(msg)&&/Vadesi Geçen/.test(msg),'onayda CRM\'de olmayan kodlar ve tutarları: '+msg.replace(/\n/g,' / '));
+   ok(/2 müşteri kodu CRM'de yok/.test(msg)&&/77001 \(€ 7\.418,28\)/.test(msg)&&/77002 \(−€ 13,90\)/.test(msg)&&/Vade Takibi/.test(msg),'onayda CRM\'de olmayan kodlar ve tutarları: '+msg.replace(/\n/g,' / '));
    // Merch / Dizim: dışa aktarmada sütun, içe aktarmada VAR/YOK okunur
    if(got){const m=await p2.evaluate(()=>{const wb=XLSX.read(window.__xc,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets['Müşteriler']);const s=rows.find(x=>x['Müşteri']==='Sağlıklı Market');return {h:Object.keys(rows[0]),m:s['Merch'],d:s['Dizim']}});
      ok(m.h.indexOf('Merch')===m.h.indexOf('Ödeme vadesi')+1&&m.h.indexOf('Dizim')===m.h.indexOf('Merch')+1&&m.m==='Var'&&m.d==='Yok','Excel\'de Merch ve Dizim sütunları: '+JSON.stringify(m));
@@ -861,7 +873,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    // muhasebe rolü
    const {ctx:c3,page:p3}=await open(browser,{admin:false,role:'muhasebe',user:'Raci.Oener@akar-gmbh.de',seed:{settings:{perms:d}}});
    ok((await rows(p3)).length===8,'muhasebe tüm müşterileri görüyor');
-   ok(await p3.isVisible('#tabK')&&await p3.isVisible('#tabV')&&await p3.isHidden('#tabH')&&await p3.isHidden('#tabB'),'muhasebe: Kredi Limiti ve Vadesi Geçen var; Hedefler ve Karne yok');
+   ok(await p3.isVisible('#tabK')&&await p3.isVisible('#tabV')&&await p3.isHidden('#tabH')&&await p3.isHidden('#tabB'),'muhasebe: Kredi Limiti ve Vade Takibi var; Hedefler ve Karne yok');
    await p3.click('#avBtn');
    ok(await p3.isVisible('#xexp')&&await p3.isVisible('#oimpBtn')&&await p3.isHidden('#ximpBtn')&&await p3.isHidden('#umRules')&&await txt(p3,'#umRole')==='Muhasebe','muhasebe menüsü: Excel\'e aktar ve açık fatura içe aktarma var; müşteri içe aktarma ve ayarlar yok');
    await p3.keyboard.press('Escape');await sel(p3,'Düşüş Market');
@@ -931,7 +943,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
   ok(!(await page.$('#stSel')),'temsilci durumu değiştiremiyor (seçim yok)');
   ok(!(await page.$('#aragOn')),'temsilci ARAG butonunu görmüyor');
-  ok(await page.isVisible('#tabV'),'temsilci Vadesi Geçen sekmesini görüyor');
+  ok(await page.isVisible('#tabV'),'temsilci Vade Takibi sekmesini görüyor');
   await page.click('#tabV');ok(!(await page.$('#odOrph'))&&!/CRM'de olmayan/.test(await txt(page,'#overdue')),'tüm müşterileri görme izni olmayan temsilci CRM\'de olmayan kodları görmüyor');await goList(page);
   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('arag').doc('c2').set({active:true,at:'2026-11-20'})));await page.waitForTimeout(150);
   ok(/ARAG süreci aktif · 20\.11\.2026/.test(await txt(page,'#aragBox'))&&!(await page.$('#aragOff')),'temsilci aktif ARAG durumunu görüyor, kapatamıyor');

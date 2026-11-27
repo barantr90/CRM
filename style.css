@@ -279,6 +279,9 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 #sT th{white-space:normal}#sT th:last-child,#sT td:last-child{width:28px;text-align:center}#sT .bad{color:var(--bad)}#serr{border:1px solid var(--bad);border-radius:10px;padding:8px 12px;margin:10px 0}#serr ul,#swarn ul{margin:6px 0 0;padding-left:18px}#swarn{margin:10px 0}
 @media(max-width:600px){#sT th,#sT td{padding-left:4px;padding-right:4px}#smodal .ordp{padding:8px}}
 
+#duT td.rk,#duT th:first-child{width:36px;color:var(--mut)!important;font-weight:400;text-align:right}#duT td:nth-child(2),#duT th:nth-child(2),#duT td:nth-child(3),#duT th:nth-child(3){text-align:left}#duT td{font-variant-numeric:tabular-nums}#duT .ddl{color:var(--mut)}#duT tr.soon .ddl{color:var(--acc);font-weight:700}
+@media(max-width:600px){#duT td:nth-child(2){white-space:normal}#duT th:nth-child(1),#duT td:nth-child(1),#duT th:nth-child(3),#duT td:nth-child(3),#duT th:nth-child(5),#duT td:nth-child(5){display:none}#duT th,#duT td{padding-left:4px;padding-right:4px}#duT th{white-space:normal}#duT td:last-child small{display:block}}
+
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){
 .umd .who small{font-size:11px}

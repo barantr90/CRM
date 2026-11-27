@@ -69,7 +69,7 @@ const ROLES=[['admin','Yönetici'],['satis','Satış temsilcisi'],['muhasebe','M
 const PERMS=[
   ['v_targets','Hedefler sekmesini görür','','Görüntüleme'],
   ['v_board','Karne sekmesini görür','','Görüntüleme'],
-  ['v_overdue','Açık faturaları ve Vadesi Geçen sekmesini görür','Müşteri kartındaki açık faturalar ve vadesi geçen kutusu dahil.','Görüntüleme'],
+  ['v_overdue','Açık faturaları ve Vade Takibi sekmesini görür','Müşteri kartındaki açık faturalar ve vadesi geçen kutusu dahil.','Görüntüleme'],
   ['v_credit','Kredi Limiti sekmesini görür','Tanımlı limit, açık bakiye ve önerilen limit.','Görüntüleme'],
   ['v_all','Tüm temsilcilerin müşterilerini görür','Kapalıysa kullanıcı yalnız kendi adına kayıtlı müşterileri görür (e-postası temsilci adıyla eşleşmeli). Hedefler sekmesi bundan etkilenmez: tüm ekip görünür.','Görüntüleme'],
   ['e_notes','Telefon ve yetkili kişi bilgisini düzenler','Ziyaret kaydı girme ve takibi tamamlandı işaretleme de bu izne bağlıdır.','Düzenleme'],
@@ -145,7 +145,16 @@ function aragHtml(c,o){
   if(!aragElig(o)||!adm)return '';
   return `<div class="arag" id="aragBox"><span>En eski vadesi geçen fatura <b>${o.odMax} gün</b> gecikmiş (${R.arag} günü aştı).</span><button type="button" class="primary" id="aragOn" data-cid="${esc(c.id)}">ARAG süreci</button></div>`;
 }
-// Vadesi Geçen sekmesi
+// Vade Takibi sekmesi: 1) vadesi geçenler, 2) bu ay (bugünden ay sonuna kadar) vadesi gelecekler
+const monthEnd=d=>{const y=+d.slice(0,4),m=+d.slice(5,7);return iso(new Date(Date.UTC(y,m,0)))};
+// bu ay vadesi gelecek: kalanı pozitif, vadesi bugün ile ay sonu arasında olan kalemler (iade / fiyat farkı alacakları hariç)
+function dueMonthOf(c){
+  const o=oiOf(c);if(!o)return null;const end=monthEnd(TODAY);
+  const L=o.L.filter(x=>x.rest>0&&x.due&&x.due>=TODAY&&x.due<=end);if(!L.length)return null;
+  const first=L.reduce((a,x)=>x.due<a?x.due:a,L[0].due);
+  return {amt:L.reduce((a,x)=>a+x.rest,0),n:L.length,first,days:dueIn(first)};
+}
+const dueRows=()=>C.filter(c=>!st.rep||c.rep===st.rep).map(c=>[c,dueMonthOf(c)]).filter(([,d])=>d).sort((a,b)=>a[1].first.localeCompare(b[1].first)||b[1].amt-a[1].amt);
 function overdueRows(){
   return C.filter(c=>!st.rep||c.rep===st.rep).map(c=>[c,oiOf(c)]).filter(([,o])=>o&&o.od>0).sort((a,b)=>b[1].od-a[1].od);
 }
@@ -238,7 +247,7 @@ function orphanHtml(){
 function renderOverdue(){
   const has=!!(OI&&OI.map)&&can('v_overdue');$('#tabV').hidden=!has;
   const all=has?overdueRows():[];
-  $('#tabV').textContent=has?`Vadesi Geçen (${all.length})`:'Vadesi Geçen';
+  $('#tabV').textContent=has?`Vade Takibi (${all.length})`:'Vade Takibi';
   if(st.view!=='overdue')return;
   if(!has){$('#overdue').innerHTML='<p class="empty">Açık fatura verisi yok.</p>';return}
   const f=['30','arag'].includes(st.ovf)?st.ovf:'all';
@@ -249,7 +258,15 @@ function renderOverdue(){
   $('#overdue').innerHTML=`<div class="rethead"><h3>Vadesi Geçen Müşteriler <small class="sm">${fmt(OI.asOf)} verisi${st.rep?' · '+esc(st.rep):''} · ${L.length} müşteri · ${eur(sum)}</small></h3>
   <div class="seg2" role="group" aria-label="Süz">${fb('all',`Tümü (${all.length})`)}${fb('30',`${R.arag}+ gün (${n30})`)}${fb('arag',`ARAG (${nA})`)}</div></div>
   ${L.length?`<div class="ordp"><table id="odT"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Vadesi geçen</th><th>Fatura</th><th>En eski</th><th>ARAG</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>`:'<p class="empty">Bu süzgeçte müşteri yok.</p>'}
-  <p class="sm">Tutar: vadesi geçmiş faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Gün sayısı bugüne göre. Satıra tıklayınca müşteri kartı açılır.</p>${orphanHtml()}`;
+  <p class="sm">Tutar: vadesi geçmiş faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Gün sayısı bugüne göre. Satıra tıklayınca müşteri kartı açılır.</p>${dueHtml()}${orphanHtml()}`;
+}
+function dueHtml(){
+  const L=dueRows(),sum=L.reduce((a,[,d])=>a+d.amt,0),mn=MONTHS_LONG[+TODAY.slice(5,7)-1]+' '+TODAY.slice(0,4);
+  const left=d=>d===0?'Bugün':`${d} gün kaldı`;
+  const row=([c,d],i)=>`<tr${d.days<=7?' class="soon"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td><b>${eur(d.amt)}</b></td><td>${d.n}</td><td>${fmt(d.first)} <small class="ddl">${left(d.days)}</small></td></tr>`;
+  return `<div class="rethead"><h3 id="dueHead">Bu Ay Vadesi Gelecek Müşteriler <small class="sm">${mn} sonuna kadar${st.rep?' · '+esc(st.rep):''} · ${L.length} müşteri · ${eur(sum)}</small></h3></div>
+  ${L.length?`<div class="ordp"><table id="duT"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Tutar</th><th>Fatura</th><th>İlk vade</th></tr></thead><tbody>${L.map(row).join('')}</tbody></table></div>`:`<p class="empty">${mn} sonuna kadar vadesi gelecek fatura yok.</p>`}
+  <p class="sm">Tutar: bugünden ay sonuna kadar vadesi dolacak faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Vadesi geçmiş faturalar yukarıdaki listede. Satıra tıklayınca müşteri kartı açılır.</p>`;
 }
 // Kredi limiti: tanımlı limit (açık fatura dosyasından), açık bakiye (net) ve önerilen limit
 const limOf=o=>o&&typeof o.lim==='number'&&o.lim>0?o.lim:null;
@@ -1006,7 +1023,7 @@ async function readOpenInv(f){
     const known=new Set(CALL.map(code)),ks=Object.keys(map),miss=ks.filter(k=>!known.has(k));
     asOf=asOf||TODAY;
     const net=k=>r2(map[k].inv.reduce((a,x)=>a+x[4],0)),MX=12,ml=miss.slice().sort((a,b)=>net(b)-net(a)).map(k=>`${k} (${eurc(net(k))})`);
-    const missTxt=miss.length?`\n\n${miss.length} müşteri kodu CRM'de yok; kartlarda görünmez, Vadesi Geçen sekmesinde ayrı listelenir:\n${ml.slice(0,MX).join(', ')}${ml.length>MX?` ve ${ml.length-MX} kod daha`:''}`:'';
+    const missTxt=miss.length?`\n\n${miss.length} müşteri kodu CRM'de yok; kartlarda görünmez, Vade Takibi sekmesinde ayrı listelenir:\n${ml.slice(0,MX).join(', ')}${ml.length>MX?` ve ${ml.length-MX} kod daha`:''}`:'';
     if(!confirm(`${n} açık kalem, ${ks.length} müşteri (veri tarihi ${fmt(asOf)}).${missTxt}\n\nMevcut açık fatura verisinin yerine yazılsın mı?`))return;
     await db.doc('sync/openinv').set({asOf,n,map,at:Date.now(),by:(window.CRM_AUTH||{}).email||''});
     toast(`Açık faturalar güncellendi: ${n} kalem, ${ks.length-miss.length} müşteri.`);
