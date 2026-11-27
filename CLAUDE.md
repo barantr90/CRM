@@ -42,6 +42,8 @@ Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
 - Roller `allowed_users(email, role, rep)` tablosunda tanımlı: `admin`, `satis`, `muhasebe`.
 - İzin anahtarları `PERMS` listesinde, varsayılanları `PDEF` nesnesinde.
 - SQL tarafında `has_perm()` aynı varsayılanları içerir; ikisi **birlikte** değiştirilir.
+- Birbirine bağlı izinler `PNEED` listesinde (ör. `x_sales` → `v_all`; `x_openinv` → `v_overdue` ya da `v_credit`); izin sayfası bunlar olmadan kaydetmez.
+- Açık fatura verisi (`sync/openinv`) yalnız `v_overdue` ya da `v_credit` izni olana gider: hem `my_sync()` hem `docs_select` kuralı bunu uygular.
 - Kurallar iki katmanda uygulanır ve ikisi de güncellenmelidir:
   - istemcide: `can()`, `viewOk()`, `repLock()`
   - veritabanında: RLS fonksiyonları `can_write_doc`, `sees_customer`, `my_sync`.
@@ -63,7 +65,7 @@ Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
 - Tempo her yerde `sales2026 / (ciro2025 × YF) − 1` formülüyle hesaplanır.
   - Yıl etiketleri dinamiktir: `CY` / `PY`.
   - `YF` verinin tarihinden (`dataTo()`) türetilir.
-- Durum önceliği: elle (`statusov`) > Excel (`statusManual`) > otomatik.
+- Durum önceliği: kartta seçilen (`statusov`) > Excel (`statusManual`) > kurallara göre (`autoSt`). Kartta yalnız Aktif / Pasif görünür (elle / otomatik etiketi yok); seçilen değer hesaplanan durumla aynıysa `statusov` kaydı silinir.
 - Excel dosyaları:
   - `CRM_Musteriler_<tarih>.xlsx`: tek sayfa "Müşteriler", yalnız müşteri bilgisi (`COLS`). İçe aktarma yalnız bu alanları yazar; satış verisi ve diğer alanlar korunur.
   - `CRM_Satis_<tarih>.xlsx`: tek sayfa "Satış" (`SCOLS`), Kod ile eşleşir. Yalnız dışa aktarılır; değerler sistemden, Tempo `tempoOf` ile.

@@ -124,7 +124,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   const r1=await rows(page);
   ok(JSON.stringify(r1)===JSON.stringify(['Düşüş Market','Sessiz Market']),'en büyük kayıp üstte sıralı, pasif yok: '+r1.join(', '));
   ok(!r1.includes('Kayıp Market'),'otomatik pasif (400 gündür faturasız) müşteri kayıp riskinde değil');
-  ok(!r1.includes('Kapanan Market'),'elle "Pasif" yapılan (kapanan) müşteri listede yok');
+  ok(!r1.includes('Kapanan Market'),'Excel\'de "Pasif" yapılan (kapanan) müşteri listede yok');
   ok(!r1.includes('Küçük Kiosk'),'küçük ciro eşiğin altında, listede yok');
   ok(!r1.includes('Sağlıklı Market'),'temposu normal müşteri listede yok');
   const why=await page.$$eval('#list .rk',e=>e.map(x=>x.textContent));
@@ -404,36 +404,44 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await m.screenshot({path:path.join(SHOTS,'3b-zincir-mobil.png'),fullPage:true});
    await ctx3.close();}
 
-  step('3c. Aktif / pasif elle düzenleme');
+  step('3c. Aktif / pasif düzenleme (elle / otomatik ayrımı yok)');
   {await page.fill('#q','');await page.dispatchEvent('#q','input');
    await sel(page,'Sağlıklı Market');
+   const OPT=()=>page.$$eval('#stSel option',o=>o.map(x=>x.textContent));
    ok(!!(await page.$('#stSel')),'yönetici kartta durum seçimini görüyor');
-   ok(await page.$eval('#stSel option',o=>o.textContent)==='Aktif · otomatik','varsayılan: otomatik (Aktif)');
+   ok(JSON.stringify(await OPT())==='["Aktif","Pasif"]'&&await page.inputValue('#stSel')==='Aktif','seçenekler yalnız Aktif / Pasif; şu an Aktif');
+   ok(!/elle|otomatik|Excel/.test(await txt(page,'#detail .tags')),'kartta "elle / otomatik / Excel" yazmıyor: '+await txt(page,'#detail .tags'));
    await page.selectOption('#stSel','Pasif');await page.waitForTimeout(150);
    const ov=await doc(page,'statusov/c3');
-   ok(ov&&ov.status==='Pasif'&&ov.by==='baran.sengul@akar-group.com','elle durum ayrı kayda yazıldı (statusov/c3)');
+   ok(ov&&ov.status==='Pasif'&&ov.by==='baran.sengul@akar-group.com','seçilen durum ayrı kayda yazıldı (statusov/c3)');
    ok(await page.$eval('#detail h2',e=>e.classList.contains('pas'))&&await page.$eval('#list .row[data-id="c3"] b',e=>e.classList.contains('pas')),'kartta ve listede pasif (kırmızı) görünüyor');
-   ok(/Pasif olarak işaretlendi/.test(await txt(page,'#toast')),'bildirim: '+await txt(page,'#toast'));
+   ok(await txt(page,'#toast')==='Sağlıklı Market: Pasif','bildirim: '+await txt(page,'#toast'));
+   ok(JSON.stringify(await OPT())==='["Aktif","Pasif"]'&&await page.inputValue('#stSel')==='Pasif','değiştirince de seçenekler aynı: Aktif / Pasif');
    await page.selectOption('#fstat','Pasif');
    ok((await rows(page)).includes('Sağlıklı Market'),'Durum: Pasif filtresinde çıkıyor');
    await page.selectOption('#fstat','');
-   // sabah eşitlemesi müşteri kaydını yeniden yazsa bile elle durum korunur
+   // müşteri kaydı yeniden yazılsa bile seçilen durum korunur
    await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('customers').doc('c3').get().then(d=>db.collection('customers').doc('c3').set({...d.data(),status:'Aktif',statusManual:''}))));
    await page.waitForTimeout(150);
-   ok(await page.inputValue('#stSel')==='Pasif'&&await page.$eval('#detail h2',e=>e.classList.contains('pas')),'müşteri kaydı yeniden yazılınca (Power BI / Excel) elle durum korunuyor');
-   await page.selectOption('#stSel','');await page.waitForTimeout(150);
-   ok(!(await doc(page,'statusov/c3'))&&!(await page.$eval('#detail h2',e=>e.classList.contains('pas'))),'"otomatik" seçilince elle kayıt silindi, durum yeniden Aktif');
-   // Excel'de elle Pasif yapılmış müşteri
+   ok(await page.inputValue('#stSel')==='Pasif'&&await page.$eval('#detail h2',e=>e.classList.contains('pas')),'müşteri kaydı yeniden yazılınca (Excel) seçilen durum korunuyor');
+   // sistemin hesapladığı duruma geri dönünce ayrı kayıt silinir; sonrası yine kurallara göre hesaplanır
+   await page.selectOption('#stSel','Aktif');await page.waitForTimeout(150);
+   ok(!(await doc(page,'statusov/c3'))&&!(await page.$eval('#detail h2',e=>e.classList.contains('pas')))&&await txt(page,'#toast')==='Sağlıklı Market: Aktif','Aktif seçilince (hesaplanan da Aktif) ayrı kayıt silindi');
+   // hesaplanan Pasif olan müşteride Aktif seçmek kalıcı olarak saklanır
    await page.selectOption('#fstat','Pasif');await sel(page,'Kapanan Market');
-   ok(await page.$eval('#stSel option',o=>o.textContent)==='Pasif · Excel','Excel\'de "Durum (elle)" dolu müşteri: Pasif · Excel');
-   await page.selectOption('#fstat','');
-   // kayıp riski: elle pasif yapılan müşteri riskten çıkar
+   ok(JSON.stringify(await OPT())==='["Aktif","Pasif"]'&&await page.inputValue('#stSel')==='Pasif','Excel\'de Pasif olan müşteri: Pasif (etiketsiz)');
+   await page.selectOption('#stSel','Aktif');await page.waitForTimeout(150);
+   ok((await doc(page,'statusov/c7')||{}).status==='Aktif','hesaplanan Pasif → Aktif seçimi saklandı');
+   await page.selectOption('#fstat','');await sel(page,'Kapanan Market');
+   await page.selectOption('#stSel','Pasif');await page.waitForTimeout(150);
+   ok(!(await doc(page,'statusov/c7'))&&await page.inputValue('#stSel')==='Pasif','tekrar Pasif (hesaplanan) seçilince kayıt silindi');
+   // kayıp riski: pasif yapılan müşteri riskten çıkar
    const before=await txt(page,'[data-quick=risk] b');
    await sel(page,'Düşüş Market');await page.selectOption('#stSel','Pasif');await page.waitForTimeout(150);
-   ok(+(await txt(page,'[data-quick=risk] b'))===+before-1,'elle pasif yapılan müşteri kayıp riski listesinden çıkıyor ('+before+' → '+await txt(page,'[data-quick=risk] b')+')');
+   ok(+(await txt(page,'[data-quick=risk] b'))===+before-1,'pasif yapılan müşteri kayıp riski listesinden çıkıyor ('+before+' → '+await txt(page,'[data-quick=risk] b')+')');
    await page.screenshot({path:path.join(SHOTS,'3c-durum.png'),clip:{x:560,y:300,width:840,height:260}});
-   await page.selectOption('#stSel','');await page.waitForTimeout(150);
-   ok(await txt(page,'[data-quick=risk] b')===before,'otomatiğe dönünce tekrar riskte');}
+   await page.selectOption('#stSel','Aktif');await page.waitForTimeout(150);
+   ok(await txt(page,'[data-quick=risk] b')===before&&!(await doc(page,'statusov/c1')),'Aktif seçilince tekrar riskte, ayrı kayıt yok');}
 
   step('3d. Açık faturalar');
   {await page.fill('#q','');await page.dispatchEvent('#q','input');
@@ -774,7 +782,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.click('#avBtn');ok(await page.isVisible('#umRules')&&await txt(page,'#umRules')==='Yönetici ayarları','yönetici menüde "Yönetici ayarları"nı görüyor');
    await page.click('#umRules');ok(await page.isVisible('#rform')&&await page.isHidden('#umDrop'),'menüden ayarlar açılıyor');
    const vals=await page.$$eval('#rform input',i=>i.map(x=>[x.name,x.value]));
-   ok(JSON.stringify(vals)==='[["pasif","120"],["temas","30"],["arag","30"],["credDays","15"],["credCut","50"],["iade","2.5"],["riskPace","70"],["dropMin","3000"],["riskSilent","45"],["silentMax","365"],["silentMin","1000"]]','11 kural, varsayılan değerlerle: '+JSON.stringify(vals));
+   ok(JSON.stringify(vals)==='[["pasif","120"],["temas","30"],["arag","30"],["dueSoon","7"],["credDays","15"],["credCut","50"],["iade","2.5"],["riskPace","70"],["dropMin","3000"],["riskSilent","45"],["silentMax","365"],["silentMin","1000"]]','12 kural, varsayılan değerlerle: '+JSON.stringify(vals));
    ok(JSON.stringify(await page.$$eval('#rform .rgrp',h=>h.map(x=>x.textContent)))==='["Durum ve temas","Açık faturalar","Kredi limiti","İade","Kayıp riski"]','kurallar 5 başlık altında gruplu');
    ok(await txt(page,'#r_dropMin ~ em')==='€'&&/Varsayılan: € 3\.000/.test(await txt(page,'#rform .rrow:has(#r_dropMin) .rdef')),'tutar kuralları € ile ve varsayılanı € 3.000');
    ok(/Henüz değiştirilmedi/.test(await txt(page,'#admin')),'henüz değiştirilmedi notu');
@@ -1126,6 +1134,53 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(await page.isVisible('#listView'),'kaydedilmemiş izinle sayfadan çıkarken soruyor');}
   await ctx.close();
 
+  step('13b. Yönetici ayarları ve izinler: gözden geçirme düzeltmeleri');
+  ({ctx,page}=await open(browser));
+  {// metinler güncel: "elle" ayrımı ve kapalı ziyaret kaydı anılmıyor
+   await page.click('#avBtn');await page.click('#umRules');await page.waitForSelector('#rform');
+   const pd=await page.$eval('label[for=r_pasif] small',e=>e.textContent);
+   ok(!/[Ee]lle/.test(pd)&&/Kartta seçilen/.test(pd),'Pasif gün sınırı açıklamasında "elle" yok: '+pd);
+   // gruplar sırayla ve her biri bir kez (aynı başlık iki kez çıkmaz)
+   const G=await page.$$eval('#rform .rgrp',h=>h.map(x=>x.textContent));
+   ok(JSON.stringify(G)==='["Durum ve temas","Açık faturalar","Kredi limiti","İade","Kayıp riski"]','başlıklar tekrarsız: '+G.join(' · '));
+   // vade yaklaşıyor eşiği artık ayarlardan (koda sabit 7 gün yerine)
+   ok(await page.inputValue('#r_dueSoon')==='7'&&/Açık faturalar/.test(await page.$eval('#r_dueSoon',e=>{let x=e.closest('.rrow');while(x&&!x.classList.contains('rgrp'))x=x.previousElementSibling;return x?x.textContent:''})),'Vade yaklaşıyor: 7 gün, Açık faturalar başlığında');
+   ok(/müşterinin vadesi 7 gün içinde/.test(await txt(page,'[data-rimp=dueSoon]')),'etki metni: '+await txt(page,'[data-rimp=dueSoon]'));
+   await page.fill('#r_dueSoon','0');await page.click('#rform button[type=submit]');await page.waitForTimeout(100);
+   ok(!(await doc(page,'settings/rules')),'0 gün kabul edilmiyor (1–31)');
+   await page.fill('#r_dueSoon','1');await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
+   ok((await doc(page,'settings/rules')||{}).dueSoon===1,'1 gün kaydedildi');
+   // etkisi Vade Takibi'nde: bugün vadesi gelen vurgulu, 5 gün sonraki değil
+   const d5=await page.evaluate(()=>window.__FIX.day(5)),T0=await page.evaluate(()=>window.__FIX.TODAY);
+   await page.click('#homeA');await page.click('#tabV');
+   const S=()=>page.$$eval('#duT tbody tr',t=>t.map(x=>x.cells[1].textContent+':'+x.classList.contains('soon')));
+   ok((await S()).includes('Sağlıklı Market:true'),'bugün vadesi gelen vurgulu: '+(await S()).join(', '));
+   if(d5.slice(0,7)===T0.slice(0,7)){ok((await S()).includes('Düşüş Market:false'),'1 gün sınırında 5 gün kalan vurgulanmıyor');
+     await page.evaluate(()=>window.claude.use('db').then(db=>db.doc('settings/rules').set({dueSoon:7})));await page.waitForTimeout(150);
+     ok((await S()).includes('Düşüş Market:true'),'7 gün sınırında 5 gün kalan vurgulu')}
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.doc('settings/rules').delete()));await page.waitForTimeout(150);
+   // izinler
+   await page.click('#avBtn');await page.click('#umPerms');await page.waitForSelector('#pform');
+   const nd=await page.$eval('[data-perm=e_notes] td',e=>e.textContent);
+   ok(!/Ziyaret kaydı/.test(nd)&&/3 yetkili/.test(nd),'iletişim izni açıklaması güncel (ziyaret kaydı kapalı): '+nd);
+   ok(/değiştirir/.test(await page.$eval('[data-perm=e_status] td b',e=>e.textContent))&&!/elle/.test(await page.$eval('[data-perm=e_status] td',e=>e.textContent)),'durum izninde "elle" yok');
+   // satış verisi içe aktarma, tüm müşterileri görme izni olmadan kaydedilmez
+   await page.uncheck('[name="muhasebe|v_all"]');await page.check('[name="muhasebe|x_sales"]');
+   await page.click('#pform button[type=submit]');await page.waitForTimeout(100);
+   ok(!(await doc(page,'settings/perms'))&&/Muhasebe: “Satış verisini içe aktarır” için “Tüm temsilcilerin müşterilerini görür” de gerekir/.test(await txt(page,'#toast')),'x_sales + v_all yok: kaydedilmedi → '+await txt(page,'#toast'));
+   ok(await page.$eval('[data-perm=x_sales] [name="muhasebe|x_sales"]',e=>e.closest('td').classList.contains('bad')),'sorunlu kutu işaretlendi');
+   await page.check('[name="muhasebe|v_all"]');await page.click('#pform button[type=submit]');await page.waitForTimeout(150);
+   ok((await doc(page,'settings/perms')||{}).muhasebe.x_sales===true,'v_all açılınca kaydedildi');
+   // açık fatura içe aktarma: açık faturaları ya da kredi limitini görme izni gerekir (sunucu yalnız bunlara gönderir)
+   await page.check('[name="satis|x_openinv"]');await page.uncheck('[name="satis|v_overdue"]');await page.uncheck('[name="satis|v_credit"]');
+   await page.click('#pform button[type=submit]');await page.waitForTimeout(100);
+   ok(/Satış temsilcisi: “Açık faturaları içe aktarır” için “Açık faturaları ve Vade Takibi sekmesini görür” ya da “Kredi Limiti sekmesini görür” de gerekir/.test(await txt(page,'#toast'))&&(await doc(page,'settings/perms')).satis.x_openinv!==true,'x_openinv görme izni olmadan kaydedilmedi → '+await txt(page,'#toast'));
+   await page.check('[name="satis|v_credit"]');await page.click('#pform button[type=submit]');await page.waitForTimeout(150);
+   ok((await doc(page,'settings/perms')).satis.x_openinv===true&&!(await page.$('#pT td.bad')),'kredi limiti izniyle kaydedildi, işaret kalktı');
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.doc('settings/perms').delete()));await page.waitForTimeout(150);
+   await page.screenshot({path:path.join(SHOTS,'13b-izinler.png'),fullPage:true});}
+  await ctx.close();
+
   step('14. Satış temsilcisi yalnız kendi müşterileri; ayar sayfalarında üst kutular gizli');
   ({ctx,page}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'}));
   {ok(JSON.stringify(await rows(page))==='["Düşüş Market","Sessiz Market"]','varsayılan: temsilci yalnız kendi 2 müşterisini görüyor');
@@ -1186,7 +1241,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('arag').doc('c2').set({active:true,at:'2026-11-20'})));await page.waitForTimeout(150);
   ok(/ARAG süreci aktif · 20\.11\.2026/.test(await txt(page,'#aragBox'))&&!(await page.$('#aragOff')),'temsilci aktif ARAG durumunu görüyor, kapatamıyor');
   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('statusov').doc('c2').set({status:'Pasif'})));await page.waitForTimeout(150);
-  ok(/Pasif · elle/.test(await txt(page,'#detail .tags')),'temsilci elle belirlenen durumu görüyor: Pasif · elle');
+  ok(/Pasif/.test(await txt(page,'#detail .tags'))&&!/elle/.test(await txt(page,'#detail .tags'))&&!(await page.$('#detail .tags [title*="elle"]')),'temsilci değiştirilen durumu "elle" etiketi olmadan görüyor: '+await txt(page,'#detail .tags'));
   ok(await page.isVisible('#tabH'),'temsilci Hedefler sekmesini görüyor');
   await page.click('#tabH');
   ok(!(await page.$('#qEdit'))&&!(await page.$('#targets input')),'temsilci yalnızca görüntülüyor: Düzenle ve giriş kutusu yok');
