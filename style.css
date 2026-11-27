@@ -199,7 +199,7 @@ dd a{color:var(--accInk);font-weight:600}
 /* elle durum seçimi */
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 .tag.stsel{padding:0;display:inline-flex}.tag.stsel select{color:inherit;field-sizing:content;min-height:0;height:26px;width:auto;padding:0 26px 0 10px;border:0;border-radius:99px;background-color:transparent;font-size:13px;cursor:pointer}
-.tag.stsel.ov select{font-weight:600}
+
 
 /* açık faturalar */
 .oi{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:14px 16px;margin:16px 0 4px}
@@ -307,6 +307,8 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 .ctf input[aria-invalid=true]{border-color:var(--bad);box-shadow:0 0 0 1px var(--bad)}
 .ctf .ctb{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.ctf .ctb .primary{margin-left:auto}.ctf .ctmax{color:var(--mut);font-size:13px}
 @media(max-width:600px){.ctf .ctr{grid-template-columns:minmax(0,1fr) auto}.ctf .ctr label:first-child{grid-column:1/-1}.ctf .ctr>span{display:none}.ctf .ctr+.ctr{border-top:1px solid var(--line);padding-top:8px}.ctf .ctb .primary{margin-left:0}}
+
+#pT td.bad{outline:2px solid var(--bad);outline-offset:-4px;border-radius:8px}
 
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){

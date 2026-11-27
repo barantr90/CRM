@@ -22,7 +22,7 @@ const low=s=>String(s||'').toLocaleLowerCase('tr');
 const RISK={dropPace:0.7,dropMin:3000,silentDays:45,silentMax:365,silentMin:1000};
 let RET_WARN=0.025;
 // Yönetici sekmesinden değiştirilebilen kurallar (settings/rules). Boş/geçersiz değer varsayılana düşer.
-const RDEF={pasif:120,temas:30,arag:30,credDays:15,credCut:50,iade:2.5,riskPace:70,dropMin:3000,riskSilent:45,silentMax:365,silentMin:1000};
+const RDEF={pasif:120,temas:30,arag:30,dueSoon:7,credDays:15,credCut:50,iade:2.5,riskPace:70,dropMin:3000,riskSilent:45,silentMax:365,silentMin:1000};
 let R={...RDEF},RMETA={};
 function applyRules(d){R={...RDEF};RMETA=d||{};for(const k in RDEF){const v=Number((d||{})[k]);if(Number.isFinite(v)&&v>0)R[k]=v}
   RET_WARN=R.iade/100;RISK.dropPace=R.riskPace/100;RISK.dropMin=R.dropMin;RISK.silentDays=R.riskSilent;RISK.silentMax=R.silentMax;RISK.silentMin=R.silentMin}
@@ -76,16 +76,18 @@ const PERMS=[
   ['v_overdue','Açık faturaları ve Vade Takibi sekmesini görür','Müşteri kartındaki açık faturalar ve vadesi geçen kutusu dahil.','Görüntüleme'],
   ['v_credit','Kredi Limiti sekmesini görür','Tanımlı limit, açık bakiye ve önerilen limit.','Görüntüleme'],
   ['v_all','Tüm temsilcilerin müşterilerini görür','Kapalıysa kullanıcı yalnız kendi adına kayıtlı müşterileri görür (e-postası temsilci adıyla eşleşmeli). Hedefler sekmesi bundan etkilenmez: tüm ekip görünür.','Görüntüleme'],
-  ['e_notes','Telefon ve yetkili kişi bilgisini düzenler','Ziyaret kaydı girme ve takibi tamamlandı işaretleme de bu izne bağlıdır.','Düzenleme'],
+  ['e_notes','Telefon ve yetkili kişi bilgisini düzenler','Müşteri başına en fazla 3 yetkili; ad yalnız harf, telefon geçerli numara olmalı.'+(VISIT_LOG?' Ziyaret kaydı girme ve takibi tamamlandı işaretleme de bu izne bağlıdır.':''),'Düzenleme'],
   ['e_visit','Rut günü, ziyaret sıklığı, merch ve dizim bilgisini düzenler','Müşteri kartındaki seçim kutularıyla. Müşteri Excel\'i içe aktarılınca aynı alanlar dosyadaki değerle güncellenir.','Düzenleme'],
-  ['e_status','Müşteri durumunu (Aktif / Pasif) elle değiştirir','','Düzenleme'],
+  ['e_status','Müşteri durumunu (Aktif / Pasif) değiştirir','Müşteri kartındaki Aktif / Pasif seçimiyle.','Düzenleme'],
   ['e_targets','Hedefleri girer ve değiştirir','','Düzenleme'],
   ['e_arag','ARAG sürecini başlatır ve kapatır','','Düzenleme'],
   ['x_export',"Excel'e aktarır",'','Veri aktarımı'],
   ['x_import',"Excel'den müşteri içe aktarır",'Müşteri bilgilerinin üzerine yazar; Excel\'de olmayan müşterileri silebilir.','Veri aktarımı'],
   ['x_sales','Satış verisini içe aktarır','Günlük satış ve detaylı satış raporundan aylık satış, iade, müşterilerin yıl toplamları ve hedef gerçekleşenlerini günceller. Tüm müşterileri görme izni de gerekir.','Veri aktarımı'],
-  ['x_openinv','Açık faturaları içe aktarır','','Veri aktarımı'],
+  ['x_openinv','Açık faturaları içe aktarır','Açık faturaları ya da Kredi Limiti sekmesini görme izni de gerekir.','Veri aktarımı'],
   ['e_rules','Yönetici ayarlarını (kurallar) görür ve değiştirir','Pasif gün sınırı, temas günü, ARAG günü, kredi limiti ayarları vb.','Yönetim']];
+// [izin, gerektirdiği izinler (biri yeter)]: ilki bunlardan biri olmadan kaydedilmez; sunucu da aynı izinleri arar
+const PNEED=[['x_sales',['v_all']],['x_openinv',['v_overdue','v_credit']]];
 const PDEF={satis:{v_targets:true,v_overdue:true,e_notes:true},muhasebe:{v_overdue:true,v_credit:true,v_all:true,e_notes:true,e_arag:true,x_export:true,x_openinv:true}};
 let PM={},PMETA={},UL=null;
 const roleKnown=()=>!!window.CRM_ROLE||typeof window.CRM_IS_ADMIN==='boolean';
@@ -183,9 +185,10 @@ function overdueRows(){
 }
 // Yönetici sekmesi: kurallar ve ayarlar
 const RULES=[
-  ['pasif','Pasif gün sınırı','gün',7,730,1,'Son satış faturası bu kadar günden eskiyse müşteri otomatik <b>Pasif</b> olur. Elle belirlenen durum (kart / Excel) bunu geçersiz kılar. Excel\'e aktarmada da bu değer kullanılır.','Durum ve temas'],
+  ['pasif','Pasif gün sınırı','gün',7,730,1,'Son satış faturası bu kadar günden eskiyse müşteri <b>Pasif</b> olur. Kartta seçilen ya da Excel\'deki durum bunun yerine geçer. Excel\'e aktarmada da bu değer kullanılır.','Durum ve temas'],
   ['temas','Temas günü','gün',1,365,1,'Son temastan (fatura ya da kayıt) bu kadar gün geçen aktif müşteri "temas yok" kutusunda sayılır ve listede noktayla işaretlenir.','Durum ve temas'],
   ['arag','ARAG süreç günü','gün',1,365,1,'Müşterinin en eski vadesi geçen faturası bu kadar günü aşınca kartta <b>ARAG süreci</b> butonu çıkar.','Açık faturalar'],
+  ['dueSoon','Vade yaklaşıyor uyarısı','gün',1,31,1,'Vade Takibi\'ndeki <b>Bu Ay Vadesi Gelecek</b> listesinde vadesine bu kadar gün ya da daha az kalan faturalar turuncu ve kalın gösterilir.','Açık faturalar'],
   ['credDays','Kredi limiti: ek gün','gün',1,180,1,'Önerilen limit, aylık ortalama satışın <b>ödeme vadesi + bu kadar gün</b> karşılığıdır (sipariş ile fatura arası ve ödeme toleransı).','Kredi limiti'],
   ['credCut','Kredi limiti: gecikme kesintisi','%',1,100,1,'En eski vadesi geçen faturası ARAG süreç gününü aşan müşterinin önerilen limiti bu oranda düşürülür. ARAG süreci aktifse öneri 0 (peşin çalışma).','Kredi limiti'],
   ['iade','İade uyarı eşiği','%',0.1,50,0.1,'Aynı dönemdeki satış faturalarına göre iade oranı bu yüzdeyi geçen müşteri kırmızı işaretlenir ve Karne\'deki iade listesine girer.','İade'],
@@ -200,6 +203,7 @@ function ruleImpact(k,v){
   if(k==='pasif'){const n=C.filter(c=>!(c._st0&&c._st0.manual)&&!c.statusOv&&(c.lastInvoice?ago(c.lastInvoice)>v:((c._st0&&c._st0.status)||'Pasif')==='Pasif')).length;return `${n} müşteri otomatik pasif olur`}
   if(k==='temas'){const n=C.filter(c=>c.status!=='Pasif'&&(()=>{const d=ago(D.last[c.id]);return d===null||d>v})()).length;return `${n} aktif müşteri ${v}+ gündür temassız`}
   if(k==='arag'){if(!(OI&&OI.map))return '';const n=C.filter(c=>{const o=oiOf(c);return o&&o.odn&&o.odMax>v}).length;return `${n} müşteri ARAG'a uygun`}
+  if(k==='dueSoon'){if(!(OI&&OI.map))return '';const n=dueRows().filter(([,d])=>d.days<=v).length;return `${n} müşterinin vadesi ${v} gün içinde (bu ay)`}
   if(k==='credDays'||k==='credCut'){if(!(OI&&OI.map))return '';const keep=R[k];R[k]=v;const L=creditRows().filter(x=>x.lim),n=L.filter(x=>x.r.rec<x.lim).length,m=L.filter(x=>x.r.rec>x.lim).length;R[k]=keep;return `${m} müşteride öneri mevcut limitin üstünde, ${n} müşteride altında`}
   if(k==='iade'){if(!(RET&&RET.map))return '';const n=C.filter(c=>{const r=retOf(c);return r&&r.p>=v/100}).length;return `${n} müşteri eşiğin üzerinde`}
   if(RKEY[k]){const keep={...RISK};RISK[RKEY[k]]=k==='riskPace'?v/100:v;const n=C.filter(c=>riskOf(c)).length;Object.assign(RISK,keep);return `${n} müşteri kayıp riskinde`}
@@ -286,7 +290,7 @@ function renderOverdue(){
 function dueHtml(){
   const L=dueRows(),sum=L.reduce((a,[,d])=>a+d.amt,0),mn=MONTHS_LONG[+TODAY.slice(5,7)-1]+' '+TODAY.slice(0,4);
   const left=d=>d===0?'Bugün':`${d} gün kaldı`;
-  const row=([c,d],i)=>`<tr${d.days<=7?' class="soon"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td><b>${eur(d.amt)}</b></td><td>${d.n}</td><td><span class="ddt">${fmt(d.first)}</span></td><td><small class="ddl">${left(d.days)}</small></td></tr>`;
+  const row=([c,d],i)=>`<tr${d.days<=R.dueSoon?' class="soon"':''}><td class="rk">${i+1}</td><td><button class="lnk" data-open="${esc(c.id)}">${esc(c.name)}</button></td><td>${esc(c.rep||'')}</td><td><b>${eur(d.amt)}</b></td><td>${d.n}</td><td><span class="ddt">${fmt(d.first)}</span></td><td><small class="ddl">${left(d.days)}</small></td></tr>`;
   return `<div class="rethead"><h3 id="dueHead">Bu Ay Vadesi Gelecek Müşteriler <small class="sm">${mn} sonuna kadar${st.rep?' · '+esc(st.rep):''} · ${L.length} müşteri · ${eur(sum)}</small></h3></div>
   ${L.length?`<div class="ordp"><table id="duT" class="vt"><thead><tr><th>#</th><th>Müşteri</th><th>Temsilci</th><th>Tutar</th><th>Fatura</th><th>Vade Tarihi</th><th aria-hidden="true"></th></tr></thead><tbody>${L.map(row).join('')}</tbody><tfoot><tr><td class="rk"></td><td>Toplam</td><td></td><td>${eur(sum)}</td><td>${L.reduce((a,[,d])=>a+d.n,0)}</td><td></td><td></td></tr></tfoot></table></div>`:`<p class="empty">${mn} sonuna kadar vadesi gelecek fatura yok.</p>`}
   <p class="sm">Tutar: bugünden ay sonuna kadar vadesi dolacak faturaların kalan tutarı (iade ve fiyat farkı alacakları hariç). Vadesi geçmiş faturalar yukarıdaki listede. Satıra tıklayınca müşteri kartı açılır.</p>`;
@@ -373,7 +377,8 @@ const allSegs=()=>[...new Set(C.map(c=>c.segment).filter(Boolean))].sort((a,b)=>
 const allReps=()=>{const have=new Set([...CALL.map(c=>c.rep).filter(Boolean),...Object.values(QTS).flatMap(q=>Object.keys((q&&q.reps)||{}))]);
   return [...REPS.filter(r=>have.has(r)),...[...have].filter(r=>!REPS.includes(r)).sort((a,b)=>a.localeCompare(b,'tr'))]};
 
-/* Elle durum: 'statusov' koleksiyonunda müşteri başına {status}. Öncelik: sitede elle > Excel 'Durum (elle)' > otomatik. */
+/* Durum: kartta seçilen 'statusov' koleksiyonunda müşteri başına {status}. Öncelik: kartta seçilen > Excel 'Durum (elle)' > kurallara göre.
+   Kartta yalnız Aktif / Pasif görünür; seçilen değer kurallarla hesaplanan durumla aynıysa ayrı kayıt tutulmaz. */
 let SO={};
 const autoSt=c=>c.lastInvoice?(ago(c.lastInvoice)>R.pasif?'Pasif':'Aktif'):((c._st0&&c._st0.status)||'Pasif');
 function applyStatus(){for(const c of C){if(!c._st0)c._st0={status:c.status||'',manual:c.statusManual||''};const ov=(SO[c.id]||{}).status||'';
@@ -381,10 +386,9 @@ function applyStatus(){for(const c of C){if(!c._st0)c._st0={status:c.status||'',
 const statusAuto=c=>(c._st0&&c._st0.manual)||autoSt(c);
 function statusHtml(c){
   const adm=can('e_status')&&canWrite;
-  if(!adm)return c.status?`<span class="tag"${c.statusOv?' title="Durum elle belirlendi"':''}>${esc(c.status)}${c.statusOv?' · elle':''}</span>`:'';
-  const a=statusAuto(c);
-  return `<label class="tag stsel${c.statusOv?' ov':''}${c.status==='Pasif'?' pas':''}" title="Müşteri durumu"><span class="sr">Durum</span><select id="stSel" data-cid="${esc(c.id)}" aria-label="Müşteri durumu">`+
-    `<option value=""${c.statusOv?'':' selected'}>${esc(a||'–')} · ${c._st0&&c._st0.manual?'Excel':'otomatik'}</option><option value="Aktif"${c.statusOv==='Aktif'?' selected':''}>Aktif · elle</option><option value="Pasif"${c.statusOv==='Pasif'?' selected':''}>Pasif · elle</option></select></label>`}
+  if(!adm)return c.status?`<span class="tag">${esc(c.status)}</span>`:'';
+  return `<label class="tag stsel${c.status==='Pasif'?' pas':''}" title="Müşteri durumu"><span class="sr">Durum</span><select id="stSel" data-cid="${esc(c.id)}" aria-label="Müşteri durumu">`+
+    ['Aktif','Pasif'].map(v=>`<option value="${v}"${c.status===v?' selected':''}>${v}</option>`).join('')+`</select></label>`}
 function derive(){
   {const dt=dataTo();YF=yearFrac(dt);CY=+dt.slice(0,4);PY=CY-1}
   applyStatus();
@@ -1188,8 +1192,10 @@ document.addEventListener('change',async e=>{
     const lab={visitDay:'Rut günü',freq:'Ziyaret sıklığı',weeks:'Ziyaret haftaları',merch:'Merch',dizim:'Dizim'}[k];
     if(await w(()=>db.rpc('set_visit',{cid:c.id,p})))toast(`${c.name} · ${lab}: ${k==='weeks'?'hafta '+v:v||'–'}${k==='freq'&&WEEKS_OF[v]&&WEEKS_OF[v].length>1?' (hafta '+p.weeks+')':''}`);else render();return}
   if(t.id==='stSel'){if(!can('e_status')){render();return}const id=t.dataset.cid,v=t.value,c=C.find(x=>x.id===id);if(!c)return;
-    const ok=await w(()=>v?db.collection('statusov').doc(id).set({status:v,customer:c.name,updatedAt:Date.now(),by:window.CRM_USER||''}):db.collection('statusov').doc(id).delete());
-    if(ok)toast(v?`${c.name}: ${v} olarak işaretlendi`:`${c.name}: durum yeniden otomatik (${statusAuto(c)||'–'})`);else render();return}
+    if(v!=='Aktif'&&v!=='Pasif'){render();return}
+    // hesaplanan durumla aynıysa ayrı kayıt gerekmez (sonrası yine kurallara göre); farklıysa saklanır
+    const ok=await w(()=>v===statusAuto(c)?(c.statusOv?db.collection('statusov').doc(id).delete():Promise.resolve()):db.collection('statusov').doc(id).set({status:v,customer:c.name,updatedAt:Date.now(),by:window.CRM_USER||''}));
+    if(ok)toast(`${c.name}: ${v}`);else render();return}
   if(t.id==='fstat'){st.status=t.value;render()}
   if(t.closest&&t.closest('#pform')){st.pdirty=true;$('#pmsg').textContent='Kaydedilmemiş değişiklik var';return}
   if(t.dataset.urole!==undefined){if(!isAdmin()||!window.CRM_USERS){render();return}const em=t.dataset.urole,r=t.value;
@@ -1209,6 +1215,11 @@ document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.tar
 document.addEventListener('submit',async e=>{
   if(e.target.id==='pform'){e.preventDefault();if(!isAdmin())return;const f=e.target,d={};
     for(const [r] of ROLES.slice(1)){d[r]={};for(const [k] of PERMS)d[r][k]=!!(f.elements[r+'|'+k]||{}).checked}
+    // birbirine bağlı izinler: biri diğeri olmadan çalışmaz (sunucu da reddeder)
+    for(const e of f.querySelectorAll('td.bad'))e.classList.remove('bad');
+    const pn=k=>PERMS.find(x=>x[0]===k)[1];
+    for(const [r,l] of ROLES.slice(1))for(const [k,need] of PNEED)if(d[r][k]&&!need.some(n=>d[r][n])){const e=f.elements[r+'|'+k];if(e)e.closest('td').classList.add('bad');
+      toast(`${l}: “${pn(k)}” için ${need.map(n=>`“${pn(n)}”`).join(' ya da ')} de gerekir.`,1);return}
     const ch=[];for(const [r,l] of ROLES.slice(1))for(const [k] of PERMS)if(d[r][k]!==permOf(r,k))ch.push(l);
     if(!ch.length){st.pdirty=false;toast('Değişiklik yok.');render();return}
     const meta={updatedAt:Date.now(),by:window.CRM_USER||''};
