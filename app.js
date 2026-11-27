@@ -116,6 +116,13 @@ const ctOf=c=>{const k=K[c.id]||{},tk=k.updatedAt||0,tc=c.ctAt||0,phone=pick(k.p
   const more=(Array.isArray(k.more)?k.more:[]).map(x=>({contact:String((x&&x.contact)||''),phone:String((x&&x.phone)||'')})).filter(x=>x.contact||x.phone).slice(0,MAXCT-1);
   const list=[...(contact||phone?[{contact,phone}]:[]),...more];
   return {phone,contact,more,list,call:(list.find(x=>x.phone)||{}).phone||''}};
+/* Yetkili adı: yalnız harf (Türkçe ve aksanlı harfler dahil), arada boşluk, nokta, kesme ya da tire; en az 2 harf.
+   Telefon: rakam ve boşluk ( ) . - / ile yazılır, + yalnız başta. Geçerli biçimler (ayırıcılar atılınca):
+   0 + 9 rakam (NL: 06…, 010…), +31/0031 + 9 rakam (başta 0 olmadan), başka ülke +/00 + 8–14 rakam, 6 + 8 rakam (NL mobil, 0'sız).
+   Aynı kurallar veritabanında contacts_valid() ile de uygulanır. */
+const ctNameOk=v=>{const t=String(v||'').trim();return !t||(t.length<=60&&/^\p{L}[\p{L}\p{M} .'’-]*$/u.test(t)&&(t.match(/\p{L}/gu)||[]).length>=2)};
+const ctPhoneOk=v=>{const t=String(v||'').trim();if(!t)return true;if(!/^\+?[\d\s().\-\/]+$/.test(t))return false;
+  return /^(0[1-9]\d{8}|(\+|00)31[1-9]\d{8}|(\+|00)(?!31)[1-9]\d{7,13}|6\d{8})$/.test(t.replace(/[\s().\-\/]/g,''))};
 // iletişim listesini contacts kaydına çevirir: boş satırlar atılır, ilk satır ana yetkili olur
 const ctDoc=rows=>{const L=rows.map(x=>({contact:String(x.contact||'').trim(),phone:String(x.phone||'').trim()})).filter(x=>x.contact||x.phone).slice(0,MAXCT);
   return {contact:(L[0]||{}).contact||'',phone:(L[0]||{}).phone||'',more:L.slice(1),updatedAt:Date.now(),by:window.CRM_USER||''}};
@@ -1245,8 +1252,10 @@ document.addEventListener('submit',async e=>{
     if(!can('e_notes')){toast('İletişim bilgisi düzenleme izniniz yok.',1);return}
     const c=C.find(x=>x.id===st.sel);if(!c)return;
     const rows=[...f.querySelectorAll('.ctr')].map((_,i)=>({contact:String(f.elements['contact'+i].value||'').trim(),phone:String(f.elements['phone'+i].value||'').trim()}));
-    const bad=rows.findIndex(x=>x.phone&&x.phone.replace(/\D/g,'').length<8);
-    if(bad>=0){toast(`${bad+1}. yetkilinin telefonu çok kısa görünüyor.`,1);f.elements['phone'+bad].focus();return}
+    for(const e of f.querySelectorAll('[aria-invalid]'))e.removeAttribute('aria-invalid');
+    for(let i=0;i<rows.length;i++){
+      const bad=!ctNameOk(rows[i].contact)?['contact',`${i+1}. yetkilinin adı yalnız harflerden oluşmalı (en az 2 harf; boşluk, nokta, kesme ve tire olabilir).`]:!ctPhoneOk(rows[i].phone)?['phone',`${i+1}. yetkilinin telefonu geçerli değil. Örnek: 06 12345678, 010 1234567 ya da +31 6 12345678.`]:null;
+      if(bad){const e=f.elements[bad[0]+i];e.setAttribute('aria-invalid','true');e.focus();toast(bad[1],1);return}}
     if(await w(()=>db.collection('contacts').doc(c.id).set(ctDoc(rows)))){st.ctEdit=null;st.ctN=0;st.formFor=null;toast('İletişim bilgisi kaydedildi');render()}
     return}
   if(f.id==='qform'){

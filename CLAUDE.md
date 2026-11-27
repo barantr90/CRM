@@ -31,6 +31,7 @@ Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
 - Müşteri kartındaki rut günü, ziyaret sıklığı/haftaları, merch ve dizim `set_visit(cid, p)` RPC'siyle yazılır (izin `e_visit`). Yalnız bu alanlar ve listedeki değerler kabul edilir.
 - İletişim (yetkili, telefon): `contacts` kaydı ile Excel'deki değerden yenisi geçerli (`ctOf`). Excel tarafının zamanı `ctAt`'tir; yalnız Excel'den yetkili/telefon değişince yazılır. Temsilcinin boşalttığı alan (yetkiliyi sil) boş kalır.
 - Bir müşteride en fazla 3 yetkili (`MAXCT`). İlki `contacts.contact/phone`, diğerleri `contacts.more` (en fazla 2; veritabanında `contacts_more_max` kısıtı). Excel yalnız ilk yetkiliyi taşır.
+- Yetkili adı yalnız harflerden (boşluk . ' - olabilir, en az 2 harf), telefon geçerli biçimde olmalı: istemcide `ctNameOk` / `ctPhoneOk`, veritabanında aynı kural `contacts_valid` kısıtıyla (`ct_name_ok`, `ct_phone_ok`). İkisi birlikte değiştirilir.
 - Veri menüden içe aktarılır:
   - **Müşterileri içe aktar**: `CRM_Musteriler` Excel'i (müşteri bilgisi).
   - **Satış verisini içe aktar**: iki dosya birlikte, günlük satış (Daily sell-out, belge bazında) + detaylı satış raporu (ürün bazında, Power BI). İki dosyanın müşteri toplamları 1 €'dan fazla tutmazsa yüklenmez. Hesap `planSales()`'ta; yazma tek işlemde `import_sales(p)` RPC'siyle (izin `x_sales` + `v_all`; arada veri değiştiyse `stale` ile reddeder). Aynı ay yeniden yüklenince eski ay çıkarılıp yenisi eklenir; aynı dosyalar iki kez yüklenince sonuç değişmez.

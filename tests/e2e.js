@@ -228,7 +228,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.click('#ctAdd');await page.fill('#ctform [name=contact2]','Ali Bey');await page.fill('#ctform [name=phone2]','12');
    ok((await page.$$('#ctform .ctr')).length===3&&!(await page.$('#ctAdd'))&&/En fazla 3 yetkili/.test(await txt(page,'#ctform')),'3 satırda ekle butonu kalkar: "En fazla 3 yetkili"');
    ok(await page.$eval('#ctform [name=contact1]',e=>e.value)==='Ayşe Hanım','satır eklenince girilenler korunur');
-   await page.click('#ctform button[type=submit]');ok(/3\. yetkilinin telefonu çok kısa/.test(await txt(page,'#toast')),'kısa telefon satır numarasıyla reddedildi: '+await txt(page,'#toast'));
+   await page.click('#ctform button[type=submit]');ok(/3\. yetkilinin telefonu geçerli değil/.test(await txt(page,'#toast')),'kısa telefon satır numarasıyla reddedildi: '+await txt(page,'#toast'));
    await page.fill('#ctform [name=phone2]','');await page.click('#ctform button[type=submit]');await page.waitForTimeout(150);
    const k=await doc(page,'contacts/c3');
    ok(k&&k.contact===ct0&&k.phone==='06 12345678'&&JSON.stringify(k.more)===JSON.stringify([{contact:'Ayşe Hanım',phone:'06 22233344'},{contact:'Ali Bey',phone:''}]),'kaydedildi: ilk yetkili + 2 ek: '+JSON.stringify(k));
@@ -261,6 +261,52 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    ok(await pm.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await pm.$$eval('#ctform input',a=>a.every(e=>e.getBoundingClientRect().right<=innerWidth)),'390 px: 3 satırlı form taşmıyor');
    await pm.screenshot({path:path.join(SHOTS,'1w-yetkili-390.png'),fullPage:true});await cm.close();
    await page.click('#ctEdit');await page.click('#ctAdd');await page.click('#ctAdd');await page.screenshot({path:path.join(SHOTS,'1w-yetkili.png')});await page.click('#ctCancel');}
+
+  step('1x. Yetkili adı harflerden, telefon geçerli bir numara olmalı');
+  {await sel(page,'Küçük Kiosk');
+   const before=await doc(page,'contacts/c4');
+   // tek satırı doldurup kaydetmeyi dener: [bildirim, kayıt yapıldı mı, form açık mı, hatalı kutu]
+   const tryRow=async(name,phone,row=0)=>{if(!(await page.$('#ctform')))await page.click('#ctEdit');
+     for(let r=(await page.$$('#ctform .ctr')).length;r<=row;r++)await page.click('#ctAdd');
+     await page.fill('#ctform [name=contact'+row+']',name);await page.fill('#ctform [name=phone'+row+']',phone);
+     await page.evaluate(()=>{window.__writes.length=0;const t=document.querySelector('#toast');if(t)t.textContent=''});
+     await page.click('#ctform button[type=submit]');await page.waitForTimeout(60);
+     const w=(await writes(page)).some(x=>x[1]==='contacts/c4');
+     const inv=await page.$$eval('#ctform [aria-invalid=true]',a=>a.map(e=>e.name)).catch(()=>[]);
+     return [await txt(page,'#toast'),w,!!(await page.$('#ctform')),inv,await page.evaluate(()=>document.activeElement&&document.activeElement.name)]};
+   const badN=['Ahmet123','12345','A','Ahmet@Bey','Ali_Veli','!!!','Mehmet / Ali','Ali,Veli','<b>Ali</b>','---','  .  '];
+   for(const n of badN){const [t,w,open,inv,foc]=await tryRow(n,'');
+     ok(/1\. yetkilinin adı yalnız harflerden oluşmalı/.test(t)&&!w&&open&&inv.join()==='contact0'&&foc==='contact0','geçersiz ad reddedildi: "'+n+'" → '+t)}
+   const goodN=['Çağlar Öztürk','Jan-Willem de Vries',"D'Angelo",'A. Yılmaz','Şükrü Ağa','Zoë Müller','İsmail Işık','Bülent'];
+   for(const n of goodN){const [t,w,open]=await tryRow(n,'');ok(w&&!open&&/kaydedildi/.test(t),'geçerli ad kabul edildi: "'+n+'"');
+     ok((await doc(page,'contacts/c4')).contact===n,'kaydedilen ad aynen: '+n)}
+   const badP=['123','06 1234','06123456789','abc','06-1234-567a','+31 6 1234','+31 06 12345678','0031 06 12345678','++31612345678','612345','+0 123456789','06 12345678 (winkel)','0612345678 / 0687654321','+','00 00','12345678901234567'];
+   for(const ph of badP){const [t,w,open,inv,foc]=await tryRow('Ali Bey',ph);
+     ok(/1\. yetkilinin telefonu geçerli değil/.test(t)&&!w&&open&&inv.join()==='phone0'&&foc==='phone0','geçersiz telefon reddedildi: "'+ph+'" → '+t)}
+   const goodP=['06 12345678','0612345678','06-12345678','010 1234567','(010) 123 45 67','+31 6 12345678','+31612345678','0031612345678','+32 470 12 34 56','+49 30 1234567','+90 532 123 45 67','612345678','020-1234567'];
+   for(const ph of goodP){const [t,w,open]=await tryRow('Ali Bey',ph);ok(w&&!open,'geçerli telefon kabul edildi: "'+ph+'"');
+     ok((await doc(page,'contacts/c4')).phone===ph,'kaydedilen telefon aynen: '+ph)}
+   // boş alanlar serbest: telefonsuz yetkili ya da adsız telefon
+   {const [,w1]=await tryRow('Ali Bey','');const [,w2]=await tryRow('','06 12345678');ok(w1&&w2,'yalnız ad ya da yalnız telefon girilebilir')}
+   // hata hangi satırdaysa onu söyler; diğer satırlar kaydedilmez
+   {await page.click('#ctEdit');await page.click('#ctAdd');await page.click('#ctAdd');
+    await page.fill('#ctform [name=contact0]','Ali Bey');await page.fill('#ctform [name=phone0]','06 12345678');
+    await page.fill('#ctform [name=contact1]','Ayşe Hanım');await page.fill('#ctform [name=phone1]','06 22233344');
+    await page.fill('#ctform [name=contact2]','Veli2');await page.fill('#ctform [name=phone2]','06 33344455');
+    await page.evaluate(()=>window.__writes.length=0);await page.click('#ctform button[type=submit]');await page.waitForTimeout(60);
+    ok(/3\. yetkilinin adı/.test(await txt(page,'#toast'))&&!(await writes(page)).some(x=>x[1]==='contacts/c4')&&await page.evaluate(()=>document.activeElement.name)==='contact2','3. satırdaki hatalı ad bildirildi, hiçbir satır kaydedilmedi');
+    await page.fill('#ctform [name=contact2]','Veli Bey');await page.fill('#ctform [name=phone2]','06 333');await page.click('#ctform button[type=submit]');await page.waitForTimeout(60);
+    ok(/3\. yetkilinin telefonu geçerli değil/.test(await txt(page,'#toast'))&&await page.$$eval('#ctform [aria-invalid=true]',a=>a.map(e=>e.name).join())==='phone2','sonra 3. satırın telefonu; önceki ad işareti kalktı');
+    ok(/06 12345678/.test(await txt(page,'#toast')),'bildirim örnek numara gösteriyor: '+await txt(page,'#toast'));
+    await page.fill('#ctform [name=phone2]','06 33344455');await page.click('#ctform button[type=submit]');await page.waitForTimeout(100);
+    const k=await doc(page,'contacts/c4');ok(k.contact==='Ali Bey'&&k.more.length===2&&k.more[1].contact==='Veli Bey','düzeltince 3 yetkili kaydedildi')}
+   // veritabanı da aynı kuralla reddeder (istemci atlatılsa bile)
+   for(const [d,lab] of [[{contact:'Ali123',phone:''},'ad'],[{contact:'Ali',phone:'123'},'telefon'],[{contact:'Ali',phone:'',more:[{contact:'Veli',phone:'06 1'}]},'ek yetkilinin telefonu'],[{contact:'Ali',phone:'',more:[{contact:'V3li',phone:''}]},'ek yetkilinin adı']]){
+    const r=await page.evaluate(d=>window.claude.use('db').then(db=>db.collection('contacts').doc('c4').set({...d,updatedAt:Date.now()})).then(()=>'kabul',()=>'red'),d);
+    ok(r==='red','veritabanı geçersiz '+lab+' reddeder')}
+   await page.evaluate(b=>window.claude.use('db').then(db=>b?db.collection('contacts').doc('c4').set(b):db.collection('contacts').doc('c4').delete()),before);await page.waitForTimeout(100);
+   if(await page.$('#ctform'))await page.click('#ctCancel');
+   await page.screenshot({path:path.join(SHOTS,'1x-dogrulama.png')});}
 
   step('1z. Kart: yetkisiz kullanıcı ve telefon görünümü');
   {const {ctx:cx,page:pp}=await open(browser,{admin:false,user:'lutfi.kaplan@akar-bv.nl'});
@@ -298,7 +344,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   ok(decodeURIComponent(await page.getAttribute('#ctMap','href')).includes('Sessiz Market'),'adres yoksa market adı kullanılıyor');
   await page.click('#ctEdit');
   await page.fill('#ctform [name=phone0]','123');await page.click('#ctform button[type=submit]');
-  ok(/çok kısa/.test(await txt(page,'#toast')),'kısa numara reddedildi');
+  ok(/geçerli değil/.test(await txt(page,'#toast')),'kısa numara reddedildi');
   await page.fill('#ctform [name=phone0]','06 11122233');await page.fill('#ctform [name=contact0]','Mehmet Usta');
   await page.click('#ctform button[type=submit]');await page.waitForTimeout(100);
   const k=await doc(page,'contacts/c2');
@@ -743,7 +789,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await page.fill('#r_temas','5');await page.fill('#r_arag','50');
    await page.fill('#r_iade','3.5');ok(/eşiğin üzerinde/.test(await txt(page,'[data-rimp=iade]'))&&!(await page.$eval('#r_iade',e=>e.closest('.rbox').classList.contains('bad'))),'ondalık değer kabul ediliyor');await page.fill('#r_iade','2.5');
    // başka bir veri değişikliği sayfayı yeniden çizse de yazılanlar kaybolmuyor
-   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('contacts').doc('c9').set({phone:'1'})));await page.waitForTimeout(150);
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('contacts').doc('c9').set({phone:'06 12345678'})));await page.waitForTimeout(150);
    ok(await page.inputValue('#r_pasif')==='60'&&await page.inputValue('#r_temas')==='5','yeniden çizimde yazılanlar korunuyor');
    await page.click('#rform button[type=submit]');await page.waitForTimeout(150);
    const d=await doc(page,'settings/rules');
@@ -1042,7 +1088,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    // izin değiştir ve kaydet
    await page.uncheck('[name="satis|v_all"]');await page.check('[name="satis|v_credit"]');
    ok(/Kaydedilmemiş/.test(await txt(page,'#pmsg')),'kaydedilmemiş değişiklik uyarısı');
-   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('contacts').doc('c9').set({phone:'2'})));await page.waitForTimeout(150);
+   await page.evaluate(()=>window.claude.use('db').then(db=>db.collection('contacts').doc('c9').set({phone:'06 87654321'})));await page.waitForTimeout(150);
    ok(!(await chk('satis','v_all'))&&await chk('satis','v_credit'),'yeniden çizimde işaretler korunuyor');
    await page.click('#pform button[type=submit]');await page.waitForTimeout(150);
    const d=await doc(page,'settings/perms');
