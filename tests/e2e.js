@@ -305,7 +305,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
     const T0=await page.evaluate(()=>window.__FIX.TODAY),d5=await page.evaluate(()=>window.__FIX.day(5)),in5=d5.slice(0,7)===T0.slice(0,7);
     const u=await page.$$eval('#duT tbody tr',tr=>tr.map(t=>[...t.cells].map(c=>c.textContent.replace(/\u00a0/g,' ').trim())));
     const exp=[['1','Sağlıklı Market','Mehmet Halici','€ 450','1','Bugün']].concat(in5?[['2','Düşüş Market','Lütfi Kaplan','€ 900','1','5 gün kaldı']]:[]);
-    ok(JSON.stringify(u.map(r=>[r[0],r[1],r[2],r[3],r[4],r[5].replace(/^\d\d\.\d\d\.\d{4}\s*/,'')]))===JSON.stringify(exp),'bu ay vadesi gelecekler, en yakın vade üstte (5 gün sonrası '+(in5?'bu ayda':'gelecek ayda')+'): '+JSON.stringify(u));
+    ok(JSON.stringify(u.map(r=>[r[0],r[1],r[2],r[3],r[4],r[6]]))===JSON.stringify(exp)&&u.every(r=>/^\d\d\.\d\d\.\d{4}$/.test(r[5])),'bu ay vadesi gelecekler, en yakın vade üstte (5 gün sonrası '+(in5?'bu ayda':'gelecek ayda')+'): '+JSON.stringify(u));
     ok(new RegExp((in5?2:1)+' müşteri · € '+(in5?'1.350':'450')).test(await txt(page,'#dueHead')),'başlıkta müşteri sayısı ve toplam: '+await txt(page,'#dueHead'));
     ok(!(await page.$$eval('#duT tbody tr',tr=>tr.some(t=>/9999|8888/.test(t.textContent)))),'CRM\'de olmayan kodlar bu listede yok');
     await page.click('[data-ovf=arag]');ok((await page.$$('#duT tbody tr')).length===u.length,'üstteki süzgeç yalnız vadesi geçenleri etkiliyor');await page.click('[data-ovf=all]');
@@ -326,9 +326,14 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
     const X=q=>page.$$eval(q+' thead th',t=>t.slice(0,6).map(x=>{const r=x.getBoundingClientRect();return [Math.round(r.left),Math.round(r.right)]}));
     const a=await X('#odT'),b=await X('#duT');ok(a.every((v,i)=>Math.abs(v[0]-b[i][0])<=1&&Math.abs(v[1]-b[i][1])<=1),'iki tablonun sütunları aynı hizada: '+JSON.stringify([a,b]));
     const R=q=>page.$eval(q,e=>Math.round(e.getBoundingClientRect().right));ok(Math.abs(await R('#odT')-await R('#duT'))<=1,'tablo genişlikleri aynı');
-    // Vade Tarihi sütunu soldan hizalı: başlık ve her satırdaki tarih aynı sol kenarda başlar
-    const L=await page.$$eval('#duT tr > :nth-child(6)',t=>t.slice(0,-1).map(x=>{const r=document.createRange();r.setStart(x,0);r.setEnd(x,Math.min(1,x.childNodes.length));const b=(x.querySelector('.ddt')||x).getBoundingClientRect();return [getComputedStyle(x).textAlign,Math.round(x.querySelector('.ddt')?b.left:r.getBoundingClientRect().left)]}));
-    ok(L.length>=2&&L.every(([a,x])=>a==='left'&&Math.abs(x-L[0][1])<=1),'Vade Tarihi sütunu soldan hizalı: '+JSON.stringify(L));}
+    // Vade Tarihi sütunu üstteki "En eski" sütunuyla aynı hizada: başlık ve tarihler En eski'nin sağ kenarında biter
+    const TX=(q,n)=>page.$$eval(q+' tr > :nth-child('+n+')',t=>t.filter(x=>x.textContent.trim()).map(x=>{const r=document.createRange();r.selectNodeContents(x);const b=r.getBoundingClientRect();return [Math.round(b.left),Math.round(b.right)]}));
+    const oe=await TX('#odT',6),vt=await TX('#duT',6),R0=oe[0][1];
+    ok(oe.length>=2&&oe.every(v=>Math.abs(v[1]-R0)<=1),'En eski sütunu sağa hizalı: '+JSON.stringify(oe));
+    ok(vt.length>=2&&vt.every(v=>Math.abs(v[1]-R0)<=1),'Vade Tarihi başlığı ve tarihleri En eski ile aynı sağ kenarda: '+JSON.stringify([R0,vt]));
+    ok(vt.slice(1).every(v=>Math.abs(v[0]-vt[1][0])<=1),'tarihler alt alta aynı sol kenarda başlar: '+JSON.stringify(vt));
+    const kl=await TX('#duT',7),ar=await page.$eval('#odT thead th:nth-child(7)',e=>Math.round(e.getBoundingClientRect().left));
+    ok(kl.length===vt.length-1&&kl.every(v=>v[0]>=ar&&Math.abs(v[0]-kl[0][0])<=1),'"gün kaldı" ARAG sütununda, soldan hizalı: '+JSON.stringify([ar,kl]));}
    await page.click('[data-ovf=arag]');ok(/Bu süzgeçte müşteri yok/.test(await txt(page,'#overdue')),'ARAG süzgeci başta boş');
    await page.click('[data-ovf=all]');
    // açık fatura dosyasında olup CRM'de olmayan kodlar ayrı bölümde
@@ -356,6 +361,29 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await sel(page,'Sağlıklı Market');ok(!(await page.$('#aragBox')),'30 günü aşmayan müşteride ARAG butonu yok');
    await sel(page,'Düşüş Market');page.once('dialog',d=>d.accept());await page.click('#aragOff');await page.waitForTimeout(150);
    ok(!(await doc(page,'arag/c1'))&&!!(await page.$('#aragOn')),'süreç kapatılınca kayıt silindi, buton geri geldi');}
+
+  step('3e2. Vade Takibi: çok satırda hiza (masaüstü, 390 px, gece modu)');
+  for(const [vp,scheme,nm] of [[{width:1366,height:1000},'light','3e2-vade-hiza.png'],[{width:1366,height:1000},'dark','3e2-vade-hiza-gece.png'],[{width:390,height:844},'light','3e2-vade-hiza-390.png']]){
+   const {ctx,page}=await open(browser,{viewport:vp,scheme});
+   // 6 müşteri: farklı tutar, vadesi geçen gün sayısı ve bu ay içindeki vade günleri
+   await page.evaluate(()=>window.claude.use('db').then(db=>{const {day,TODAY}=window.__FIX,e=new Date(+TODAY.slice(0,4),+TODAY.slice(5,7),0).getDate()-+TODAY.slice(8,10),d=k=>day(Math.min(k,e)),m={};
+     [['1',[-26],[0]],['2',[-2],[1]],['3',[-1],[1]],['4',[-1],[2]],['5',[-2],[3]],['6',[-120],[]],['7',[],[e]]].forEach(([k,od,du],i)=>{m[k]={vade:30,inv:[...od.map((x,j)=>['RE-O'+k+j,day(x-30),'F',1000+i*317,1000+i*317,day(x)]),...du.map((x,j)=>['RE-D'+k+j,day(-10),'F',2000+i*211,2000+i*211,d(x)])]}});
+     return db.doc('sync/openinv').set({asOf:TODAY,n:12,map:m})}));
+   await page.waitForTimeout(150);await page.click('#tabV');await page.waitForSelector('#duT tbody tr');
+   const TX=(q,n)=>page.$$eval(q+' tr > :nth-child('+n+')',t=>t.filter(x=>x.textContent.trim()&&x.offsetParent).map(x=>{const r=document.createRange();r.selectNodeContents(x);const b=r.getBoundingClientRect();return [Math.round(b.left),Math.round(b.right)]}));
+   const tag=nm.replace('.png','')+': ';
+   const oe=await TX('#odT',6),vt=await TX('#duT',6),kl=await TX('#duT',7),ar=await TX('#odT',7);
+   ok(oe.length>=6&&vt.length>=6,tag+'iki tabloda da çok satır ('+oe.length+' / '+vt.length+')');
+   const R0=oe[0][1];
+   ok(oe.every(v=>Math.abs(v[1]-R0)<=1)&&vt.every(v=>Math.abs(v[1]-R0)<=1),tag+'"En eski" ve "Vade Tarihi" (başlık + tüm tarihler) aynı sağ kenarda: '+JSON.stringify([oe,vt]));
+   ok(vt.slice(1).every(v=>Math.abs(v[0]-vt[1][0])<=1),tag+'tarihler aynı sol kenarda başlar: '+JSON.stringify(vt.slice(1)));
+   ok(kl.length===vt.length-1&&kl.every(v=>Math.abs(v[0]-kl[0][0])<=1),tag+'"gün kaldı / Bugün" etiketleri aynı sol kenarda: '+JSON.stringify(kl));
+   ok(kl.every(v=>v[0]>vt[1][1]),tag+'etiket tarihin sağında, üst üste binmiyor');
+   const X=q=>page.$$eval(q+' thead th',t=>t.filter(x=>x.offsetParent).map(x=>{const r=x.getBoundingClientRect();return [Math.round(r.left),Math.round(r.right)]}));
+   const a=await X('#odT'),b=await X('#duT');ok(a.length===b.length&&a.every((v,i)=>Math.abs(v[0]-b[i][0])<=1&&Math.abs(v[1]-b[i][1])<=1),tag+'görünen tüm sütun sınırları iki tabloda aynı: '+JSON.stringify([a,b]));
+   ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)&&await page.$$eval('#overdue .ordp',d=>d.every(x=>x.scrollWidth<=x.clientWidth+1)),tag+'sayfa ve tablolar yatay taşmıyor');
+   if(vp.width<=600){const lab=await page.$$eval('#duT tbody td:nth-child(7)',t=>t.map(x=>x.offsetParent?x.textContent.trim():''));ok(lab.every(Boolean),tag+'telefonda "gün kaldı" etiketleri görünüyor: '+lab.join(', '))}
+   await page.screenshot({path:path.join(SHOTS,nm),fullPage:true});await ctx.close()}
 
   step('3f. Liste ve kart bağımsız kayıyor');
   {const {ctx:c2,page:p2}=await open(browser,{viewport:{width:1400,height:650}});
