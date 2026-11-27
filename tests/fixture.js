@@ -11,7 +11,7 @@
   const customers=Object.fromEntries([
     cust('c1',{name:'Düşüş Market',rep:'Lütfi Kaplan',ciro2025:60000,sales2026:20000,lastInvoice:day(-10),visitDay:TODAYNAME,segment:'Gold'}),
     cust('c2',{name:'Sessiz Market',rep:'Lütfi Kaplan',ciro2025:24000,sales2026:Math.round(24000*YF),lastInvoice:day(-70)}),
-    cust('c3',{name:'Sağlıklı Market',rep:'Mehmet Halici',ciro2025:50000,sales2026:Math.round(50000*YF),lastInvoice:day(-3),phone:'06 12345678',contact:'Ahmet Bey',address:'Kerkstraat 1',postcode:'1017 GA',city:'Amsterdam'}),
+    cust('c3',{name:'Sağlıklı Market',rep:'Mehmet Halici',ciro2025:50000,sales2026:Math.round(50000*YF),lastInvoice:day(-3),phone:'06 12345678',contact:'Ahmet Bey',address:'Kerkstraat 1',postcode:'1017 GA',city:'Amsterdam',merch:'Var',dizim:'Yok'}),
     cust('c4',{name:'Küçük Kiosk',rep:'Mehmet Halici',ciro2025:500,sales2026:100,lastInvoice:day(-100),segment:'Kiosk'}),
     cust('c5',{name:'Kayıp Market',rep:'Gökhan Genç',ciro2025:10000,sales2026:0,lastInvoice:day(-400),status:'Pasif'}),
     cust('c6',{name:'İadeci Market',rep:'Özgür Firat',ciro2025:30000,sales2026:Math.round(30000*YF),lastInvoice:day(-5),phone:'+31 6 98765432'}),
