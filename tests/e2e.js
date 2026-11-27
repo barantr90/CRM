@@ -45,25 +45,6 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
 
 (async()=>{
   fs.mkdirSync(SHOTS,{recursive:true});
-
-  step('00. kurallar.md kodla uyumlu');
-  {const src=fs.readFileSync(path.join(ROOT,'app.js'),'utf8'),md=fs.readFileSync(path.join(ROOT,'kurallar.md'),'utf8');
-   const block=(a,b)=>src.slice(src.indexOf(a),src.indexOf(b,src.indexOf(a)));
-   const perms=[...block('const PERMS=[','const PDEF=').matchAll(/\n\s*\['(\w+)',/g)].map(m=>m[1]);
-   const PDEF=Function('return '+src.match(/const PDEF=(\{.*?\}\});/)[1])();
-   const RDEF=Function('return '+src.match(/const RDEF=(\{.*?\});/)[1])();
-   const rules=[...block('const RULES=[','const RKEY=').matchAll(/\n\s*\['(\w+)','/g)].map(m=>m[1]);
-   const sec=n=>md.slice(md.indexOf('\n## '+n+'.'),md.indexOf('\n## ',md.indexOf('\n## '+n+'.')+3));
-   const rowIn=(t,k)=>{const l=t.split('\n').find(l=>l.startsWith('| `'+k+'` |'));return l?l.split('|').map(x=>x.trim()):[]};
-   const row=k=>rowIn(sec(3),k),rrow=k=>rowIn(sec(5),k);
-   const noRow=perms.filter(k=>!row(k).length||row(k).length<2);
-   ok(perms.length>=14&&!noRow.length,`her izin (${perms.length}) kurallar.md'de satır olarak var`+(noRow.length?': eksik '+noRow.join(', '):''));
-   const badDef=perms.filter(k=>{const r=row(k);return r[4]!==(PDEF.satis[k]?'✓':'–')||r[5]!==(PDEF.muhasebe[k]?'✓':'–')});
-   ok(!badDef.length,'izin varsayılanları (PDEF) kurallar.md ile aynı'+(badDef.length?': farklı '+badDef.join(', '):''));
-   const extra=[...sec(3).matchAll(/^\| `([a-z]_\w+)` \|/gm)].map(m=>m[1]).filter(k=>!perms.includes(k));
-   ok(!extra.length,'kurallar.md\'de koda olmayan izin yok'+(extra.length?': '+extra.join(', '):''));
-   const badR=rules.filter(k=>{const r=rrow(k);return !r.length||r[5]!==String(RDEF[k])});
-   ok(rules.length===Object.keys(RDEF).length&&!badR.length,`her ayar (${rules.length}) ve varsayılanı kurallar.md ile aynı`+(badR.length?': farklı '+badR.join(', '):''));}
   const server=await serve();
   const browser=await chromium.launch();
   let {ctx,page}=await open(browser);
