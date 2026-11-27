@@ -116,6 +116,8 @@ function riskCalc(c){
   if(d!=null&&d>=RISK.silentDays&&d<=RISK.silentMax&&yearly>=RISK.silentMin){const m=yearly/12;why.push({k:'silent',days:d,monthly:m});val=Math.max(val,m*d/30)}
   return why.length?{why,val}:null;
 }
+// Tempo: bu yılın satışı / (geçen yıl cirosu × yılın geçen kısmı) − 1. Kart, zincir, Karne ve Excel bu fonksiyonu kullanır.
+const tempoOf=c=>typeof c.ciro2025==='number'&&c.ciro2025>0&&typeof c.sales2026==='number'&&YF>0?c.sales2026/(c.ciro2025*YF)-1:null;
 const riskText=r=>r?r.why.map(x=>x.k==='drop'?`Ciro temposu %${Math.round(x.pace*100)} · ${eur(x.loss)} geride`:`${x.days} gündür fatura yok (aylık ~${eur(x.monthly)})`).join(' · '):'';
 function retOf(c){if(!RET||!RET.map)return null;const r=RET.map[code(c)];if(!r||!(r[0]>0))return null;const p=Math.abs(r[1]||0)/r[0];return {p,iade:r[1]||0,sales:r[0],warn:p>=RET_WARN}}
 // Açık faturalar (sync/openinv): map[kod]={lim,vade,inv:[[no,faturaTarihi,tür F/I/P,tutar,kalan,vadeTarihi]]}
@@ -372,7 +374,7 @@ function visible(){
 function renderTop(){
   renderUser();
   {const lk=repLock();$('#reps').innerHTML=(lk!==null?[lk]:['',...allReps()]).map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}"${lk!==null?' disabled title="Yalnız kendi müşterilerinizi görüyorsunuz"':''}>${r==='—'?'Temsilci eşleşmedi':r?esc(r):'Tüm temsilciler'}</button>`).join('')}
-  $('#ximpBtn').hidden=!(canWrite&&can('x_import'));$('#oimpBtn').hidden=!(canWrite&&can('x_openinv'));$('#xexp').hidden=!can('x_export');$('#umSep').hidden=$('#ximpBtn').hidden&&$('#oimpBtn').hidden&&$('#xexp').hidden;
+  $('#ximpBtn').hidden=!(canWrite&&can('x_import'));$('#oimpBtn').hidden=!(canWrite&&can('x_openinv'));$('#xexp').hidden=$('#xsal').hidden=!can('x_export');$('#umSep').hidden=$('#ximpBtn').hidden&&$('#oimpBtn').hidden&&$('#xexp').hidden;
   $('#umRules').hidden=!can('e_rules');$('#umPerms').hidden=!isAdmin();$('#umSep2').hidden=$('#umRules').hidden&&$('#umPerms').hidden;
   $('#umRules').classList.toggle('on',st.view==='admin');$('#umPerms').classList.toggle('on',st.view==='perms');
   if($('#umRole'))$('#umRole').textContent=roleKnown()?roleName(myRole()):'';
@@ -695,7 +697,7 @@ function chainHtml(c){
   const both=S.filter(x=>typeof x.ciro2025==='number'&&x.ciro2025>0&&typeof x.sales2026==='number');
   const pb=both.reduce((a,x)=>a+x.ciro2025,0),sb=both.reduce((a,x)=>a+x.sales2026,0);
   const gTxt=g=>g==null?'–':`<span class="${gCls(g)}">${gPct(g)}</span>`;
-  const tempo=x=>typeof x.ciro2025==='number'&&x.ciro2025>0&&typeof x.sales2026==='number'?x.sales2026/(x.ciro2025*YF)-1:null;
+  const tempo=tempoOf;
   let rs=0,ri=0;for(const x of S){const r=RET&&RET.map&&RET.map[code(x)];if(r){rs+=r[0]||0;ri+=Math.abs(r[1]||0)}}
   const rp=rs?ri/rs:null,rk=S.filter(x=>RK[x.id]),nA=S.filter(x=>x.status!=='Pasif').length;
   const reps=[...new Set(S.map(x=>x.rep).filter(Boolean))];
@@ -797,17 +799,16 @@ async function loadXLSX(){
   await new Promise((res,rej)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';sc.onload=res;sc.onerror=rej;document.head.appendChild(sc)});
   return window.XLSX;
 }
-const TYPE_DEFAULT='Satis Faturasi';
-// [header, field, type, isFormula]
+// Müşteri Excel'i: yalnız müşteri bilgisi. [başlık, alan, tür, yalnız dışa aktarılır]
 const COLS=[['Kod','code','t'],['Müşteri','name','t'],['Zincir','chain','t'],
  ['Segment','segment','seg'],['Durum','status','st',1],['Durum (elle)','statusManual','st0'],
  ['Temsilci','rep','t'],['Rut günü','visitDay','day'],['Ziyaret sıklığı','freq','t'],['Ziyaret haftaları','weeks','t'],['Ödeme vadesi','pay','t'],['Merch','merch','vy'],['Dizim','dizim','vy'],
- ['Yetkili','contact','t'],['Telefon','phone','t'],['Adres','address','t'],['Posta kodu','postcode','t'],['Şehir','city','t'],
- ['Son fatura tarihi','lastInvoice','d',1],['Son fatura no','lastInvoiceNo','t',1],['2026 net satış (€)','sales2026','n',1],['2026 fatura sayısı','invoices2026','n',1],
- ['Ciro 2025 (€)','ciro2025','n'],['Tempo % (aynı dönem)','_growth','f',1]];
-const DATA_KEYS=COLS.filter(c=>!c[1].startsWith('_')).map(c=>c[1]);
-const PBI_KEYS=['lastInvoice','lastInvoiceNo'];
-const PBI_HEAD=['Datum','BelegNr','Belegart','Distributor','DebitorenNr','DebitorenBez','Segment','Ort','Land','EUR','KTN','TON','Verkaeufer'];
+ ['Yetkili','contact','t'],['Telefon','phone','t'],['Adres','address','t'],['Posta kodu','postcode','t'],['Şehir','city','t']];
+const EDIT_KEYS=COLS.filter(c=>!c[3]).map(c=>c[1]);
+// Satış Excel'i: sistemdeki satış verisi, Kod ile müşteri Excel'ine eşlenir; içe aktarılmaz
+const SCOLS=()=>[['Kod','code','t'],['Müşteri','name','t'],['Son fatura tarihi','lastInvoice','d'],['Son fatura no','lastInvoiceNo','t'],[`${CY} net satış (€)`,'sales2026','n'],[`${CY} fatura sayısı`,'invoices2026','i'],[`Ciro ${PY} (€)`,'ciro2025','n'],['Tempo % (aynı dönem)','_tempo','p']];
+// eski dosyalarda olabilecek satış sütunları: okunmaz, değerler sistemden gelir
+const OLD_SALES=['Son fatura tarihi','Son fatura no','2026 net satış (€)','2026 fatura sayısı','Ciro 2025 (€)','Tempo % (aynı dönem)','Büyüme %'];
 const XL=n=>{let s='';n++;while(n){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=Math.floor((n-1)/26)}return s};
 const colOf=k=>XL(COLS.findIndex(c=>c[1]===k));
 const serial=d=>{const [y,m,dd]=d.split('-').map(Number);return (Date.UTC(y,m-1,dd)-Date.UTC(1899,11,30))/864e5};
@@ -827,100 +828,35 @@ function cellVal(x,t){
   if(t==='day'){const d=s&&DAYS.find(dn=>low(dn).startsWith(low(s).slice(0,3)));return d||''}
   return s;
 }
-// same rules as the Excel formulas
-const statusOf=(last,S)=>!last?'Pasif':(serial(S.ref)-serial(last)>S.pasif?'Pasif':'Aktif');
-function aggPBI(rows,type){
-  const m={};let to=0;
-  for(const [d,b,t,k,e] of rows){if(!k)continue;const x=m[k]||(m[k]=[0,'',0,0]);x[2]=Math.round((x[2]+(+e||0))*100)/100;if(d>to)to=d;
-    if(t===type){x[3]++;if(d>x[0]){x[0]=d;x[1]=b}}}
-  return {map:m,to:to?fromSerial(to):''};
+function xlCell(v,t){
+  if(v==null||v==='')return {t:'s',v:''};
+  if(t==='d')return {t:'n',v:serial(v),z:'dd.mm.yyyy'};
+  if(t==='n')return {t:'n',v:+v,z:'#,##0.00'};
+  if(t==='i')return {t:'n',v:+v,z:'0'};
+  if(t==='p')return {t:'n',v:+v,z:'0.0%'};
+  return {t:'s',v:String(v)};
 }
-function readSettings(wb){
-  const S={pasif:R.pasif,ref:TODAY,type:TYPE_DEFAULT};const ws=wb.Sheets['Ayarlar'];if(!ws)return S;
-  for(let r=1;r<=30;r++){const k=low(String((ws['A'+r]||{}).v||''));const c=ws['B'+r];if(!c||!k)continue;const v=c.v;
-    if(k.startsWith('pasif')){const n=num(v);if(n)S.pasif=n}
-    else if(k.startsWith('referans')){if(!c.f){const d=cellVal(v,'d');if(d)S.ref=d}}
-    else if(k.includes('fatura') && k.includes('tür')){const s=String(v||'').trim();if(s)S.type=s}}
-  return S;
+function xlSheet(cols,list,val,w){
+  const ws={};cols.forEach((c,j)=>ws[XL(j)+1]={t:'s',v:c[0]});
+  list.forEach((c,i)=>{const o=val(c);cols.forEach(([h,k,t],j)=>ws[XL(j)+(i+2)]=xlCell(o[k],t))});
+  const ref=`A1:${XL(cols.length-1)}${list.length+1}`;ws['!ref']=ref;ws['!autofilter']={ref};ws['!cols']=w.map(x=>({wch:x}));return ws;
 }
-function readPBI(X,wb){
-  let ws=wb.Sheets['PowerBI_Veri'];
-  if(!ws)for(const n of wb.SheetNames){const h=((X.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:''})[0])||[]).map(normH);if(h.includes('datum')&&h.includes('debitorennr')&&h.includes('eur')){ws=wb.Sheets[n];break}}
-  if(!ws)return null;
-  const rows=X.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});const h=(rows[0]||[]).map(normH);
-  const iD=h.indexOf('datum'),iB=h.indexOf('belegnr'),iT=h.indexOf('belegart'),iK=h.indexOf('debitorennr'),iE=h.indexOf('eur');
-  if(iD<0||iK<0||iE<0)return null;
-  const out=[];
-  for(const r of rows.slice(1)){const ds=cellVal(r[iD],'d');if(!ds)continue;const k=normKod(r[iK]);if(!k)continue;
-    out.push([serial(ds),String(r[iB]??'').trim(),String(r[iT]??'').trim(),k,Math.round((num(r[iE])||0)*100)/100])}
-  return out.length?out:null;
+async function saveXLSX(sheet,name,file){
+  const X=await loadXLSX();toast('Excel hazırlanıyor…');
+  const wb=X.utils.book_new();X.utils.book_append_sheet(wb,sheet,name);
+  const buf=X.write(wb,{type:'array',bookType:'xlsx'});
+  const dl=await (window.claude?claude.use('downloads'):null);
+  if(!dl){toast('Bu görünümde dosya indirilemiyor.',1);return}
+  await dl.save({filename:`${file}_${fmt(TODAY)}.xlsx`,data:buf});
 }
-async function getPBI(){
-  if(db){try{const m=await db.doc('pbi/meta').get();if(m.exists){const d=m.data();const out=[];for(let i=0;i<d.chunks;i++){const c=await db.doc('pbi/c'+i).get();if(c.exists)out.push(...c.data().rows)}if(out.length)return {rows:out,to:d.to}}}catch(e){}}
-  return null;
-}
-const HELP=[['Bu dosya nasıl kullanılır'],
-['1. Power BI "Daily Sales (Sell Out)" raporundan 2026 verisini Excel olarak dışa aktarın ve "PowerBI_Veri" sayfasında A1 hücresinden itibaren yapıştırın (başlık satırı dahil). N ve O sütunlarındaki formüllere dokunmayın.'],
-['2. "Müşteriler" sayfasında Son fatura tarihi, Son fatura no, 2026 net satış, 2026 fatura sayısı, Durum ve Tempo % formüldür; kendiliğinden güncellenir. Bu sütunlara yazmayın.'],
-['3. Segment sütununa ne yazarsanız CRM\'de aynen o görünür (ör. A, B, C, Key Account). CRM segmenti ciroya göre hesaplamaz. Durumu elle sabitlemek isterseniz "Durum (elle)" sütununa yazın.'],
-['4. Kurallar "Ayarlar" sayfasındadır: Pasif gün sınırı, referans tarih ve satış faturası türü.'],
-['5. CRM\'de "Excel\'den içe aktar" ile yükleyin. CRM aynı kuralları kendisi de uygular; Excel\'de hesaplanmamış bir hücre olsa bile sonuç aynı olur.'],
-['6. Eşleştirme Kod ile yapılır; yeni Kod = yeni müşteri. Boş hücre o bilgiyi CRM\'de de boşaltır. Excel\'de olmayan müşteriler silinmez; ziyaret notları ve takipler etkilenmez.'],
-[''],['Kurallar'],
-['Segment: Hesaplanmaz. Excel\'deki Segment hücresinde yazan değer aynen kullanılır; boşsa boş kalır.'],
-['Durum: Son satış faturası yoksa ya da referans tarihten Pasif gün sınırından daha eskiyse Pasif, değilse Aktif.'],
-['Son fatura: PowerBI_Veri\'de Belegart = satış faturası türü olan en son tarihli belge. Aynı gün birden fazla fatura varsa listede ilk görünen numara alınır.'],
-['2026 net satış: Müşterinin PowerBI_Veri\'deki tüm belgelerinin EUR toplamı (satış + iade + fiyat farkı).']];
-function setCell(ws,a,c){ws[a]=c}
+const xlList=()=>[...C].sort((a,b)=>String(a.rep||'').localeCompare(String(b.rep||''),'tr')||String(a.name||'').localeCompare(String(b.name||''),'tr'));
 async function exportXLSX(){
-  try{
-    const X=await loadXLSX();toast('Excel hazırlanıyor…');
-    const pb=await getPBI();const S={pasif:R.pasif,ref:TODAY,type:TYPE_DEFAULT};
-    const list=[...C].sort((a,b)=>String(a.rep||'').localeCompare(String(b.rep||''),'tr')||String(a.name||'').localeCompare(String(b.name||''),'tr'));
-    const LR=list.length+1;const ws={};
-    COLS.forEach((c,j)=>setCell(ws,XL(j)+1,{t:'s',v:c[0]}));
-    const A=colOf('code'),G=colOf('statusManual'),LI=colOf('lastInvoice'),T=colOf('sales2026'),V=colOf('ciro2025');
-    const P='PowerBI_Veri!',ty='Ayarlar!$B$4';
-    list.forEach((c,i)=>{const r=i+2,iv=inv(c);
-      const val={...c,...ctOf(c),code:code(c),statusManual:c.statusManual||'',lastInvoice:iv?iv.last:'',lastInvoiceNo:iv?iv.no:'',sales2026:iv?iv.sales:0,invoices2026:iv?iv.n:0,ciro2025:typeof c.ciro2025==='number'?c.ciro2025:null};
-      val._growth=(typeof val.ciro2025==='number'&&val.ciro2025>0&&typeof val.sales2026==='number')?val.sales2026/(val.ciro2025*YF)-1:'';
-      COLS.forEach(([h,k,t,isF],j)=>{const a=XL(j)+r;let v=val[k];let cell;
-        if(t==='d')cell=v?{t:'n',v:serial(v),z:'dd.mm.yyyy'}:{t:'s',v:''};
-        else if(t==='n'||t==='f')cell=(v==null||v==='')?{t:'s',v:''}:{t:'n',v:+v,z:k==='invoices2026'?'0':k==='_growth'?'0.0%':'#,##0.00'};
-        else cell={t:'s',v:v==null?'':String(v)};
-        if(k==='status')cell.f=`IF(${G}${r}<>"",${G}${r},IF(${LI}${r}="","Pasif",IF(Ayarlar!$B$3-${LI}${r}>Ayarlar!$B$2,"Pasif","Aktif")))`;
-        if(k==='_growth'){cell.f=`IF(AND(ISNUMBER(${V}${r}),${V}${r}>0),${T}${r}/(${V}${r}*Ayarlar!$B$5)-1,"")`;cell.z='0.0%'}
-        const lit=k==='lastInvoice'?(val.lastInvoice?`DATE(${val.lastInvoice.slice(0,4)},${+val.lastInvoice.slice(5,7)},${+val.lastInvoice.slice(8,10)})`:'""'):k==='lastInvoiceNo'?`"${String(val.lastInvoiceNo||'').replace(/"/g,'""')}"`:String(+val[k]||0);
-        const keep=f=>`IF(COUNTA(${P}$A:$A)<=1,${lit},${f})`;
-        if(k==='lastInvoice'){cell.f=keep(`IF(COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})=0,"",_xlfn.MAXIFS(${P}$A:$A,${P}$N:$N,$${A}${r},${P}$C:$C,${ty}))`);cell.z='dd.mm.yyyy'}
-        if(k==='lastInvoiceNo')cell.f=keep(`IF(${LI}${r}="","",IFERROR(INDEX(${P}$B:$B,MATCH($${A}${r}&"|"&${LI}${r}&"|"&${ty},${P}$O:$O,0)),""))`);
-        if(k==='sales2026'){cell.f=keep(`SUMIFS(${P}$J:$J,${P}$N:$N,$${A}${r})`);if(cell.t==='s')Object.assign(cell,{t:'n',v:0});cell.z='#,##0.00'}
-        if(k==='invoices2026'){cell.f=keep(`COUNTIFS(${P}$N:$N,$${A}${r},${P}$C:$C,${ty})`);if(cell.t==='s')Object.assign(cell,{t:'n',v:0});cell.z='0'}
-        setCell(ws,a,cell)})});
-    ws['!ref']=`A1:${XL(COLS.length-1)}${LR}`;
-    ws['!cols']=[10,36,14,9,14,10,15,11,13,12,11,16,15,32,11,18,13,15,15,12,14,10].map(w=>({wch:w}));
-    ws['!autofilter']={ref:`A1:${XL(COLS.length-1)}${LR}`};
-    // Ayarlar
-    const st={};const A2=[['Ayar','Değer','Açıklama'],['Pasif gün sınırı',S.pasif,'Son satış faturası bundan eskiyse Pasif'],['Referans tarih',null,'Varsayılan: bugünün tarihi (=BUGÜN()). Sabit bir tarih de yazabilirsiniz.'],['Satış faturası türü',S.type,'PowerBI_Veri sayfasındaki Belegart değeri'],['Yılın geçen kısmı',YF,`Satış verisinin tarihi (${fmt(dataTo())}) itibarıyla. Tempo % = 2026 net satış / (Ciro 2025 × bu oran) − 1`]];
-    A2.forEach((row,ri)=>row.forEach((v,ci)=>{const a=XL(ci)+(ri+1);if(v==null)return;st[a]=typeof v==='number'?{t:'n',v}:{t:'s',v}}));
-    st.B3={t:'n',v:serial(TODAY),f:'TODAY()',z:'dd.mm.yyyy'};
-    st.B5.z='0.0%';st['!ref']='A1:C5';st['!cols']=[{wch:22},{wch:16},{wch:70}];
-    // PowerBI_Veri
-    const pv={};PBI_HEAD.forEach((h,j)=>pv[XL(j)+1]={t:'s',v:h});pv.N1={t:'s',v:'Kod (formül)'};pv.O1={t:'s',v:'Anahtar (formül)'};
-    const rows=pb?pb.rows:[];const LV=Math.max(rows.length+2001,15001);
-    for(let r=2;r<=LV;r++){const x=rows[r-2];
-      if(x){pv['A'+r]={t:'n',v:x[0],z:'dd.mm.yyyy'};pv['B'+r]={t:'s',v:x[1]};pv['C'+r]={t:'s',v:x[2]};pv['E'+r]={t:'s',v:x[3]};pv['J'+r]={t:'n',v:x[4]}}
-      pv['N'+r]={t:'s',v:x?x[3]:'',f:`IF(E${r}="","",IFERROR(VALUE(E${r})&"",TRIM(E${r})))`};
-      pv['O'+r]={t:'s',v:x?`${x[3]}|${x[0]}|${x[2]}`:'',f:`IF(N${r}="","",N${r}&"|"&A${r}&"|"&C${r})`}}
-    pv['!ref']=`A1:O${LV}`;pv['!cols']=[12,15,22,10,12,30,8,14,10,12,8,8,15,12,30].map(w=>({wch:w}));
-    const wb=X.utils.book_new();
-    X.utils.book_append_sheet(wb,ws,'Müşteriler');X.utils.book_append_sheet(wb,st,'Ayarlar');X.utils.book_append_sheet(wb,pv,'PowerBI_Veri');
-    const hs=X.utils.aoa_to_sheet(HELP);hs['!cols']=[{wch:130}];X.utils.book_append_sheet(wb,hs,'Açıklama');
-    const buf=X.write(wb,{type:'array',bookType:'xlsx'});
-    const dl=await (window.claude?claude.use('downloads'):null);
-    if(!dl){toast('Bu görünümde dosya indirilemiyor.',1);return}
-    await dl.save({filename:`CRM_Musteriler_${fmt(TODAY)}.xlsx`,data:buf});
-  }catch(err){if(err&&err.code==='declined')return;toast('Excel dosyası oluşturulamadı.',1)}
+  try{await saveXLSX(xlSheet(COLS,xlList(),c=>({...c,...ctOf(c),code:code(c),statusManual:(c._st0?c._st0.manual:c.statusManual)||''}),[10,36,14,10,8,12,15,11,13,12,11,8,8,16,15,32,11,18]),'Müşteriler','CRM_Musteriler')}
+  catch(err){if(err&&err.code==='declined')return;toast('Excel dosyası oluşturulamadı.',1)}
+}
+async function exportSales(){
+  try{await saveXLSX(xlSheet(SCOLS(),xlList(),c=>{const iv=inv(c);return {code:code(c),name:c.name,lastInvoice:iv?iv.last:'',lastInvoiceNo:iv?iv.no:'',sales2026:iv?iv.sales:null,invoices2026:iv?iv.n:null,ciro2025:typeof c.ciro2025==='number'?c.ciro2025:null,_tempo:tempoOf(c)}},[10,36,14,15,16,14,14,14]),'Satış','CRM_Satis')}
+  catch(err){if(err&&err.code==='declined')return;toast('Excel dosyası oluşturulamadı.',1)}
 }
 let plan=null;
 // Açık fatura dosyası (ERP "Export" sayfası) → sync/openinv
@@ -957,9 +893,11 @@ async function readImport(f){
     const ws=wb.Sheets['Müşteriler']||wb.Sheets[wb.SheetNames[0]];
     const rows=X.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
     const head=(rows[0]||[]).map(normH);
-    const idx=COLS.filter(c=>!c[1].startsWith('_')).map(([h,k,t])=>[k,t,head.indexOf(normH(h))]).filter(x=>x[2]>=0);
+    const idx=COLS.filter(c=>!c[3]).map(([h,k,t])=>[k,t,head.indexOf(normH(h))]).filter(x=>x[2]>=0);
     if(!idx.some(x=>x[0]==='code')||!idx.some(x=>x[0]==='name')){toast('Dosyada "Kod" ve "Müşteri" sütunları bulunamadı.',1);return}
-    const known=new Set([...COLS.map(c=>normH(c[0])),normH('Büyüme %')]);const ignored=(rows[0]||[]).filter(h=>String(h).trim()&&!known.has(normH(h)));
+    const known=new Set(COLS.map(c=>normH(c[0]))),oldS=new Set(OLD_SALES.map(normH));
+    const salesCols=(rows[0]||[]).filter(h=>oldS.has(normH(h))||/net satış|fatura sayısı|^ciro \d{4}/.test(normH(h)));
+    const ignored=(rows[0]||[]).filter(h=>String(h).trim()&&!known.has(normH(h))&&!salesCols.includes(h));
     const seen=new Set(),parsed=[];let bad=0,dup=0;const odd={status:0};
     for(const r of rows.slice(1)){
       const o={};for(const [k,t,i] of idx){o[k]=cellVal(r[i],t);if(k==='status'&&String(r[i]).trim()&&!o[k])odd[k]++}
@@ -967,22 +905,25 @@ async function readImport(f){
       if(!o.code||!o.name){if(r.some(x=>String(x).trim()))bad++;continue}
       if(seen.has(o.code)){dup++;continue}seen.add(o.code);parsed.push(o);
     }
-    const keys=[...new Set(idx.map(x=>x[0]))];
-    const dflt=k=>['sales2026','invoices2026','ciro2025'].includes(k)?null:'';
+    const keys=idx.map(x=>x[0]);
+    // yalnız dosyadaki müşteri bilgisi alanları yazılır; satış verisi ve diğer alanlar korunur
+    const cur=(c,k)=>k==='statusManual'?((c._st0?c._st0.manual:c.statusManual)||''):(c[k]??'');
     const byCode=new Map(C.map(c=>[code(c),c]));const writes=[];let same=0;
     for(const o of parsed){const old=byCode.get(o.code);
-      const d={};for(const k of DATA_KEYS)d[k]=PBI_KEYS.includes(k)?(old?(old[k]??dflt(k)):dflt(k)):keys.includes(k)?(o[k]??dflt(k)):dflt(k);
-      if(old&&DATA_KEYS.every(k=>JSON.stringify(old[k]??dflt(k))===JSON.stringify(d[k]))){same++;continue}
-      d.createdAt=(old&&old.createdAt)||Date.now();d.updatedAt=Date.now();
-      writes.push({id:old?old.id:'c'+o.code,isNew:!old,data:d})}
+      if(old){const p={};for(const k of keys)if(String(cur(old,k))!==String(o[k]??''))p[k]=o[k]??'';
+        if(!Object.keys(p).length){same++;continue}
+        p.updatedAt=Date.now();writes.push({id:old.id,isNew:false,data:p});continue}
+      const d={};for(const k of EDIT_KEYS)d[k]=keys.includes(k)?(o[k]??''):'';
+      Object.assign(d,{status:'',lastInvoice:'',lastInvoiceNo:'',sales2026:null,invoices2026:null,ciro2025:null,createdAt:Date.now(),updatedAt:Date.now()});
+      writes.push({id:'c'+o.code,isNew:true,data:d})}
     const gone=C.filter(c=>!seen.has(code(c)));const goneIds=new Set(gone.map(c=>c.id));
     const goneActs=A.filter(a=>goneIds.has(a.customerId));
     const nNew=writes.filter(w=>w.isNew).length;
-    const miss=COLS.filter(c=>!c[1].startsWith('_')&&!PBI_KEYS.includes(c[1])&&!idx.some(x=>x[0]===c[1])).map(c=>c[0]);
+    const miss=COLS.filter(c=>!c[3]&&!idx.some(x=>x[0]===c[1])).map(c=>c[0]);
     plan={writes,gone,goneActs};
-    $('#iprev').innerHTML=`<p><b>${parsed.length}</b> müşteri okundu: <b>${writes.length-nNew}</b> güncellenecek, <b>${nNew}</b> yeni eklenecek, ${same} müşteride değişiklik yok.</p><p>Son fatura tarihi ve no Excel'den alınmaz; her sabah Power BI'dan güncellenir.</p>
+    $('#iprev').innerHTML=`<p><b>${parsed.length}</b> müşteri okundu: <b>${writes.length-nNew}</b> güncellenecek, <b>${nNew}</b> yeni eklenecek, ${same} müşteride değişiklik yok.</p><p>Yalnız müşteri bilgileri güncellenir; satış verisi (son fatura, net satış, fatura sayısı, ${PY} cirosu) sistemden gelir ve değişmez.</p>
       ${gone.length?`<p class="warn"><b>${gone.length} müşteri Excel'de olmadığı için CRM'den kalıcı olarak silinecek</b>${goneActs.length?` (bu müşterilere ait ${goneActs.length} ziyaret/not kaydıyla birlikte)`:''}. Bu işlem geri alınamaz: ${esc(gone.slice(0,8).map(c=>c.name).join(', '))}${gone.length>8?` ve ${gone.length-8} müşteri daha`:''}.</p>`:''}
-      <p>Okunan sütunlar: ${esc(idx.filter(x=>!PBI_KEYS.includes(x[0])).map(x=>COLS.find(c=>c[1]===x[0])[0]).join(', '))}.${miss.length?` Dosyada olmayan sütunlar CRM'de boş olacak: ${esc(miss.join(', '))}.`:''}${ignored.length?` Tanınmayan sütunlar okunmadı: ${esc(ignored.join(', '))}.`:''}</p>
+      <p>Okunan sütunlar: ${esc(idx.map(x=>COLS.find(c=>c[1]===x[0])[0]).join(', '))}.${miss.length?` Dosyada olmayan sütunlar değişmez: ${esc(miss.join(', '))}.`:''}${salesCols.length?` Satış sütunları okunmadı: ${esc(salesCols.join(', '))}.`:''}${ignored.length?` Tanınmayan sütunlar okunmadı: ${esc(ignored.join(', '))}.`:''}</p>
       ${bad||dup||odd.status?`<p>${bad?`${bad} satır Kod veya Müşteri adı eksik olduğu için atlandı. `:''}${dup?`${dup} tekrar eden Kod atlandı (ilk satır alındı). `:''}${odd.status?`${odd.status} satırda Durum Aktif/Pasif değil, boş yazılacak.`:''}</p>`:''}`;
     $('#irun').textContent=gone.length?'Uygula ve sil':'Uygula';
     $('#irun').disabled=!writes.length&&!gone.length;$('#ipr').textContent='';$('#imodal').hidden=false;
@@ -990,7 +931,7 @@ async function readImport(f){
 }
 async function applyImport(){
   if(!plan)return;const {writes,gone,goneActs}=plan;plan=null;$('#irun').disabled=true;let n=0,del=0,ok=true;
-  for(const wv of writes){if(!await w(()=>db.collection('customers').doc(wv.id).set(wv.data))){ok=false;break}n++;if(n%10===0||n===writes.length)$('#ipr').textContent=`${n}/${writes.length} müşteri yazıldı`}
+  for(const wv of writes){if(!await w(()=>wv.isNew?db.collection('customers').doc(wv.id).set(wv.data):db.collection('customers').doc(wv.id).update(wv.data))){ok=false;break}n++;if(n%10===0||n===writes.length)$('#ipr').textContent=`${n}/${writes.length} müşteri yazıldı`}
   if(ok){for(const a of goneActs){if(!await w(()=>db.collection('activities').doc(a.id).delete())){ok=false;break}}}
   if(ok){for(const c of gone){if(!await w(()=>db.collection('customers').doc(c.id).delete())){ok=false;break}del++;$('#ipr').textContent=`${del}/${gone.length} müşteri silindi`}}
   if(ok&&gone.some(c=>c.id===st.sel))st.sel=null;
@@ -1042,6 +983,7 @@ document.addEventListener('click',async e=>{
   if(t.id==='back'){st.sel=null;render();return}
   if(t.id==='irun'){applyImport();return}
   if(t.id==='xexp'){umOpen(false);if(!can('x_export'))return;exportXLSX();return}
+  if(t.id==='xsal'){umOpen(false);if(!can('x_export'))return;exportSales();return}
   if(t.id==='clearSample'){if(st.arm!=='samples'){st.arm='samples';render();return}
     st.arm=null;for(const a of A.filter(x=>x.sample))await w(()=>db.collection('activities').doc(a.id).delete());
     for(const c of C.filter(x=>x.sample))await w(()=>db.collection('customers').doc(c.id).delete());
