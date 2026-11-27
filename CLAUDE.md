@@ -2,8 +2,6 @@
 
 Hollanda'daki market müşterileri için satış CRM'i. Arayüz metinleri, kod yorumları, commit mesajları, PR açıklamaları ve kullanıcıya verilen yanıtlar **Türkçe** olur.
 
-**Kural kaynağı: [`kurallar.md`](kurallar.md).** Roller, izinler, ayarlar, yazma kuralları, hesap kuralları ve bilinen riskler orada. Yeni bir görev, özellik ya da fonksiyondan **önce** okunur; gereken izinler kullanıcıya önerilir ve **onayı alınmadan uygulanmaz**. İş bitince `kurallar.md` güncellenir (tablolar ve "Değişiklik kaydı"). Test, izin ve ayar tablolarının koddaki `PERMS` / `PDEF` / `RULES` / `RDEF` ile aynı olduğunu denetler.
-
 ## Mimari
 
 Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
@@ -98,7 +96,6 @@ node tests/e2e.js
 
 ## Çalışma şekli
 
-- Yeni özellikte önce `kurallar.md` → izin önerisi → kullanıcı onayı → uygulama → `kurallar.md` güncellemesi.
 - Değişiklik PR ile `main`'e birleştirilir. PR açıklaması özet ve test sonucunu içerir.
 - Tüm testler geçince PR, kullanıcıdan onay beklenmeden GitHub'da `main`'e birleştirilir (kullanıcının kalıcı talimatı).
 - Her işin sonunda kullanıcıya kısa bir Türkçe özet verilir:
