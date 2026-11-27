@@ -31,6 +31,20 @@
     return q;
   }
   const db={collection,doc(p){const [c,i]=p.split('/');return docRef(c,i)}};
+  // sunucudaki import_sales() fonksiyonunun bellek içi karşılığı (tek işlemde yazar)
+  db.rpc=async(name,{p})=>{
+    if(name!=='import_sales')throw new Error('rpc yok: '+name);
+    if(window.__failWrites)throw new Error('fail');
+    const g=k=>store.get(k),m=g('sync/month'),r=g('sync/returns');
+    if(String(m?(m.importedAt??m.through??''):'')!==p.expect.month||String(r?(r.through??''):'')!==p.expect.returns)throw new Error('stale: veri değişmiş');
+    store.set('sync/month',clone(p.month));store.set('sync/returns',clone(p.returns));
+    const K=['sales2026','invoices2026','lastInvoice','lastInvoiceNo'];
+    for(const [id,c] of Object.entries(p.customers)){const cur=g('customers/'+id);if(!cur)continue;const x={...cur};for(const k of K)if(k in c)x[k]=c[k];x.updatedAt=Date.now();store.set('customers/'+id,x)}
+    const q=clone(g('qtargets/'+p.qtargets.key))||{period:p.qtargets.key,reps:{}};q.reps=q.reps||{};
+    for(const [rep,cs] of Object.entries(p.qtargets.reps)){const e=q.reps[rep]||(q.reps[rep]={c:{}});e.c=e.c||{};for(const [k,a] of Object.entries(cs)){const o=e.c[k]||(e.c[k]={p:0,t:0});o.a=a}}
+    q.asOf=p.qtargets.asOf;q.updatedAt=Date.now();store.set('qtargets/'+p.qtargets.key,q);
+    window.__writes.push(['rpc','import_sales',clone(p)]);for(const c of ['sync','customers','qtargets'])emit(c);
+    return {ok:true}};
   window.__store=store;
   // kullanıcı listesi (Supabase'de allowed_users tablosu)
   const users=(window.__USERS||[{email:'baran.sengul@akar-group.com',role:'admin',rep:'Baran Sengül'},{email:'lutfi.kaplan@akar-bv.nl',role:'satis',rep:'Lütfi Kaplan'},{email:'Raci.Oener@akar-gmbh.de',role:'satis',rep:null}]).map(u=>({...u}));

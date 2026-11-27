@@ -78,6 +78,7 @@ const PERMS=[
   ['e_arag','ARAG sürecini başlatır ve kapatır','','Düzenleme'],
   ['x_export',"Excel'e aktarır",'','Veri aktarımı'],
   ['x_import',"Excel'den müşteri içe aktarır",'Müşteri bilgilerinin üzerine yazar; Excel\'de olmayan müşterileri silebilir.','Veri aktarımı'],
+  ['x_sales','Satış verisini içe aktarır','Günlük satış ve detaylı satış raporundan aylık satış, iade, müşterilerin yıl toplamları ve hedef gerçekleşenlerini günceller. Tüm müşterileri görme izni de gerekir.','Veri aktarımı'],
   ['x_openinv','Açık faturaları içe aktarır','','Veri aktarımı'],
   ['e_rules','Yönetici ayarlarını (kurallar) görür ve değiştirir','Pasif gün sınırı, temas günü, ARAG günü, kredi limiti ayarları vb.','Yönetim']];
 const PDEF={satis:{v_targets:true,v_overdue:true,e_notes:true},muhasebe:{v_overdue:true,v_credit:true,v_all:true,e_notes:true,e_arag:true,x_export:true,x_openinv:true}};
@@ -374,7 +375,7 @@ function visible(){
 function renderTop(){
   renderUser();
   {const lk=repLock();$('#reps').innerHTML=(lk!==null?[lk]:['',...allReps()]).map(r=>`<button class="chip${st.rep===r?' on':''}" data-rep="${esc(r)}" aria-pressed="${st.rep===r}"${lk!==null?' disabled title="Yalnız kendi müşterilerinizi görüyorsunuz"':''}>${r==='—'?'Temsilci eşleşmedi':r?esc(r):'Tüm temsilciler'}</button>`).join('')}
-  $('#ximpBtn').hidden=!(canWrite&&can('x_import'));$('#oimpBtn').hidden=!(canWrite&&can('x_openinv'));$('#xexp').hidden=$('#xsal').hidden=!can('x_export');$('#umSep').hidden=$('#ximpBtn').hidden&&$('#oimpBtn').hidden&&$('#xexp').hidden;
+  $('#ximpBtn').hidden=!(canWrite&&can('x_import'));$('#oimpBtn').hidden=!(canWrite&&can('x_openinv'));$('#simpBtn').hidden=!(canWrite&&can('x_sales')&&can('v_all'));$('#xexp').hidden=$('#xsal').hidden=!can('x_export');$('#umSep').hidden=$('#ximpBtn').hidden&&$('#oimpBtn').hidden&&$('#simpBtn').hidden&&$('#xexp').hidden;
   $('#umRules').hidden=!can('e_rules');$('#umPerms').hidden=!isAdmin();$('#umSep2').hidden=$('#umRules').hidden&&$('#umPerms').hidden;
   $('#umRules').classList.toggle('on',st.view==='admin');$('#umPerms').classList.toggle('on',st.view==='perms');
   if($('#umRole'))$('#umRole').textContent=roleKnown()?roleName(myRole()):'';
@@ -791,7 +792,7 @@ function openModal(c){
   f.elements.rep.readOnly=true;f.elements.rep.title='Temsilci değiştirilemez';
   $('#modal').hidden=false;f.elements.name.focus();
 }
-const closeModals=()=>{$('#modal').hidden=true;$('#imodal').hidden=true};
+const closeModals=()=>{$('#modal').hidden=true;$('#imodal').hidden=true;$('#smodal').hidden=true;splan=null};
 
 /* Excel round-trip (dynamic workbook) */
 async function loadXLSX(){
@@ -859,6 +860,130 @@ async function exportSales(){
   catch(err){if(err&&err.code==='declined')return;toast('Excel dosyası oluşturulamadı.',1)}
 }
 let plan=null;
+// ===== Satış verisi içe aktarma =====
+// İki dosya birlikte yüklenir: günlük satış (Daily sell-out, belge bazında) ve detaylı satış raporu (ürün bazında).
+// Günlük satış: sync/month (ay), sync/returns (yıl başından bu yana) ve müşterinin yıl toplamları.
+// Detaylı rapor: o ayın hedef gerçekleşenleri (temsilci × kategori). İki dosyanın müşteri toplamları birbirini tutmalı.
+// Yazma tek işlemde, sunucudaki import_sales() fonksiyonuyla yapılır.
+const deacc=s=>low(s).replace(/ı/g,'i').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+const PIM_CAT={'atistirmalik':'atis','icecek':'icecek','mutfak':'mutfak','temel gida':'temel','non-food':'nonfood','nonfood':'nonfood','non food':'nonfood'};
+const MON3={jan:1,oca:1,feb:2,sub:2,mar:3,mrz:3,maa:3,apr:4,nis:4,may:5,mai:5,mei:5,jun:6,haz:6,jul:7,tem:7,aug:8,agu:8,sep:9,eyl:9,oct:10,okt:10,eki:10,nov:11,kas:11,dec:12,dez:12,ara:12};
+const monNo=v=>{if(typeof v==='number'&&v>=1&&v<=12)return v;const s=deacc(v);if(/^\d{1,2}$/.test(s))return +s;return MON3[s.slice(0,3)]||0};
+const r2=x=>Math.round(x*100)/100;
+function headRow(rows,need){for(let i=0;i<Math.min(rows.length,30);i++){const h=(rows[i]||[]).map(x=>deacc(x));if(need.every(n=>h.includes(n)))return i}return -1}
+function sheetRows(X,wb){const out=[];for(const n of wb.SheetNames)out.push(X.utils.sheet_to_json(wb.Sheets[n],{header:1,defval:'',raw:true}));return out}
+// günlük satış: [{d,no,t:F/I/P,k,e,rep,name}]
+function parseDaily(rows){
+  const h=headRow(rows,['datum','belegnr','belegart','debitorennr','eur']);if(h<0)return null;
+  const H=rows[h].map(x=>deacc(x)),ix=n=>H.indexOf(n),I={d:ix('datum'),no:ix('belegnr'),t:ix('belegart'),k:ix('debitorennr'),n:ix('debitorenbez'),e:ix('eur'),v:ix('verkaeufer')};
+  const out=[],badT=new Set();
+  for(const r of rows.slice(h+1)){const d=cellVal(r[I.d],'d'),k=normKod(r[I.k]);if(!d||!k)continue;
+    const tt=deacc(r[I.t]),t=/iade/.test(tt)?'I':/fiyat/.test(tt)?'P':/fatura/.test(tt)?'F':'';if(!t){badT.add(String(r[I.t]));continue}
+    out.push({d,no:String(r[I.no]??'').trim(),t,k,e:r2(num(r[I.e])||0),rep:I.v>=0?String(r[I.v]??'').trim():'',name:I.n>=0?String(r[I.n]??'').trim():''})}
+  return {rows:out,badT:[...badT]};
+}
+// detaylı rapor: [{k,rep,y,m,cat,pim,e}]; Power BI tablosundaki boş (birleştirilmiş) hücreler üst satırdan doldurulur
+function parseDetail(rows){
+  const h=headRow(rows,['debitorennr','ciro','pim']);if(h<0)return null;
+  const H=rows[h].map(x=>deacc(x)),ix=n=>H.indexOf(n);
+  const I={k:ix('debitorennr'),rep:H.findIndex(x=>/^vertreter/.test(x)),y:H.findIndex(x=>/year|yil|jahr/.test(x)),m:H.findIndex(x=>/month|monat|^ay$|- ay/.test(x)),art:ix('artikelnr'),pim:ix('pim'),e:ix('ciro')};
+  const fill=Math.max(I.k,I.rep,I.y,I.m)+1,last=[],out=[],badCat=new Set();
+  for(const r of rows.slice(h+1)){
+    for(let j=0;j<fill;j++){if(r[j]===''||r[j]==null)r[j]=last[j];else last[j]=r[j]}
+    if(I.art>=0&&!String(r[I.art]??'').trim())continue;
+    const k=normKod(r[I.k]);if(!k)continue;const pim=String(r[I.pim]??'').trim(),cat=PIM_CAT[deacc(pim)];if(!cat){badCat.add(pim||'(boş)');continue}
+    out.push({k,rep:String(r[I.rep]??'').trim(),y:+r[I.y]||0,m:monNo(r[I.m]),cat,e:num(r[I.e])||0})}
+  return {rows:out,badCat:[...badCat]};
+}
+const ymOf=(y,m)=>`${y}-${String(m).padStart(2,'0')}`;
+// temsilci adı: sistemdeki yazımla eşleştir (Özgur → Özgür)
+function repName(n,known){const d=deacc(n);return known.find(x=>deacc(x)===d)||n}
+function planSales(files){
+  const err=[],warn=[];const D=files.find(f=>f.daily),T=files.find(f=>f.detail);
+  for(const f of files)if(!f.daily&&!f.detail)err.push(`"${f.name}" tanınmadı: günlük satış dosyasında Datum, BelegNr, Belegart, DebitorenNr ve EUR; detaylı raporda DebitorenNr, PIM ve Ciro sütunları olmalı.`);
+  if(!D)err.push('Günlük satış dosyası (Daily sell-out) seçilmedi.');if(!T)err.push('Detaylı satış raporu seçilmedi.');
+  if(files.length!==2)err.push(`İki dosya birlikte seçilmeli (${files.length} dosya seçildi).`);
+  if(err.length)return {err,warn};
+  if(D.daily.badT.length)err.push(`Günlük satışta tanınmayan belge türü: ${D.daily.badT.join(', ')}`);
+  if(T.detail.badCat.length)err.push(`Detaylı raporda tanınmayan kategori (PIM): ${T.detail.badCat.join(', ')}`);
+  const dr=D.daily.rows,tr=T.detail.rows;if(!dr.length)err.push('Günlük satış dosyasında satır yok.');if(!tr.length)err.push('Detaylı raporda satır yok.');
+  if(err.length)return {err,warn};
+  const dm=[...new Set(dr.map(x=>x.d.slice(0,7)))],tm=[...new Set(tr.map(x=>x.y&&x.m?ymOf(x.y,x.m):'?'))];
+  if(dm.length>1)err.push(`Günlük satış dosyası birden fazla ay içeriyor: ${dm.join(', ')}. Tek ay olmalı.`);
+  if(tm.length>1||tm[0]==='?')err.push(`Detaylı raporda yıl ve ay okunamadı ya da birden fazla ay var: ${tm.join(', ')}.`);
+  if(err.length)return {err,warn};
+  const month=dm[0];if(tm[0]!==month)err.push(`Dosyalar farklı aylara ait: günlük satış ${month}, detaylı rapor ${tm[0]}.`);
+  const through=dr.reduce((a,x)=>x.d>a?x.d:a,'');
+  if(RET&&RET.from&&RET.from.slice(0,4)!==month.slice(0,4))err.push(`Dosya ${month.slice(0,4)} yılına ait; sistemdeki yıl verisi ${RET.from.slice(0,4)}. Yeni yıla geçiş ayrıca yapılmalı.`);
+  if(MON&&MON.month){if(month<MON.month)err.push(`Dosya ayı (${month}) sistemdeki aydan (${MON.month}) eski.`);
+    else if(month===MON.month&&MON.through&&through<MON.through)err.push(`Dosya ${fmt(through)} tarihine kadar; sistemde ${fmt(MON.through)} tarihine kadar veri var. Daha eski veri yüklenemez.`)}
+  // müşteri toplamları iki dosyada aynı olmalı
+  const dn={},tn={};for(const x of dr)dn[x.k]=(dn[x.k]||0)+x.e;for(const x of tr)tn[x.k]=(tn[x.k]||0)+x.e;
+  const diff=[...new Set([...Object.keys(dn),...Object.keys(tn)])].map(k=>[k,r2(dn[k]||0),r2(tn[k]||0)]).filter(([,a,b])=>Math.abs(a-b)>1).sort((a,b)=>Math.abs(b[1]-b[2])-Math.abs(a[1]-a[2]));
+  if(diff.length)err.push(`İki dosyanın müşteri toplamları tutmuyor (${diff.length} müşteri), dosyalar aynı tarihe kadar alınmamış olabilir: ${diff.slice(0,5).map(([k,a,b])=>`${k}: günlük ${eurc(a)} / detaylı ${eurc(b)}`).join('; ')}${diff.length>5?' …':''}`);
+  if(err.length)return {err,warn};
+  // ay verisi: kod → [satış, fatura adedi, iade, fiyat farkı, iade adedi, fiyat farkı adedi]
+  const mon={},last={};
+  for(const x of dr){const m=mon[x.k]||(mon[x.k]=[0,0,0,0,0,0]);
+    if(x.t==='F'){m[0]+=x.e;m[1]++;if(!last[x.k]||x.d>last[x.k][0]||(x.d===last[x.k][0]&&x.no>last[x.k][1]))last[x.k]=[x.d,x.no]}
+    else if(x.t==='I'){m[2]+=x.e;m[4]++}else{m[3]+=x.e;m[5]++}}
+  for(const m of Object.values(mon))for(const i of [0,2,3])m[i]=r2(m[i]);
+  // sistemdeki aynı ayın verisi çıkarılıp yenisi eklenir; yeni ayda önceki ay olduğu gibi kalır
+  const same=!!(MON&&MON.month===month),om=same?(MON.map||{}):{};
+  const oldN=(k,i)=>{const o=om[k];if(!o)return 0;if(o.length>=6)return o[i];const t=i===4?'I':'P';return dr.filter(x=>x.k===k&&x.t===t&&x.d<=MON.through).length};
+  const base=(RET&&RET.map)||{},ret={...base},codes=new Set([...Object.keys(om),...Object.keys(mon)]);
+  for(const k of codes){const o=base[k]||[0,0,0,0,0,0],a=om[k]||[0,0,0,0],b=mon[k]||[0,0,0,0,0,0];
+    ret[k]=[r2(o[0]-a[0]+b[0]),r2(o[1]-a[2]+b[2]),o[2]-oldN(k,4)+b[4],r2(o[3]-a[3]+b[3]),o[4]-oldN(k,5)+b[5],o[5]-a[1]+b[1]]}
+  const byCode=new Map(CALL.map(c=>[code(c),c])),cust={};
+  for(const k of codes){const c=byCode.get(k);if(!c)continue;const a=om[k]||[0,0,0,0],b=mon[k]||[0,0,0,0,0,0];
+    const s=typeof c.sales2026==='number'?c.sales2026:0,n=typeof c.invoices2026==='number'?c.invoices2026:0;
+    const p={sales2026:r2(s-(a[0]+a[2]+a[3])+(b[0]+b[2]+b[3])),invoices2026:n-a[1]+b[1]};
+    if(last[k]&&(!c.lastInvoice||last[k][0]>c.lastInvoice||(last[k][0]===c.lastInvoice&&last[k][1]>(c.lastInvoiceNo||'')))){p.lastInvoice=last[k][0];p.lastInvoiceNo=last[k][1]}
+    if(p.sales2026!==c.sales2026||p.invoices2026!==c.invoices2026||p.lastInvoice)cust[c.id]=p}
+  // hedef gerçekleşenleri: temsilci × kategori; dosyada olmayan temsilci ve kategori 0
+  const q=QTS[month]||{},known=[...new Set([...Object.keys(q.reps||{}),...allReps()])],act={};
+  for(const x of tr){const r=repName(x.rep,known);const o=act[r]||(act[r]={});o[x.cat]=(o[x.cat]||0)+x.e}
+  for(const r of Object.keys(q.reps||{}))if(!act[r]){act[r]={};warn.push(`${r}: detaylı raporda bu ay satış yok, hedef gerçekleşenleri 0 olacak.`)}
+  for(const r of Object.keys(act))for(const [k] of QCATS)act[r][k]=Math.round(act[r][k]||0);
+  // kontroller ve uyarılar
+  const unknown=Object.keys(mon).filter(k=>!byCode.has(k)),gone=Object.keys(om).filter(k=>!mon[k]&&byCode.has(k));
+  if(unknown.length)warn.push(`${unknown.length} müşteri kodu CRM'de yok; satışları toplamlara girer ama bir müşteri kartında görünmez: ${unknown.slice(0,8).map(k=>{const x=dr.find(y=>y.k===k);return `${k}${x&&x.name?' '+x.name:''} (${eurc(mon[k][0]+mon[k][2]+mon[k][3])})`}).join(', ')}${unknown.length>8?' …':''}`);
+  if(gone.length)warn.push(`${gone.length} müşterinin sistemde bu ay satışı vardı, yeni dosyada yok; bu aydaki satışları sıfırlanacak: ${gone.slice(0,8).map(k=>byCode.get(k).name).join(', ')}${gone.length>8?' …':''}`);
+  const repD={},repT={};for(const x of dr)if(x.rep){const r=repName(x.rep,known);repD[r]=(repD[r]||0)+x.e}for(const x of tr){const r=repName(x.rep,known);repT[r]=(repT[r]||0)+x.e}
+  const sum=i=>r2(Object.values(mon).reduce((a,m)=>a+m[i],0));
+  const tot={satis:sum(0),n:sum(1),iade:sum(2),ff:sum(3)};
+  const payload={
+    expect:{month:MON?String(MON.importedAt??MON.through??''):'',returns:RET?String(RET.through??''):''},
+    month:{cols:['satis','faturaAdet','iade','fiyatFarki','iadeAdet','fiyatFarkiAdet'],month,through,updatedAt:TODAY,importedAt:Date.now(),by:(window.CRM_AUTH||{}).email||'',source:`${D.name} + ${T.name}`,map:mon},
+    returns:{...(RET||{}),from:(RET&&RET.from)||month.slice(0,4)+'-01',to:month,through,updatedAt:TODAY,cols:['satis','iade','iadeAdet','fiyatFarki','fiyatFarkiAdet','satisAdet'],source:`Yıl başından bu yana; son içe aktarma ${D.name} + ${T.name}`,map:ret},
+    customers:cust,qtargets:{key:month,asOf:through,reps:act}};
+  return {err,warn,payload,info:{D,T,month,through,tot,nCust:Object.keys(cust).length,nCodes:Object.keys(mon).length,repD,repT,same}};
+}
+async function readSales(fl){
+  try{
+    const X=await loadXLSX();const files=[];
+    for(const f of fl){const o={name:f.name};try{const wb=X.read(await f.arrayBuffer(),{type:'array'});
+      for(const rows of sheetRows(X,wb)){if(!o.daily){const d=parseDaily(rows);if(d){o.daily=d;continue}}if(!o.detail){const t=parseDetail(rows);if(t)o.detail=t}}}catch(e){}
+      files.push(o)}
+    const pl=planSales(files);splan=pl.err.length?null:pl;
+    const i=pl.info;
+    const rep=i?[...new Set([...Object.keys(i.repD),...Object.keys(i.repT)])].sort((a,b)=>a.localeCompare(b,'tr')):[];
+    $('#sprev').innerHTML=(i?`<p><b>${MONTHS_LONG[+i.month.slice(5)-1]} ${i.month.slice(0,4)}</b> · veri ${fmt(i.through)} tarihine kadar${i.same?'':' · yeni ay'}</p>
+      <p>Günlük satış: ${esc(i.D.name)} (${i.D.daily.rows.length} belge) · Detaylı rapor: ${esc(i.T.name)} (${i.T.detail.rows.length} satır)</p>
+      <div class="ordp"><table id="sT"><thead><tr><th>Temsilci</th><th>Günlük satış</th><th>Detaylı rapor</th><th><span class="sr">Kontrol</span></th></tr></thead><tbody>${rep.map(r=>{const a=r2(i.repD[r]||0),b=r2(i.repT[r]||0);return `<tr><td>${esc(r)}</td><td>${eurc(a)}</td><td>${eurc(b)}</td><td>${Math.abs(a-b)<=1?'✓':'<b class="bad">✗</b>'}</td></tr>`}).join('')}</tbody>
+      <tfoot><tr><td>Toplam</td><td>${eurc(i.tot.satis+i.tot.iade+i.tot.ff)}</td><td>${eurc(Object.values(i.repT).reduce((a,x)=>a+x,0))}</td><td></td></tr></tfoot></table></div>
+      <p>Satış ${eurc(i.tot.satis)} (${i.tot.n} fatura) · iade ${eurc(i.tot.iade)} · fiyat farkı ${eurc(i.tot.ff)}. <b>${i.nCust}</b> müşterinin yıl toplamı güncellenecek; ${i.nCodes} müşteri kodu bu ay satış yapmış.</p>`:'')+
+      (pl.err.length?`<div class="warn" id="serr"><b>Yüklenemez:</b><ul>${pl.err.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:'')+
+      (pl.warn.length?`<div id="swarn"><b>Dikkat:</b><ul>${pl.warn.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:'');
+    $('#srun').disabled=!splan;$('#spr').textContent='';$('#smodal').hidden=false;
+  }catch(err){toast('Dosyalar okunamadı. .xlsx formatında iki Excel dosyası seçin.',1)}
+}
+let splan=null;
+async function applySales(){
+  if(!splan)return;const p=splan.payload;splan=null;$('#srun').disabled=true;$('#spr').textContent='Yazılıyor…';
+  try{const r=await db.rpc('import_sales',{p});closeModals();toast(`Satış verisi güncellendi: ${fmt(p.month.through)} tarihine kadar, ${Object.keys(p.customers).length} müşteri.`);render()}
+  catch(e){const m=String((e&&e.message)||e);$('#spr').textContent='';toast(/stale/.test(m)?'Bu arada sistemdeki satış verisi değişmiş. Dosyaları yeniden seçin.':/izin|perm/.test(m)?'Satış verisini içe aktarma izniniz yok.':'Satış verisi yazılamadı: '+m,1)}
+}
 // Açık fatura dosyası (ERP "Export" sayfası) → sync/openinv
 async function readOpenInv(f){
   try{
@@ -982,6 +1107,7 @@ document.addEventListener('click',async e=>{
   if(t.dataset.open){st.view='list';st.sel=t.dataset.open;saveUi();render();return}
   if(t.id==='back'){st.sel=null;render();return}
   if(t.id==='irun'){applyImport();return}
+  if(t.id==='srun'){applySales();return}
   if(t.id==='xexp'){umOpen(false);if(!can('x_export'))return;exportXLSX();return}
   if(t.id==='xsal'){umOpen(false);if(!can('x_export'))return;exportSales();return}
   if(t.id==='clearSample'){if(st.arm!=='samples'){st.arm='samples';render();return}
@@ -1010,6 +1136,7 @@ document.addEventListener('change',async e=>{
     try{await window.CRM_USERS.save(em,r,u.rep||null);toast(`${personOf(em).name}: ${roleName(r)}`);UL=null;render()}catch(err){toast('Rol kaydedilemedi: '+(err.message||err),1);render()}return}
   if(t.dataset.urep!==undefined){if(!isAdmin()||!window.CRM_USERS){render();return}const em=t.dataset.urep,u=(UL||[]).find(x=>x.email===em)||{};
     try{await window.CRM_USERS.save(em,u.role||'satis',t.value||null);toast(`${personOf(em).name}: ${t.value?'temsilci '+t.value:'temsilci kaldırıldı'}`);UL=null;render()}catch(err){toast('Temsilci kaydedilemedi: '+(err.message||err),1);render()}return}
+  if(t.id==='simp'){umOpen(false);if(t.files.length&&can('x_sales')&&can('v_all')){const f=[...t.files];t.value='';readSales(f)}return}
   if(t.id==='oimp'){umOpen(false);if(t.files[0]&&can('x_openinv')){const f=t.files[0];t.value='';readOpenInv(f)}return}
   if(t.id==='ximp')umOpen(false);
   if(t.id==='ximp'&&t.files[0]&&can('x_import')){const f=t.files[0];t.value='';readImport(f);return}
@@ -1017,7 +1144,7 @@ document.addEventListener('change',async e=>{
 $('#q').addEventListener('input',e=>{st.q=e.target.value;renderList()});
 document.addEventListener('paste',qPaste);
 document.addEventListener('input',e=>{const t=e.target;if(t.closest&&t.closest('#rform')){st.rdirty=true;rformCheck(t.closest('#rform'));$('#rmsg').textContent='Kaydedilmemiş değişiklik var'}if(t.closest&&t.closest('#qform')){st.qdirty=true;qformTotals(t.closest('#qform'))}if((t.name==='nextAction'||t.name==='nextDate')&&t.closest('#aform'))t.dataset.touched='1'});
-document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if((e.key==='Enter'||e.key===' ')&&e.target.id==='oimpBtn'){e.preventDefault();$('#oimp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.id==='ximpBtn'){e.preventDefault();$('#ximp').click();return}if((e.key==='Enter'||e.key===' ')&&e.target.id==='oimpBtn'){e.preventDefault();$('#oimp').click();return}if((e.key==='Enter'||e.key===' ')&&e.target.id==='simpBtn'){e.preventDefault();$('#simp').click();return}if(e.key==='Escape'){if(!$('#umDrop').hidden){umOpen(false);$('#avBtn').focus();return}if(!$('#modal').hidden||!$('#imodal').hidden||!$('#smodal').hidden)closeModals();else if(st.sel&&innerWidth<=900){st.sel=null;render()}}});
 document.addEventListener('submit',async e=>{
   if(e.target.id==='pform'){e.preventDefault();if(!isAdmin())return;const f=e.target,d={};
     for(const [r] of ROLES.slice(1)){d[r]={};for(const [k] of PERMS)d[r][k]=!!(f.elements[r+'|'+k]||{}).checked}

@@ -77,7 +77,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.click('#avBtn');
   ok(await page.isVisible('#xexp')&&await page.isVisible('#ximpBtn')&&await page.isVisible('#umSep'),'yönetici menüde Excel\'e aktar ve Excel\'den içe aktar görüyor');
   ok(await page.isVisible('#oimpBtn'),'yönetici menüde Açık faturaları içe aktar görüyor');
-  {const items=await page.$$eval('#umDrop [role=menuitem]',e=>e.map(x=>x.textContent.trim()));ok(JSON.stringify(items)===JSON.stringify(["Müşterileri Excel'e aktar","Satış verisini Excel'e aktar","Excel'den içe aktar",'Açık faturaları içe aktar','Yönetici ayarları','Kullanıcı izinleri','Şifre belirle','Çıkış']),'menü sırası: '+items.join(' · '))}
+  {const items=await page.$$eval('#umDrop [role=menuitem]',e=>e.map(x=>x.textContent.trim()));ok(JSON.stringify(items)===JSON.stringify(["Müşterileri Excel'e aktar","Satış verisini Excel'e aktar","Müşterileri içe aktar","Satış verisini içe aktar",'Açık faturaları içe aktar','Yönetici ayarları','Kullanıcı izinleri','Şifre belirle','Çıkış']),'menü sırası: '+items.join(' · '))}
   await page.screenshot({path:path.join(SHOTS,'0-menu-excel.png'),clip:{x:900,y:0,width:500,height:330}});
   {const [fc]=await Promise.all([page.waitForEvent('filechooser',{timeout:3000}).catch(()=>null),page.click('#ximpBtn')]);ok(!!fc,'Excel\'den içe aktar dosya seçme penceresini açıyor')}
   await page.keyboard.press('Escape');await page.click('#avBtn');await page.click('#xexp');
@@ -714,7 +714,66 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
      ok(/Satış sütunları okunmadı/.test(await txt(p2,'#iprev'))&&/2026 net satış/.test(await txt(p2,'#iprev')),'önizleme: satış sütunlarının okunmadığı yazıyor ('+await txt(p2,'#iprev')+')');
      await p2.click('#irun');await p2.waitForTimeout(300);
      const c1b=await doc(p2,'customers/c1');ok(c1b.sales2026===20000&&c1b.ciro2025===60000&&c1b.merch==='Var','eski biçimli dosyadan sonra da satış ve 2025 cirosu aynı; dosyada olmayan Merch korunuyor');}
-   await c2.close();}}
+   await c2.close();}
+
+  step('11s. Satış verisini içe aktar (günlük satış + detaylı rapor)');
+  {const c3=await browser.newContext();const p3=await c3.newPage();p3.on('pageerror',e=>errors.push(e.message));
+   await p3.route(offline,r=>/xlsx/.test(r.request().url())?r.fulfill({body:fs.readFileSync(process.env.XLSX_LIB),contentType:'text/javascript'}):r.abort());
+   await p3.addInitScript(`${FIX};window.CRM_IS_ADMIN=true;window.CRM_USER="baran.sengul@akar-group.com";window.CRM_AUTH={email:"baran.sengul@akar-group.com"};${MOCK}`);
+   await p3.goto(BASE+'/index.html');await p3.waitForSelector('#list .row');
+   await p3.addScriptTag({content:fs.readFileSync(process.env.XLSX_LIB,'utf8')});
+   const F=await p3.evaluate(()=>window.__FIX);const T=F.TODAY,ser=(d=>(Date.UTC(+d.slice(0,4),+d.slice(5,7)-1,+d.slice(8,10))-Date.UTC(1899,11,30))/864e5)(T);
+   const [Y,M]=[+T.slice(0,4),+T.slice(5,7)],MN=['January','February','March','April','May','June','July','August','September','October','November','December'][M-1];
+   const dailyHead=['Datum','BelegNr','Belegart','Distributor','DebitorenNr','DebitorenBez','Segment','Ort','Land','EUR','KTN','TON','Verkaeufer'];
+   const dl=(no,t,k,n,e,rep)=>[ser,no,t,'Akar-NL',k,n,'N/A','Rotterdam','Nederland',e,1,0.01,rep];
+   const daily=[['Uygulanan filtreler:\nAkarDistributor Akar-NL değeridir'],[],dailyHead,
+     dl('RE26-1','Satis Faturasi','00001','Düşüş Market',1500,'Lütfi Kaplan'),dl('RE26-2','Satis Faturasi','1','Düşüş Market',400,'Lütfi Kaplan'),
+     dl('CR26-1','Satis Iade Faturasi','1','Düşüş Market',-100,'Lütfi Kaplan'),dl('PD26-1','Satis Fiyat Farki Faturasi','1','Düşüş Market',-50,'Lütfi Kaplan'),
+     dl('RE26-3','Satis Faturasi','3','Sağlıklı Market',6000,'Mehmet Halici'),dl('RE26-4','Satis Faturasi','77777','Yeni Kod Market',200,'Baran Sengül')];
+   const detHead=['Kanal','Kunde','Vertreter2','DebitorenNr','DebitorenBez','Datum - Year','Datum - Month','ArtikelNr','ArtikelBez','PIM','Ciro'];
+   const detail=(a1)=>[detHead,['Ethnik','Akar-NL','Lutfi Kaplan','1','Düşüş Market',Y,MN,'001','Bisküvi','Atistirmalik',a1],['','','','','','','','002','Çay','Icecek',750],
+     ['','','Mehmet Halici','3','Sağlıklı Market',Y,MN,'003','Salça','Mutfak',6000],['','','Baran Sengül','77777','Yeni Kod Market',Y,MN,'004','Pirinç','Temel Gida',200],
+     ['Uygulanan filtreler:\nAkarDistributor Akar-NL değeridir']];
+   const pick=async(fl)=>{await p3.evaluate(fl=>{const dt=new DataTransfer();for(const f of fl){const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(f.aoa),f.sheet);
+       dt.items.add(new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],f.name))}const i=document.getElementById('simp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))},fl);
+     await p3.waitForSelector('#smodal:not([hidden])');await p3.waitForTimeout(50);return await txt(p3,'#sprev')};
+   const D={name:'daily_sell-out.xlsx',sheet:'Sheet1',aoa:daily},Dt=a=>({name:'satis_temsilcisi_satis.xlsx',sheet:'Export',aoa:detail(a)});
+   await p3.click('#avBtn');ok(await p3.isVisible('#simpBtn')&&await p3.$eval('#simp',e=>e.multiple),'menüde "Satış verisini içe aktar", birden çok dosya seçilebiliyor');await p3.keyboard.press('Escape');
+   // tek dosya
+   let t=await pick([D]);ok(/Detaylı satış raporu seçilmedi/.test(t)&&/İki dosya birlikte/.test(t)&&await p3.$eval('#srun',b=>b.disabled),'tek dosya: hata, Uygula kapalı');await p3.click('#smodal [data-close]');
+   // toplamlar tutmuyor
+   t=await pick([Dt(900),D]);ok(/toplamları tutmuyor/.test(t)&&/1: günlük € 1\.750,00 \/ detaylı € 1\.650,00/.test(t)&&await p3.$eval('#srun',b=>b.disabled),'müşteri toplamı tutmuyor: hata ve fark gösteriliyor ('+t.slice(0,200)+')');await p3.click('#smodal [data-close]');
+   // farklı ay
+   const oth=detail(1000).map((r,i)=>i>0&&r[6]===MN?Object.assign([...r],{6:M===1?'February':'January'}):r);
+   t=await pick([D,{name:'d.xlsx',sheet:'Export',aoa:oth}]);ok(/farklı aylara ait/.test(t)&&await p3.$eval('#srun',b=>b.disabled),'dosyalar farklı aylara ait: hata');await p3.click('#smodal [data-close]');
+   // doğru dosyalar (sıra fark etmez)
+   t=await pick([Dt(1000),D]);
+   ok(!(await p3.$('#serr'))&&!(await p3.$eval('#srun',b=>b.disabled)),'doğru dosyalar: hata yok, Uygula açık');
+   const rows=await p3.$$eval('#sT tbody tr',tr=>tr.map(x=>[...x.cells].map(c=>c.textContent.replace(/\u00a0/g,' '))));
+   ok(rows.length===3&&rows.every(r=>r[3]==='✓')&&JSON.stringify(rows.find(r=>r[0]==='Lütfi Kaplan'))===JSON.stringify(['Lütfi Kaplan','€ 1.750,00','€ 1.750,00','✓']),'temsilci kontrol tablosu, Lutfi → Lütfi eşleşti: '+JSON.stringify(rows));
+   const w=await txt(p3,'#swarn');ok(/77777 Yeni Kod Market/.test(w)&&/İadeci Market/.test(w)&&/Özgür Firat: detaylı raporda bu ay satış yok/.test(w),'uyarılar: CRM\'de olmayan kod, bu ay satışı kaybolan müşteri, satışı olmayan temsilci');
+   ok(/Satış € 8\.100,00 \(4 fatura\) · iade −€ 100,00 · fiyat farkı −€ 50,00/.test(t),'özet toplamlar: '+t.match(/Satış .*?fark[ıi] [^.]*/));
+   await (await p3.$('#smodal .sheet')).screenshot({path:path.join(SHOTS,'11s-satis-onizleme.png')});
+   await p3.click('#srun');await p3.waitForTimeout(300);
+   const g=k=>doc(p3,k),mon=await g('sync/month'),ret=await g('sync/returns'),c1=await g('customers/c1'),c3c=await g('customers/c3'),c6=await g('customers/c6'),q=await g('qtargets/'+T.slice(0,7));
+   ok(mon.month===T.slice(0,7)&&mon.through===T&&JSON.stringify(mon.map)===JSON.stringify({'1':[1900,2,-100,-50,1,1],'3':[6000,1,0,0,0,0],'77777':[200,1,0,0,0,0]}),'ay verisi: '+JSON.stringify(mon.map));
+   ok(JSON.stringify(ret.map['1'])==='[15550,-300,2,0,0,10]'&&JSON.stringify(ret.map['3'])==='[41000,-400,1,0,0,28]'&&JSON.stringify(ret.map['6'])==='[17000,-2400,5,-100,1,19]'&&JSON.stringify(ret.map['77777'])==='[200,0,0,0,0,1]'&&JSON.stringify(ret.map['8'])==='[5000,-150,1,0,0,4]'&&ret.through===T,'yıl başından bu yana: eski ay çıkarıldı, yenisi eklendi, ilgisiz kod aynı');
+   ok(c1.sales2026===20550&&c1.invoices2026===5&&c1.lastInvoice===T&&c1.lastInvoiceNo==='RE26-2','Düşüş Market: net satış 20.550, 5 fatura, son fatura RE26-2');
+   ok(c3c.sales2026===Math.round(50000*F.YF)+1000&&c3c.invoices2026===3&&c3c.lastInvoice===T&&c6.sales2026===Math.round(30000*F.YF)-3000&&c6.invoices2026===4,'Sağlıklı +1.000 (3 fatura); İadeci bu ay dosyada yok: −3.000 (4 fatura)');
+   ok(q.reps['Lütfi Kaplan'].c.atis.a===1000&&q.reps['Lütfi Kaplan'].c.icecek.a===750&&q.reps['Lütfi Kaplan'].c.mutfak.a===0&&q.reps['Lütfi Kaplan'].c.atis.t===40000&&q.reps['Özgür Firat'].c.atis.a===0&&q.reps['Özgür Firat'].c.atis.t===180000&&q.reps['Mehmet Halici'].c.mutfak.a===6000&&q.reps['Baran Sengül'].c.temel.a===200&&q.asOf===T,'hedef gerçekleşenleri yazıldı, hedefler (t) korundu');
+   ok(await p3.isHidden('#smodal')&&/Satış verisi güncellendi/.test(await txt(p3,'#toast')),'pencere kapandı, bildirim');
+   // aynı dosyalar ikinci kez: sonuç değişmez
+   await pick([D,Dt(1000)]);await p3.click('#srun');await p3.waitForTimeout(300);
+   ok(JSON.stringify((await g('sync/returns')).map)===JSON.stringify(ret.map)&&(await g('customers/c1')).sales2026===20550,'aynı dosyalar tekrar yüklenince sonuç aynı (çift sayım yok)');
+   // eski veri
+   await p3.evaluate(()=>window.claude.use('db').then(db=>db.doc('sync/month').get().then(d=>db.doc('sync/month').set({...d.data(),through:'2999-12-31'}))));await p3.waitForTimeout(150);
+   t=await pick([D,Dt(1000)]);ok(/Daha eski veri yüklenemez/.test(t)&&await p3.$eval('#srun',b=>b.disabled),'sistemdekinden eski veri: hata');await p3.click('#smodal [data-close]');
+   // arada veri değişirse yazılmaz
+   await p3.evaluate(()=>window.claude.use('db').then(db=>db.doc('sync/month').get().then(d=>db.doc('sync/month').set({...d.data(),through:window.__FIX.TODAY,importedAt:1}))));await p3.waitForTimeout(150);
+   await pick([D,Dt(1000)]);await p3.evaluate(()=>window.claude.use('db').then(db=>db.doc('sync/month').get().then(d=>db.doc('sync/month').set({...d.data(),importedAt:2}))));
+   await p3.click('#srun');await p3.waitForTimeout(300);ok(/değişmiş/.test(await txt(p3,'#toast'))&&(await g('sync/month')).importedAt===2,'açıkken veri değişirse yazılmıyor (stale)');
+   await c3.close();}
+  }
 
 
   step('12. Kredi Limiti sekmesi');
@@ -867,6 +926,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.keyboard.press('Escape');
   ok(await page.isHidden('#ximpBtn'),'temsilci Excel içe aktarmayı görmüyor (mevcut davranış)');
   ok(await page.isHidden('#oimpBtn'),'temsilci açık fatura içe aktarmayı görmüyor');
+  ok(await page.isHidden('#simpBtn'),'temsilci satış verisini içe aktarmayı görmüyor');
   await sel(page,'Sessiz Market');
   ok(!!(await page.$('#ctEdit')),'temsilci telefon ekleyebiliyor');
   ok(!(await page.$('#stSel')),'temsilci durumu değiştiremiyor (seçim yok)');

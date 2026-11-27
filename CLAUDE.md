@@ -26,8 +26,12 @@ Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
   - `qtargets`: aylık hedefler.
   - `settings/rules` ve `settings/perms`: ayarlar ve izinler.
   - `sync/month`, `sync/returns`, `sync/openinv`: toplu veri, müşteri koduna göre `map`.
+    - `sync/month.map[kod]` = [satış, fatura adedi, iade, fiyat farkı, iade adedi, fiyat farkı adedi]; `sync/returns.map[kod]` = [satış, iade, iade adedi, fiyat farkı, fiyat farkı adedi, satış adedi] (yıl başından bu yana).
 - `sync` kayıtları istemciden `my_sync()` RPC'siyle okunur.
-- Satış verisi her sabah zamanlanmış bir görevle Power BI / Excel'den güncellenir. Açık faturalar menüden içe aktarılır.
+- Veri menüden içe aktarılır:
+  - **Müşterileri içe aktar**: `CRM_Musteriler` Excel'i (müşteri bilgisi).
+  - **Satış verisini içe aktar**: iki dosya birlikte, günlük satış (Daily sell-out, belge bazında) + detaylı satış raporu (ürün bazında, Power BI). İki dosyanın müşteri toplamları 1 €'dan fazla tutmazsa yüklenmez. Hesap `planSales()`'ta; yazma tek işlemde `import_sales(p)` RPC'siyle (izin `x_sales` + `v_all`; arada veri değiştiyse `stale` ile reddeder). Aynı ay yeniden yüklenince eski ay çıkarılıp yenisi eklenir; aynı dosyalar iki kez yüklenince sonuç değişmez.
+  - **Açık faturaları içe aktar**: ERP "Export" dosyası → `sync/openinv`.
 
 ## Roller ve güvenlik
 
