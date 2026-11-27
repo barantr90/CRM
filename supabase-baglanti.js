@@ -50,6 +50,8 @@ function docSnap(col,id,cb,err){const ref=docRef(col,id);const load=async()=>{tr
     return q;
   }
   const db={collection,doc(path){const [c,i]=path.split('/');const r=docRef(c,i);r.onSnapshot=(cb,err)=>docSnap(c,i,cb,err);return r}};
+  // sunucu fonksiyonu (ör. import_sales): birden çok kaydı tek işlemde yazar
+  db.rpc=async(name,args)=>{const {data,error}=await sb.rpc(name,args);if(error)fail(error);return data};
   window.CRM_DB=db; // zamanlanmış görevler için
 
   /* --- giriş ekranı --- */

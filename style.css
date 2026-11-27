@@ -276,6 +276,9 @@ li.od .oi-s{color:var(--bad)}li.td .oi-s{color:var(--accInk)}li.nd .oi-s{color:v
 
 .info dd.yes{color:light-dark(#2e7d32,#7cc47f);font-weight:700}.info dd.no{color:var(--mut)}
 
+#sT th{white-space:normal}#sT th:last-child,#sT td:last-child{width:28px;text-align:center}#sT .bad{color:var(--bad)}#serr{border:1px solid var(--bad);border-radius:10px;padding:8px 12px;margin:10px 0}#serr ul,#swarn ul{margin:6px 0 0;padding-left:18px}#swarn{margin:10px 0}
+@media(max-width:600px){#sT th,#sT td{padding-left:4px;padding-right:4px}#smodal .ordp{padding:8px}}
+
 /* TELEFON PUNTOSU: telefonda yazılar 2 px küçük. tests/punto.js üretir; elle düzenlenmez. */
 @media(max-width:600px){
 .umd .who small{font-size:11px}
