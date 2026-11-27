@@ -315,10 +315,17 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    {const ft=async q=>page.$$eval(q+' tfoot td',t=>t.map(x=>x.textContent.replace(/\u00a0/g,' ').trim()));
     const T0=await page.evaluate(()=>window.__FIX.TODAY),in5=(await page.evaluate(()=>window.__FIX.day(5))).slice(0,7)===T0.slice(0,7);
     ok(JSON.stringify(await ft('#odT'))==='["","Toplam","","€ 1.201","1","",""]','Vadesi geçen tablosunda toplam: '+JSON.stringify(await ft('#odT')));
-    ok(JSON.stringify(await ft('#duT'))===JSON.stringify(['','Toplam','',in5?'€ 1.350':'€ 450',in5?'2':'1','']),'Bu ay vadesi gelecek tablosunda toplam: '+JSON.stringify(await ft('#duT')));
+    ok(JSON.stringify(await ft('#duT'))===JSON.stringify(['','Toplam','',in5?'€ 1.350':'€ 450',in5?'2':'1','','']),'Bu ay vadesi gelecek tablosunda toplam: '+JSON.stringify(await ft('#duT')));
     ok(JSON.stringify(await ft('#odOrph'))==='["Toplam","−€ 30,00","€ 10,00","2",""]','CRM\'de olmayan kodlar tablosunda toplam: '+JSON.stringify(await ft('#odOrph')));
     const bb=q=>page.$eval(q+' tbody tr:last-child td',e=>getComputedStyle(e).borderBottomWidth);
     ok(await bb('#odT')==='0px'&&await bb('#duT')==='0px'&&await bb('#odOrph')==='0px','tablolarda son satırın altında çizgi yok');}
+   {const H=q=>page.$$eval(q+' thead th',t=>t.map(x=>x.textContent));
+    ok(JSON.stringify(await H('#odT'))==='["#","Müşteri","Temsilci","Tutar","Fatura","En eski","ARAG"]','Vadesi Geçen sütunları: '+(await H('#odT')).join(' · '));
+    ok(JSON.stringify((await H('#duT')).slice(0,6))==='["#","Müşteri","Temsilci","Tutar","Fatura","Vade Tarihi"]','Bu Ay Vadesi Gelecek sütunları: '+(await H('#duT')).join(' · '));
+    // iki tablonun sütunları dikeyde aynı hizada (masaüstü)
+    const X=q=>page.$$eval(q+' thead th',t=>t.slice(0,6).map(x=>{const r=x.getBoundingClientRect();return [Math.round(r.left),Math.round(r.right)]}));
+    const a=await X('#odT'),b=await X('#duT');ok(a.every((v,i)=>Math.abs(v[0]-b[i][0])<=1&&Math.abs(v[1]-b[i][1])<=1),'iki tablonun sütunları aynı hizada: '+JSON.stringify([a,b]));
+    const R=q=>page.$eval(q,e=>Math.round(e.getBoundingClientRect().right));ok(Math.abs(await R('#odT')-await R('#duT'))<=1,'tablo genişlikleri aynı');}
    await page.click('[data-ovf=arag]');ok(/Bu süzgeçte müşteri yok/.test(await txt(page,'#overdue')),'ARAG süzgeci başta boş');
    await page.click('[data-ovf=all]');
    // açık fatura dosyasında olup CRM'de olmayan kodlar ayrı bölümde
