@@ -51,10 +51,14 @@ Derleme yok: düz HTML + vanilla JS; `main` dalı canlı sitedir.
 - Bir rakam birden çok yerde gösteriliyorsa **tek bir fonksiyondan** hesaplanır. Kart, liste, Karne ve Excel aynı sonucu verir. Temel fonksiyonlar:
   - `autoSt` (durum), `riskCalc` (kayıp riski), `retOf` (iade)
   - `oiOf` (açık fatura), `credRec` (kredi önerisi), `tgtMap` (hedef)
+  - `tempoOf` (tempo)
 - Tempo her yerde `sales2026 / (ciro2025 × YF) − 1` formülüyle hesaplanır.
   - Yıl etiketleri dinamiktir: `CY` / `PY`.
   - `YF` verinin tarihinden (`dataTo()`) türetilir.
 - Durum önceliği: elle (`statusov`) > Excel (`statusManual`) > otomatik.
+- Excel dosyaları:
+  - `CRM_Musteriler_<tarih>.xlsx`: tek sayfa "Müşteriler", yalnız müşteri bilgisi (`COLS`). İçe aktarma yalnız bu alanları yazar; satış verisi ve diğer alanlar korunur.
+  - `CRM_Satis_<tarih>.xlsx`: tek sayfa "Satış" (`SCOLS`), Kod ile eşleşir. Yalnız dışa aktarılır; değerler sistemden, Tempo `tempoOf` ile.
 
 ## Kod kuralları
 

@@ -77,7 +77,7 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
   await page.click('#avBtn');
   ok(await page.isVisible('#xexp')&&await page.isVisible('#ximpBtn')&&await page.isVisible('#umSep'),'yönetici menüde Excel\'e aktar ve Excel\'den içe aktar görüyor');
   ok(await page.isVisible('#oimpBtn'),'yönetici menüde Açık faturaları içe aktar görüyor');
-  {const items=await page.$$eval('#umDrop [role=menuitem]',e=>e.map(x=>x.textContent.trim()));ok(JSON.stringify(items)===JSON.stringify(["Excel'e aktar","Excel'den içe aktar",'Açık faturaları içe aktar','Yönetici ayarları','Kullanıcı izinleri','Şifre belirle','Çıkış']),'menü sırası: '+items.join(' · '))}
+  {const items=await page.$$eval('#umDrop [role=menuitem]',e=>e.map(x=>x.textContent.trim()));ok(JSON.stringify(items)===JSON.stringify(["Müşterileri Excel'e aktar","Satış verisini Excel'e aktar","Excel'den içe aktar",'Açık faturaları içe aktar','Yönetici ayarları','Kullanıcı izinleri','Şifre belirle','Çıkış']),'menü sırası: '+items.join(' · '))}
   await page.screenshot({path:path.join(SHOTS,'0-menu-excel.png'),clip:{x:900,y:0,width:500,height:330}});
   {const [fc]=await Promise.all([page.waitForEvent('filechooser',{timeout:3000}).catch(()=>null),page.click('#ximpBtn')]);ok(!!fc,'Excel\'den içe aktar dosya seçme penceresini açıyor')}
   await page.keyboard.press('Escape');await page.click('#avBtn');await page.click('#xexp');
@@ -660,13 +660,31 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
    await p2.click('#avBtn');await p2.click('#xexp');
    const got=await p2.waitForFunction(()=>window.__xb,null,{timeout:20000}).then(()=>true).catch(()=>false);
    ok(got,'Excel dosyası oluşturuldu (toast: '+await txt(p2,'#toast')+')');
-   if(got){const r=await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array'}),m=XLSX.utils.sheet_to_json(wb.Sheets['Müşteriler']),a=wb.Sheets['Ayarlar'];
-       return {f:window.__xf,h:Object.keys(m[0]),n:m.length,pasif:a.B2.v,yf:a.B5.v,ss:(m.find(x=>x['Müşteri']==='Sessiz Market')||{})['Durum'],
-         tf:wb.Sheets['Müşteriler'][XLSX.utils.encode_cell({r:1,c:Object.keys(m[0]).indexOf('Tempo % (aynı dönem)')})].f}});
+   const INFO=['Kod','Müşteri','Zincir','Segment','Durum','Durum (elle)','Temsilci','Rut günü','Ziyaret sıklığı','Ziyaret haftaları','Ödeme vadesi','Merch','Dizim','Yetkili','Telefon','Adres','Posta kodu','Şehir'];
+   const SALES=['Kod','Müşteri','Son fatura tarihi','Son fatura no','2026 net satış (€)','2026 fatura sayısı','Ciro 2025 (€)','Tempo % (aynı dönem)'];
+   let custCodes=[];
+   if(got){const r=await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array',cellFormula:true}),ws=wb.Sheets['Müşteriler'],m=XLSX.utils.sheet_to_json(ws);
+       return {f:window.__xf,sheets:wb.SheetNames,h:XLSX.utils.sheet_to_json(ws,{header:1})[0],n:m.length,codes:m.map(x=>String(x['Kod'])),ss:(m.find(x=>x['Müşteri']==='Sessiz Market')||{})['Durum'],fx:Object.keys(ws).filter(k=>ws[k]&&ws[k].f).length}});
+     custCodes=r.codes;
      ok(/^CRM_Musteriler_\d\d\.\d\d\.\d{4}\.xlsx$/.test(r.f)&&r.n===8,'dosya adı ve 8 müşteri: '+r.f);
-     ok(r.pasif===60,'Ayarlar: pasif gün sınırı Yönetici ayarından (60)');
-     ok(r.ss==='Pasif','Sessiz Market (70 gün) pasif sınırı 60 ile Pasif');
-     ok(r.h.includes('Tempo % (aynı dönem)')&&!r.h.includes('Büyüme %')&&r.yf>0&&r.yf<=1&&/Ayarlar!\$B\$5/.test(r.tf),'Tempo % sütunu ve formülü sitedeki tanımla aynı ('+r.tf+')')}
+     ok(JSON.stringify(r.sheets)==='["Müşteriler"]','müşteri Excel\'inde yalnız "Müşteriler" sayfası var: '+r.sheets.join(', '));
+     ok(JSON.stringify(r.h)===JSON.stringify(INFO),'yalnız müşteri bilgisi sütunları (satış ve tempo yok): '+r.h.join(' · '));
+     ok(r.fx===0,'formül yok (değerler sistemden)');
+     ok(r.ss==='Pasif','Durum sistemdeki gibi: Sessiz Market (70 gün) pasif sınırı 60 ile Pasif');}
+   // satış verisi ayrı Excel'de, Kod ile eşleşir; Tempo sistemde hesaplanır
+   await p2.evaluate(()=>{window.__xc=window.__xb;window.__xb=null});await p2.click('#avBtn');
+   ok(await txt(p2,'#xsal')==='Satış verisini Excel\'e aktar','menüde "Satış verisini Excel\'e aktar"');
+   await p2.click('#xsal');
+   const got2=await p2.waitForFunction(()=>window.__xb,null,{timeout:20000}).then(()=>true).catch(()=>false);
+   ok(got2,'satış Excel\'i oluşturuldu');
+   if(got2){const r=await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array',cellFormula:true}),ws=wb.Sheets[wb.SheetNames[0]],m=XLSX.utils.sheet_to_json(ws);
+       return {f:window.__xf,sheets:wb.SheetNames,h:XLSX.utils.sheet_to_json(ws,{header:1})[0],rows:m,fx:Object.keys(ws).filter(k=>ws[k]&&ws[k].f).length,YF:window.__FIX.YF}});
+     ok(/^CRM_Satis_\d\d\.\d\d\.\d{4}\.xlsx$/.test(r.f)&&JSON.stringify(r.sheets)==='["Satış"]','dosya adı CRM_Satis_…, tek sayfa "Satış": '+r.f);
+     ok(JSON.stringify(r.h)===JSON.stringify(SALES),'satış sütunları: '+r.h.join(' · '));
+     ok(JSON.stringify(r.rows.map(x=>String(x['Kod'])).sort())===JSON.stringify([...custCodes].sort()),'müşteri kodları iki dosyada aynı (Kod ile eşleşir)');
+     const d1=r.rows.find(x=>x['Müşteri']==='Düşüş Market'),y8=r.rows.find(x=>x['Müşteri']==='Yeni Market');
+     ok(r.fx===0&&Math.abs(d1['Tempo % (aynı dönem)']-(20000/(60000*r.YF)-1))<1e-9,'Tempo değer olarak, sistemdeki formülle: '+d1['Tempo % (aynı dönem)']);
+     ok(d1['2026 net satış (€)']===20000&&d1['Ciro 2025 (€)']===60000&&d1['2026 fatura sayısı']===5&&!y8['Tempo % (aynı dönem)'],'satış rakamları kayıttan; 2025 cirosu olmayanda tempo boş: '+JSON.stringify([d1,y8]));}
    // açık fatura içe aktarma: CRM'de olmayan kodlar onay penceresinde listelenir
    const msg=await new Promise(async res=>{p2.once('dialog',d=>{res(d.message());d.dismiss()});
      await p2.evaluate(()=>{const H=['Müsteri Kodu','Fatura No','Datum','Fatura Türü','Fatura Tutarı','Rest Offen','Faelligkeit'];
@@ -676,9 +694,9 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
        const i=document.getElementById('oimp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))})});
    ok(/2 müşteri kodu CRM'de yok/.test(msg)&&/77001 \(€ 7\.418,28\)/.test(msg)&&/77002 \(−€ 13,90\)/.test(msg)&&/Vadesi Geçen/.test(msg),'onayda CRM\'de olmayan kodlar ve tutarları: '+msg.replace(/\n/g,' / '));
    // Merch / Dizim: dışa aktarmada sütun, içe aktarmada VAR/YOK okunur
-   if(got){const m=await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets['Müşteriler']);const s=rows.find(x=>x['Müşteri']==='Sağlıklı Market');return {h:Object.keys(rows[0]),m:s['Merch'],d:s['Dizim']}});
+   if(got){const m=await p2.evaluate(()=>{const wb=XLSX.read(window.__xc,{type:'array'}),rows=XLSX.utils.sheet_to_json(wb.Sheets['Müşteriler']);const s=rows.find(x=>x['Müşteri']==='Sağlıklı Market');return {h:Object.keys(rows[0]),m:s['Merch'],d:s['Dizim']}});
      ok(m.h.indexOf('Merch')===m.h.indexOf('Ödeme vadesi')+1&&m.h.indexOf('Dizim')===m.h.indexOf('Merch')+1&&m.m==='Var'&&m.d==='Yok','Excel\'de Merch ve Dizim sütunları: '+JSON.stringify(m));
-     await p2.evaluate(()=>{const wb=XLSX.read(window.__xb,{type:'array',cellFormula:true});const ws=wb.Sheets['Müşteriler'],R=XLSX.utils.decode_range(ws['!ref']);
+     await p2.evaluate(()=>{const wb=XLSX.read(window.__xc,{type:'array',cellFormula:true});const ws=wb.Sheets['Müşteriler'],R=XLSX.utils.decode_range(ws['!ref']);
        const H=[];for(let c=0;c<=R.e.c;c++)H.push((ws[XLSX.utils.encode_cell({r:0,c})]||{}).v);const cm=H.indexOf('Merch'),cd=H.indexOf('Dizim'),cn=H.indexOf('Müşteri');
        for(let r=1;r<=R.e.r;r++){const n=(ws[XLSX.utils.encode_cell({r,c:cn})]||{}).v;if(n==='Düşüş Market'){ws[XLSX.utils.encode_cell({r,c:cm})]={t:'s',v:'VAR'};ws[XLSX.utils.encode_cell({r,c:cd})]={t:'s',v:' yok '}}if(n==='Sağlıklı Market')ws[XLSX.utils.encode_cell({r,c:cm})]={t:'s',v:''}}
        const f=new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],'m.xlsx');const dt=new DataTransfer();dt.items.add(f);const i=document.getElementById('ximp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))});
@@ -686,7 +704,16 @@ const sel=async(p,name)=>{await p.click(`#list .row:has-text("${name}")`);await 
      ok(/2<\/b> güncellenecek/.test(await p2.$eval('#iprev',e=>e.innerHTML))&&/Merch, Dizim/.test(await txt(p2,'#iprev')),'önizleme: 2 müşteri güncellenecek, Merch ve Dizim okunuyor ('+await txt(p2,'#iprev')+')');
      await p2.click('#irun');await p2.waitForTimeout(300);
      const c1=await doc(p2,'customers/c1'),c3=await doc(p2,'customers/c3');
-     ok(c1.merch==='Var'&&c1.dizim==='Yok'&&c3.merch===''&&c3.dizim==='Yok','içe aktarma: VAR → Var, " yok " → Yok, boş → boş');}
+     ok(c1.merch==='Var'&&c1.dizim==='Yok'&&c3.merch===''&&c3.dizim==='Yok','içe aktarma: VAR → Var, " yok " → Yok, boş → boş');
+     ok(c1.sales2026===20000&&c1.ciro2025===60000&&!!c1.lastInvoice&&c1.invoices2026===5,'içe aktarma satış verisine dokunmuyor (net satış, 2025 cirosu, son fatura korunuyor)');
+     // eski biçimli dosya: satış sütunları okunmaz, değerler değişmez
+     await p2.evaluate(()=>{const H=['Kod','Müşteri','Segment','Temsilci','2026 net satış (€)','Ciro 2025 (€)','Tempo % (aynı dönem)'];
+       const ws=XLSX.utils.aoa_to_sheet([H,['1','Düşüş Market','Gold','Lütfi Kaplan',999,1,0.5]]);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Müşteriler');
+       const f=new File([XLSX.write(wb,{type:'array',bookType:'xlsx'})],'eski.xlsx');const dt=new DataTransfer();dt.items.add(f);const i=document.getElementById('ximp');i.files=dt.files;i.dispatchEvent(new Event('change',{bubbles:true}))});
+     await p2.waitForSelector('#imodal:not([hidden])');
+     ok(/Satış sütunları okunmadı/.test(await txt(p2,'#iprev'))&&/2026 net satış/.test(await txt(p2,'#iprev')),'önizleme: satış sütunlarının okunmadığı yazıyor ('+await txt(p2,'#iprev')+')');
+     await p2.click('#irun');await p2.waitForTimeout(300);
+     const c1b=await doc(p2,'customers/c1');ok(c1b.sales2026===20000&&c1b.ciro2025===60000&&c1b.merch==='Var','eski biçimli dosyadan sonra da satış ve 2025 cirosu aynı; dosyada olmayan Merch korunuyor');}
    await c2.close();}}
 
 
